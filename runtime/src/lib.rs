@@ -198,6 +198,14 @@ pub const MICROUNIT: Balance = 1_000_000;
 /// The existential deposit. Set to 1/10 of the Connected Relay Chain.
 pub const EXISTENTIAL_DEPOSIT: Balance = MILLIUNIT;
 
+pub const DEPOSIT_STORAGE_ITEM: Balance = 100 * MILLIUNIT;
+
+pub const DEPOSIT_STORAGE_BYTE: Balance = 10 * MICROUNIT;
+
+pub const fn deposit(items: u32, bytes: u32) -> Balance {
+	items as Balance * DEPOSIT_STORAGE_ITEM + (bytes as Balance) * DEPOSIT_STORAGE_BYTE
+}
+
 /// We assume that ~5% of the block weight is consumed by `on_initialize` handlers. This is
 /// used to limit the maximal weight of a single extrinsic.
 const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(5);
@@ -266,12 +274,24 @@ mod runtime {
 	pub type Timestamp = pallet_timestamp;
 	#[runtime::pallet_index(3)]
 	pub type ParachainInfo = parachain_info;
+	#[runtime::pallet_index(4)]
+	pub type Proxy = pallet_proxy;
+	#[runtime::pallet_index(5)]
+	pub type Utility = pallet_utility;
+	#[runtime::pallet_index(6)]
+	pub type Multisig = pallet_multisig;
 
 	// Monetary stuff.
 	#[runtime::pallet_index(10)]
 	pub type Balances = pallet_balances;
 	#[runtime::pallet_index(11)]
 	pub type TransactionPayment = pallet_transaction_payment;
+	#[runtime::pallet_index(12)]
+	pub type RealEstateAssets = pallet_assets::Pallet<Runtime, Instance1>;
+	#[runtime::pallet_index(13)]
+	pub type Assets = pallet_assets::Pallet<Runtime, Instance2>;
+	#[runtime::pallet_index(14)]
+	pub type AssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance2>;
 
 	// Governance
 	#[runtime::pallet_index(15)]
@@ -288,6 +308,10 @@ mod runtime {
 	pub type Aura = pallet_aura;
 	#[runtime::pallet_index(24)]
 	pub type AuraExt = cumulus_pallet_aura_ext;
+	#[runtime::pallet_index(25)]
+	pub type Nfts = pallet_nfts;
+	#[runtime::pallet_index(26)]
+	pub type NftFractionalization = pallet_nft_fractionalization;
 
 	// XCM helpers.
 	#[runtime::pallet_index(30)]

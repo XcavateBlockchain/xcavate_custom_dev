@@ -34,13 +34,15 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		ConstBool, ConstU32, ConstU64, ConstU8, EitherOfDiverse, TransformOrigin, VariantCountOf,
+		InstanceFilter, AsEnsureOriginWithArg, VariantCount,
 	},
 	weights::{ConstantMultiplier, Weight},
-	PalletId,
+	PalletId, BoundedVec,
+	instances::Instance1,
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,
 };
 use pallet_xcm::{EnsureXcm, IsVoiceOfBody};
 use parachains_common::message_queue::{NarrowOriginToSibling, ParaIdToSibling};
@@ -48,7 +50,7 @@ use polkadot_runtime_common::{
 	xcm_sender::NoPriceForMessageDelivery, BlockHashCount, SlowAdjustingFeeUpdate,
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::Perbill;
+use sp_runtime::{Perbill, RuntimeDebug, traits::{BlakeTwo256, Verify}, MultiSignature};
 use sp_version::RuntimeVersion;
 use xcm::latest::prelude::BodyId;
 
@@ -59,9 +61,16 @@ use super::{
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, HOURS,
-	MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION,
+	MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION, deposit,
+	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use pallet_nfts::PalletFeatures;
+
+/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
+pub type Signature = MultiSignature;
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -308,3 +317,251 @@ impl pallet_parachain_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_parachain_template::weights::SubstrateWeight<Runtime>;
 }
+
+parameter_types! {
+    pub const MaxProxies: u32 = 32;
+    pub const MaxPending: u32 = 32;
+    pub const ProxyDepositBase: Balance = deposit(1, 40);
+    pub const AnnouncementDepositBase: Balance = deposit(1, 48);
+    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+}
+
+/// The type used to represent the kinds of proxying allowed.
+/// If you are adding new pallets, consider adding new ProxyType variant
+#[derive(
+    Copy,
+    Clone,
+    Decode,
+    Default,
+    Encode,
+    Eq,
+    MaxEncodedLen,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    RuntimeDebug,
+    TypeInfo,
+)]
+pub enum ProxyType {
+    /// Allows to proxy all calls
+    #[default]
+    Any,
+    /// Allows all non-transfer calls
+    NonTransfer,
+    /// Allows to finish the proxy
+    CancelProxy,
+    /// Allows to operate with collators list (invulnerables, candidates, etc.)
+    Collator,
+}
+
+impl InstanceFilter<RuntimeCall> for ProxyType {
+    fn filter(&self, c: &RuntimeCall) -> bool {
+        match self {
+            ProxyType::Any => true,
+            ProxyType::NonTransfer => !matches!(c, RuntimeCall::Balances { .. }),
+            ProxyType::CancelProxy => matches!(
+                c,
+                RuntimeCall::Proxy(pallet_proxy::Call::reject_announcement { .. })
+                    | RuntimeCall::Multisig { .. }
+            ),
+            ProxyType::Collator => {
+                matches!(c, RuntimeCall::CollatorSelection { .. } | RuntimeCall::Multisig { .. })
+            }
+        }
+    }
+}
+
+impl pallet_proxy::Config for Runtime {
+    type AnnouncementDepositBase = AnnouncementDepositBase;
+    type AnnouncementDepositFactor = AnnouncementDepositFactor;
+    type CallHasher = BlakeTwo256;
+    type Currency = Balances;
+    type MaxPending = MaxPending;
+    type MaxProxies = MaxProxies;
+    type ProxyDepositBase = ProxyDepositBase;
+    type ProxyDepositFactor = ProxyDepositFactor;
+    type ProxyType = ProxyType;
+    type RuntimeCall = RuntimeCall;
+    type RuntimeEvent = RuntimeEvent;
+    /// Rerun benchmarks if you are making changes to runtime configuration.
+    type WeightInfo = ();
+}
+
+parameter_types! {
+    // One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
+    pub const DepositBase: Balance = deposit(1, 88);
+    // Additional storage item size of 32 bytes.
+    pub const DepositFactor: Balance = deposit(0, 32);
+    pub const MaxSignatories: u16 = 20;
+}
+
+impl pallet_multisig::Config for Runtime {
+    type Currency = Balances;
+    type DepositBase = DepositBase;
+    type DepositFactor = DepositFactor;
+    type MaxSignatories = MaxSignatories;
+    type RuntimeCall = RuntimeCall;
+    type RuntimeEvent = RuntimeEvent;
+    /// Rerun benchmarks if you are making changes to runtime configuration.
+    type WeightInfo = ();
+}
+
+impl pallet_utility::Config for Runtime {
+    type PalletsOrigin = OriginCaller;
+    type RuntimeCall = RuntimeCall;
+    type RuntimeEvent = RuntimeEvent;
+    /// Rerun benchmarks if you are making changes to runtime configuration.
+    type WeightInfo = ();
+}
+
+parameter_types! {
+    pub const AssetDeposit: Balance = 10 * UNIT;
+    pub const AssetAccountDeposit: Balance = deposit(1, 16);
+    pub const ApprovalDeposit: Balance = EXISTENTIAL_DEPOSIT;
+    pub const StringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = deposit(1, 68);
+    pub const MetadataDepositPerByte: Balance = deposit(0, 1);
+    pub const RemoveItemsLimit: u32 = 1000;
+    pub const ZeroDeposit: Balance = 0;
+    pub RootAccountId: AccountId = AccountId::from([0xffu8; 32]);
+}
+
+impl pallet_assets::Config<pallet_assets::Instance1> for Runtime {
+    type ApprovalDeposit = ApprovalDeposit;
+    type AssetAccountDeposit = AssetAccountDeposit;
+    type AssetDeposit = ZeroDeposit;
+    type AssetId = u32;
+    type AssetIdParameter = codec::Compact<u32>;
+    type Balance = Balance;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+    type CallbackHandle = ();
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureRootWithSuccess<AccountId, RootAccountId>>;
+    type Currency = Balances;
+    type Extra = ();
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type Freezer = ();
+    type MetadataDepositBase = ZeroDeposit;
+    type MetadataDepositPerByte = ZeroDeposit;
+    type RemoveItemsLimit = RemoveItemsLimit;
+    type RuntimeEvent = RuntimeEvent;
+    type StringLimit = StringLimit;
+    /// Rerun benchmarks if you are making changes to runtime configuration.
+    type WeightInfo = ();
+}
+
+impl pallet_assets::Config<pallet_assets::Instance2> for Runtime {
+    type ApprovalDeposit = ApprovalDeposit;
+    type AssetAccountDeposit = AssetAccountDeposit;
+    type AssetDeposit = AssetDeposit;
+    type AssetId = u32;
+    type AssetIdParameter = codec::Compact<u32>;
+    type Balance = Balance;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+    type CallbackHandle = ();
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureRootWithSuccess<AccountId, RootAccountId>>;
+    type Currency = Balances;
+    type Extra = ();
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type Freezer = ();
+    type MetadataDepositBase = MetadataDepositBase;
+    type MetadataDepositPerByte = MetadataDepositPerByte;
+    type RemoveItemsLimit = RemoveItemsLimit;
+    type RuntimeEvent = RuntimeEvent;
+    type StringLimit = StringLimit;
+    /// Rerun benchmarks if you are making changes to runtime configuration.
+    type WeightInfo = ();
+}
+
+#[derive(
+	Decode, Encode, MaxEncodedLen, PartialEq, Eq, Ord, PartialOrd, TypeInfo, Debug, Clone, Copy,
+)]
+pub enum TestId {
+	Marketplace,
+}
+
+impl VariantCount for TestId {
+	// Intentionally set below the actual count of variants, to allow testing for `can_freeze`
+	const VARIANT_COUNT: u32 = 2;
+}
+
+impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Runtime {
+	type RuntimeFreezeReason = TestId;
+	type RuntimeEvent = RuntimeEvent;
+} 
+
+parameter_types! {
+	pub Features: PalletFeatures = PalletFeatures::all_enabled();
+	pub const MaxAttributesPerCall: u32 = 10;
+	pub const CollectionDeposit: Balance = UNIT;
+	pub const ItemDeposit: Balance = UNIT;
+	pub const KeyLimit: u32 = 32;
+	pub const ValueLimit: u32 = 256;
+	pub const ApprovalsLimit: u32 = 20;
+	pub const ItemAttributesApprovalsLimit: u32 = 20;
+	pub const MaxTips: u32 = 10;
+	pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
+
+	pub const UserStringLimit: u32 = 5;
+
+}
+
+impl pallet_nfts::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type CollectionId = u32;
+	type ItemId = u32;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type CollectionDeposit = CollectionDeposit;
+	type ItemDeposit = ItemDeposit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type AttributeDepositBase = MetadataDepositBase;
+	type DepositPerByte = MetadataDepositPerByte;
+	type StringLimit = StringLimit;
+	type KeyLimit = KeyLimit;
+	type ValueLimit = ValueLimit;
+	type ApprovalsLimit = ApprovalsLimit;
+	type ItemAttributesApprovalsLimit = ItemAttributesApprovalsLimit;
+	type MaxTips = MaxTips;
+	type MaxDeadlineDuration = MaxDeadlineDuration;
+	type MaxAttributesPerCall = MaxAttributesPerCall;
+	type Features = Features;
+	type OffchainSignature = Signature;
+	type OffchainPublic = <Signature as Verify>::Signer;
+	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
+	//type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<CollectionCreationOrigin, AccountId>>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+	type Locker = ();
+}
+
+parameter_types! {
+	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
+	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"BRIX").to_vec().try_into().unwrap();
+	pub NewAssetName: BoundedVec<u8, StringLimit> = (*b"Brix").to_vec().try_into().unwrap();
+	pub const Deposit: Balance = UNIT;
+}
+
+impl pallet_nft_fractionalization::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Deposit = Deposit;
+	type Currency = Balances;
+	type NewAssetSymbol = NewAssetSymbol;
+	type NewAssetName = NewAssetName;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+	type Assets = RealEstateAssets;
+	type Nfts = Nfts;
+	type PalletId = NftFractionalizationPalletId;
+	type WeightInfo = ();
+	type StringLimit = StringLimit;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
+	type RuntimeHoldReason = RuntimeHoldReason;
+}  
+
