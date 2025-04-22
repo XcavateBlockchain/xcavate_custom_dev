@@ -565,6 +565,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type NativeCurrency = Balances;
 	type LocalCurrency = RealEstateAssets;
 	type ForeignCurrency = Assets;
+	type AssetsFreezer = AssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;

@@ -35,6 +35,8 @@ pallet-property-management = { workspace = true }
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
+types = { path = "../../types", default-features = false }
+pallet-assets-freezer = { workspace = true }
 
 [features]
 default = ["std"]
@@ -52,7 +54,9 @@ std = [
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"pallet-property-management/std",
-	"sp-api/std"
+	"sp-api/std",
+	"types/std",
+	"pallet-assets-freezer/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

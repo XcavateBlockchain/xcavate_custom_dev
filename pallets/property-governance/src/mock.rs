@@ -16,6 +16,8 @@ use pallet_nfts::PalletFeatures;
 
 use pallet_assets::{Instance1, Instance2};
 
+use types::TestId;
+
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type BlockNumber = u64;
@@ -50,6 +52,7 @@ frame_support::construct_runtime!(
 		LocalAssets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
+		AssetsFreezer: pallet_assets_freezer::<Instance2>,
 	}
 );
 
@@ -184,6 +187,11 @@ impl pallet_assets::Config<Instance2> for Test {
 	type RemoveItemsLimit = ConstU32<1000>;
 }
 
+impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Test {
+	type RuntimeFreezeReason = TestId;
+	type RuntimeEvent = RuntimeEvent;
+} 
+
 parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 	pub NewAssetSymbol: BoundedVec<u8, ConstU32<50>> = (*b"FRAC").to_vec().try_into().unwrap();
@@ -236,6 +244,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type NativeCurrency = Balances;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
+	type AssetsFreezer = AssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
@@ -336,6 +345,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1984, [4; 32].into(), 5_000),
 			(1984, [5; 32].into(), 500),
 		], // Genesis accounts: id, account_id, balance
+		next_asset_id: None,
 	}
 	.assimilate_storage(&mut test)
 	.unwrap(); 
@@ -346,6 +356,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		accounts: vec![
 			(1337, [4; 32].into(), 5000),
 		], // Genesis accounts: id, account_id, balance
+		next_asset_id: None,
 	}
 	.assimilate_storage(&mut test)
 	.unwrap(); 

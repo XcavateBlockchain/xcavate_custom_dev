@@ -1,1 +1,9 @@
 target/
+
+# zombienet stuff
+**/zombienet-macos-arm64
+**/zombienet-macos-x64
+**/zombienet-linux-arm64
+**/zombienet-linux-x64
+**/bin-*
+**/bin*

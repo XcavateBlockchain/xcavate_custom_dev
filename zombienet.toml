@@ -1,21 +1,84 @@
 [relaychain]
-default_command = "polkadot"
+default_command = "./bin-stable2409/polkadot"
 chain = "rococo-local"
 
 [[relaychain.nodes]]
 name = "alice"
 validator = true
-ws_port = 9944
+rpc_port = 9900
 
 [[relaychain.nodes]]
 name = "bob"
 validator = true
-ws_port = 9955
 
 [[parachains]]
 id = 1000
+add_to_genesis = true
+cumulus_based = true
+chain = "asset-hub-rococo-local"
 
-[parachains.collator]
-name = "charlie"
-ws_port = 9988
-command = "parachain-template-node"
+    [parachains.genesis.runtimeGenesis.patch.assets]
+    accounts = [
+        [1984, "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", 3000000000000000000],
+        [1984, "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", 3000000000000000000],
+        [1337, "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", 3000000000000000000],
+        [1337, "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty", 3000000000000000000]
+    ]
+    assets = [
+        [
+            1984,
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            true,
+            1
+        ],
+        [
+            1337,
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            true,
+            1
+        ]
+    ]
+    metadata = [
+        [
+            1984,
+            [84, 101, 116, 104, 101, 114, 32, 85, 83, 68], # "Tether USD" as ASCII array
+            [85, 83, 68, 84], # "USDT" as ASCII array
+            6
+        ],
+        [
+            1337,
+            [67, 105, 114, 99, 108, 101, 32, 85, 83, 68, 67], # "Circle USDC" as ASCII array
+            [85, 83, 68, 67], # "USDC" as ASCII array
+            6
+        ]
+    ]
+
+    [[parachains.collators]]
+    name = "asset-hub-rococo-collator01"
+    command = "./bin-stable2409/polkadot-parachain"
+    rpc_port = 9910
+    args = ["-lxcm=trace,pallet-assets=trace"]
+
+    [[parachains.collators]]
+    name = "asset-hub-rococo-collator02"
+    command = "./bin-stable2409/polkadot-parachain"
+    rpc_port = 9911
+    args = ["--log=xcm=trace,pallet-assets=trace"]
+
+[[parachains]]
+id = 2000
+addToGenesis = true
+cumulus_based = true
+chain = "dev"
+
+[[parachains.collators]]
+name = "collator01"
+command = "./target/release/parachain-template-node"
+rpc_port = 9920
+args = ["--rpc-max-connections 10000"]
+
+[[parachains.collators]]
+name = "collator02"
+rpc_port = 9921
+command = "./target/release/parachain-template-node"
+args = ["--rpc-max-connections 10000"]
