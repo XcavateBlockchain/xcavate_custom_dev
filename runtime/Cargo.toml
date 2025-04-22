@@ -27,7 +27,6 @@ scale-info = { features = [
 ], workspace = true }
 smallvec = { workspace = true, default-features = true }
 docify = { workspace = true }
-pallet-parachain-template.workspace = true
 frame-benchmarking = { optional = true, workspace = true }
 frame-executive.workspace = true
 frame-metadata-hash-extension.workspace = true
@@ -83,6 +82,13 @@ cumulus-primitives-storage-weight-reclaim.workspace = true
 pallet-collator-selection.workspace = true
 parachains-common.workspace = true
 parachain-info.workspace = true
+types = { path = "../types", default-features = false }
+
+# Local Dependencies
+pallet-nft-marketplace.workspace = true
+pallet-xcavate-whitelist.workspace = true
+pallet-property-management.workspace = true
+pallet-property-governance.workspace = true
 
 [features]
 default = ["std"]
@@ -111,7 +117,6 @@ std = [
 	"pallet-balances/std",
 	"pallet-collator-selection/std",
 	"pallet-message-queue/std",
-	"pallet-parachain-template/std",
 	"pallet-session/std",
 	"pallet-sudo/std",
 	"pallet-timestamp/std",
@@ -142,9 +147,14 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
+	"types/std",
 	"xcm-builder/std",
 	"xcm-executor/std",
 	"xcm/std",
+	"pallet-nft-marketplace/std",
+	"pallet-xcavate-whitelist/std",
+	"pallet-property-management/std",
+	"pallet-property-governance/std",
 ]
 
 runtime-benchmarks = [
@@ -161,7 +171,6 @@ runtime-benchmarks = [
 	"pallet-balances/runtime-benchmarks",
 	"pallet-collator-selection/runtime-benchmarks",
 	"pallet-message-queue/runtime-benchmarks",
-	"pallet-parachain-template/runtime-benchmarks",
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
@@ -177,6 +186,10 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 	"xcm-builder/runtime-benchmarks",
 	"xcm-executor/runtime-benchmarks",
+	"pallet-nft-marketplace/runtime-benchmarks",
+	"pallet-xcavate-whitelist/runtime-benchmarks",
+	"pallet-property-governance/runtime-benchmarks",
+	"pallet-property-management/runtime-benchmarks",
 ]
 
 try-runtime = [
@@ -193,7 +206,6 @@ try-runtime = [
 	"pallet-balances/try-runtime",
 	"pallet-collator-selection/try-runtime",
 	"pallet-message-queue/try-runtime",
-	"pallet-parachain-template/try-runtime",
 	"pallet-session/try-runtime",
 	"pallet-sudo/try-runtime",
 	"pallet-timestamp/try-runtime",
@@ -209,6 +221,10 @@ try-runtime = [
 	"parachain-info/try-runtime",
 	"polkadot-runtime-common/try-runtime",
 	"sp-runtime/try-runtime",
+	"pallet-nft-marketplace/try-runtime",
+	"pallet-xcavate-whitelist/try-runtime",
+	"pallet-property-governance/try-runtime",
+	"pallet-property-management/try-runtime",
 ]
 
 # Enable the metadata hash generation.

@@ -34,7 +34,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		ConstBool, ConstU32, ConstU64, ConstU8, EitherOfDiverse, TransformOrigin, VariantCountOf,
-		InstanceFilter, AsEnsureOriginWithArg, VariantCount,
+		InstanceFilter, AsEnsureOriginWithArg,
 	},
 	weights::{ConstantMultiplier, Weight},
 	PalletId, BoundedVec,
@@ -50,7 +50,7 @@ use polkadot_runtime_common::{
 	xcm_sender::NoPriceForMessageDelivery, BlockHashCount, SlowAdjustingFeeUpdate,
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::{Perbill, RuntimeDebug, traits::{BlakeTwo256, Verify}, MultiSignature};
+use sp_runtime::{Perbill, RuntimeDebug, traits::{BlakeTwo256, Verify}, Percent, MultiSignature};
 use sp_version::RuntimeVersion;
 use xcm::latest::prelude::BodyId;
 
@@ -62,12 +62,13 @@ use super::{
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, HOURS,
 	MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION, deposit,
-	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS,
+	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsFreezer, Assets,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use pallet_nfts::PalletFeatures;
+use types::TestId;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -312,12 +313,6 @@ impl pallet_collator_selection::Config for Runtime {
 	type WeightInfo = ();
 }
 
-/// Configure the pallet template in pallets/template.
-impl pallet_parachain_template::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_parachain_template::weights::SubstrateWeight<Runtime>;
-}
-
 parameter_types! {
     pub const MaxProxies: u32 = 32;
     pub const MaxPending: u32 = 32;
@@ -465,7 +460,7 @@ impl pallet_assets::Config<pallet_assets::Instance2> for Runtime {
     type Currency = Balances;
     type Extra = ();
     type ForceOrigin = EnsureRoot<AccountId>;
-    type Freezer = ();
+    type Freezer = AssetsFreezer;
     type MetadataDepositBase = MetadataDepositBase;
     type MetadataDepositPerByte = MetadataDepositPerByte;
     type RemoveItemsLimit = RemoveItemsLimit;
@@ -473,18 +468,6 @@ impl pallet_assets::Config<pallet_assets::Instance2> for Runtime {
     type StringLimit = StringLimit;
     /// Rerun benchmarks if you are making changes to runtime configuration.
     type WeightInfo = ();
-}
-
-#[derive(
-	Decode, Encode, MaxEncodedLen, PartialEq, Eq, Ord, PartialOrd, TypeInfo, Debug, Clone, Copy,
-)]
-pub enum TestId {
-	Marketplace,
-}
-
-impl VariantCount for TestId {
-	// Intentionally set below the actual count of variants, to allow testing for `can_freeze`
-	const VARIANT_COUNT: u32 = 2;
 }
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Runtime {
@@ -564,4 +547,113 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type BenchmarkHelper = ();
 	type RuntimeHoldReason = RuntimeHoldReason;
 }  
+
+parameter_types! {
+	pub const CommunityProjectPalletId: PalletId = PalletId(*b"py/cmprj");
+	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
+	pub const MaxNftTokens: u32 = 250;
+	pub const Postcode: u32 = 10;
+	pub const MaxPaymentOption: u32 = 2;
+	pub const ListingDepositAmount: Balance = 100 * UNIT;
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+}
+
+/// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
+impl pallet_nft_marketplace::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
+	type NativeCurrency = Balances;
+	type LocalCurrency = RealEstateAssets;
+	type ForeignCurrency = Assets;
+	type Nfts = Nfts;
+	type PalletId = NftMarketplacePalletId;
+	type MaxNftToken = MaxNftTokens;
+	type LocationOrigin = EnsureRoot<Self::AccountId>;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = pallet_nft_marketplace::NftHelper;
+	type TreasuryId = TreasuryPalletId;
+	type CommunityProjectsId = CommunityProjectPalletId;
+	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
+	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+	type PostcodeLimit = Postcode;
+	type MaxPaymentOptions = MaxPaymentOption;
+	type ListingDeposit = ListingDepositAmount;
+}
+
+parameter_types! {
+	pub const MaxWhitelistUsers: u32 = 1000;
+}
+
+/// Configure the pallet-xcavate-whitelist in pallets/xcavate-whitelist.
+impl pallet_xcavate_whitelist::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_xcavate_whitelist::weights::SubstrateWeight<Runtime>;
+	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
+	type MaxUsersInWhitelist = MaxWhitelistUsers;
+}
+
+parameter_types! {
+	pub const MinimumStakingAmount: Balance = 100 * UNIT;
+	pub const PropertyManagementPalletId: PalletId = PalletId(*b"py/ppmmt");
+	pub const MaxProperty: u32 = 1000;
+	pub const MaxLettingAgent: u32 = 100;
+	pub const MaxLocation: u32 = 100;
+	pub const PropertyReserves: Balance = 1000 * UNIT;
+	pub const PolkadotJsMultiply: Balance = 1 * UNIT;
+}
+
+/// Configure the pallet-property-management in pallets/property-management.
+impl pallet_property_management::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_property_management::weights::SubstrateWeight<Runtime>;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type NativeCurrency = Balances;
+	type ForeignCurrency = Assets;
+	type PalletId = PropertyManagementPalletId;
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = pallet_property_management::AssetHelper;
+	type AgentOrigin = EnsureRoot<Self::AccountId>;
+	type LettingAgentDeposit = MinimumStakingAmount;
+	type MaxProperties = MaxProperty;
+	type MaxLettingAgents = MaxLettingAgent;
+	type MaxLocations = MaxLocation;
+	type GovernanceId = PropertyGovernancePalletId;
+	type PropertyReserve = PropertyReserves;
+	type PolkadotJsMultiplier = PolkadotJsMultiply;
+}
+
+parameter_types! {
+	pub const PropertyVotingTime: BlockNumber = 20;
+	pub const MaxVoteForBlock: u32 = 100;
+	pub const MinimumSlashingAmount: Balance = 10 * UNIT;
+	pub const MaximumVoter: u32 = 100;
+	pub const VotingThreshold: Percent = Percent::from_percent(51);
+	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
+	pub const LowProposal: Balance = 500 * UNIT;
+	pub const HighProposal: Balance = 10_000 * UNIT;
+	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
+}
+
+/// Configure the pallet-property-governance in pallets/property-governance.
+impl pallet_property_governance::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
+	type NativeCurrency = Balances;
+	type ForeignCurrency = Assets;
+	type VotingTime = PropertyVotingTime;
+	type MaxVotesForBlock = MaxVoteForBlock;
+	type MinSlashingAmount = MinimumSlashingAmount;
+	type MaxVoter = MaximumVoter;
+	type Threshold = VotingThreshold;
+	type HighThreshold = HighVotingThreshold;
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = pallet_property_governance::AssetHelper;
+	type LowProposal = LowProposal;
+	type HighProposal = HighProposal;
+	type PalletId = PropertyGovernancePalletId;
+	type PolkadotJsMultiplier = PolkadotJsMultiply;
+}
 

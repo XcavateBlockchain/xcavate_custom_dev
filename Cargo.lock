@@ -6858,6 +6858,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-nft-marketplace"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-nft-fractionalization",
+ "pallet-nfts",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-nfts"
 version = "31.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6984,20 +7006,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-parachain-template"
-version = "0.1.0"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
-]
-
-[[package]]
 name = "pallet-parameters"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7027,6 +7035,51 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-property-governance"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-nft-fractionalization",
+ "pallet-nft-marketplace",
+ "pallet-nfts",
+ "pallet-property-management",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-property-management"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-nft-fractionalization",
+ "pallet-nft-marketplace",
+ "pallet-nfts",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7430,6 +7483,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-xcavate-whitelist"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-xcm"
 version = "16.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7564,8 +7631,10 @@ dependencies = [
  "pallet-message-queue",
  "pallet-multisig",
  "pallet-nft-fractionalization",
+ "pallet-nft-marketplace",
  "pallet-nfts",
- "pallet-parachain-template",
+ "pallet-property-governance",
+ "pallet-property-management",
  "pallet-proxy",
  "pallet-session",
  "pallet-sudo",
@@ -7573,6 +7642,7 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "pallet-utility",
+ "pallet-xcavate-whitelist",
  "pallet-xcm",
  "parachains-common",
  "parity-scale-codec",
@@ -7596,6 +7666,7 @@ dependencies = [
  "staging-xcm-builder",
  "staging-xcm-executor",
  "substrate-wasm-builder",
+ "types",
 ]
 
 [[package]]
@@ -14172,6 +14243,16 @@ name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
+
+[[package]]
+name = "types"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+]
 
 [[package]]
 name = "ucd-trie"
