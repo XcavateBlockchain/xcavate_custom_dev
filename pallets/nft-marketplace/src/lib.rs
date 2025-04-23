@@ -940,6 +940,21 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(4)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn confirm_deal(
+			origin: OriginFor<T>,
+			listing_id: ListingId
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			let nft_details =
+				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			ensure!(nft_details.real_estate_developer == signer, Error::<T>::NoPermission);
+			Self::developer_confirmation_handling(listing_id, nft_details, &[PaymentAssets::USDT, PaymentAssets::USDC])?;
+			Ok(())
+		}
+
 		/// Relist token on the marketplace.
 		/// The nft must be registered on the marketplace.
 		///
@@ -952,7 +967,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token of the real estate object that should be listed.
 		///
 		/// Emits `TokenListed` event when succesfful
-		#[pallet::call_index(4)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
 		pub fn relist_token(
 			origin: OriginFor<T>,
@@ -1014,7 +1029,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token the investor wants to buy.
 		///
 		/// Emits `TokenBought` event when succesfful.
-		#[pallet::call_index(5)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
 		pub fn buy_relisted_token(
 			origin: OriginFor<T>,
@@ -1056,7 +1071,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token that the investor wants to buy.
 		///
 		/// Emits `OfferCreated` event when succesfful.
-		#[pallet::call_index(6)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
 		pub fn make_offer(
 			origin: OriginFor<T>,
@@ -1092,7 +1107,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		/// - `offeror`: AccountId of the person that the seller wants to handle the offer from.
 		/// - `offer`: Enum for offer which is either Accept or Reject.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
 		pub fn handle_offer(
 			origin: OriginFor<T>,
@@ -1140,7 +1155,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `OfferCancelled` event when succesfful.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
 		pub fn cancel_offer(
 			origin: OriginFor<T>,
@@ -1166,7 +1181,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the nft.
 		///
 		/// Emits `ListingUpdated` event when succesfful.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
 		pub fn upgrade_listing(
 			origin: OriginFor<T>,
@@ -1200,7 +1215,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the object.
 		///
 		/// Emits `ObjectUpdated` event when succesfful.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
 		pub fn upgrade_object(
 			origin: OriginFor<T>,
@@ -1238,7 +1253,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the seller wants to delist.
 		///
 		/// Emits `ListingDelisted` event when succesfful.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
 		pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -1270,7 +1285,7 @@ pub mod pallet {
 		/// - `lawyer`: The lawyer that should be registered.
 		///
 		/// Emits `LawyerRegistered` event when succesfful.
-		#[pallet::call_index(12)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn register_lawyer(
 			origin: OriginFor<T>,
@@ -1293,7 +1308,7 @@ pub mod pallet {
 		/// - `costs`: The costs thats the lawyer demands for his work.
 		///
 		/// Emits `LawyerClaimedProperty` event when succesfful.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_property(
 			origin: OriginFor<T>,
@@ -1389,7 +1404,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing from the property.
 		///
 		/// Emits `LawyerRemovedFromCase` event when succesfful.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn remove_from_case(
 			origin: OriginFor<T>,
@@ -1423,7 +1438,7 @@ pub mod pallet {
 		/// - `approve`: Approves or Rejects the case.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_confirm_documents(
 			origin: OriginFor<T>,
@@ -1465,6 +1480,7 @@ pub mod pallet {
 						property_lawyer_details.clone(),
 						&[PaymentAssets::USDT, PaymentAssets::USDC],
 					)?; 
+					<TokenBuyer<T>>::take(listing_id);
 				}
 				(DocumentStatus::Rejected, DocumentStatus::Rejected) => {
 					Self::burn_tokens_and_nfts(listing_id)?;
@@ -1530,7 +1546,6 @@ pub mod pallet {
 		/// Sends the token to the new owners and the funds to the real estate developer once all 100 token
 		/// of a collection are sold.
 		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>, payment_assets: &[PaymentAssets]) -> DispatchResult {
-			let list = <TokenBuyer<T>>::take(listing_id);
 			let nft_details =
 				OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let treasury_id = Self::treasury_account_id();
@@ -1543,77 +1558,6 @@ pub mod pallet {
 			let spv_lawyer_id = property_lawyer_details
 				.spv_lawyer
 				.ok_or(Error::<T>::LawyerNotFound)?;
-
-			// Process each investor once for all assets and token distribution
-			for owner in list {
-				let token_details = TokenOwner::<T>::take(owner.clone(), listing_id);
-
-				// Process each payment asset
-				for asset in payment_assets {
-					if let (Some(paid_funds), Some(paid_tax)) = (
-						token_details.paid_funds.get(asset),
-						token_details.paid_tax.get(asset),
-					) {
-						if !paid_funds.is_zero() && !paid_tax.is_zero() {
-							// Calculate investor's fee (1% of paid_funds)
-							let investor_fee = paid_funds
-								.checked_mul(&1)
-								.ok_or(Error::<T>::MultiplyError)?
-								.checked_div(100)
-								.ok_or(Error::<T>::DivisionError)?;
-
-							// Total amount to unfreeze (paid_funds + fee + tax)
-							let total_investor_amount = paid_funds
-								.checked_add(&investor_fee)
-								.ok_or(Error::<T>::ArithmeticOverflow)?
-								.checked_add(*paid_tax)
-								.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-							// Unfreeze the investor's funds
-							let frozen_balance = T::AssetsFreezer::balance_frozen(
-								asset.id(),
-								&TestId::Marketplace,
-								&owner,
-							);
-							let new_frozen_balance = frozen_balance
-								.checked_sub(total_investor_amount)
-								.ok_or(Error::<T>::ArithmeticOverflow)?;
-							T::AssetsFreezer::set_freeze(
-								asset.id(),
-								&TestId::Marketplace,
-								&owner,
-								new_frozen_balance,
-							)?;
-
-							// Transfer funds to property account
-							Self::transfer_funds(
-								owner.clone(),
-								property_account.clone(),
-								total_investor_amount,
-								asset.id(),
-							)?;
-						}
-					}
-				}
-
-				// Distribute property tokens
-				let token_amount = token_details.token_amount.into();
-
-				T::LocalCurrency::transfer(
-					nft_details.asset_id,
-					&property_account,
-					&owner,
-					token_amount,
-					Preservation::Expendable,
-				)?;
-
-				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
-					keys.try_push(owner.clone())
-						.map_err(|_| Error::<T>::TooManyTokenBuyer)?;
-					Ok::<(), DispatchError>(())
-				})?;
-				PropertyOwnerToken::<T>::insert(nft_details.asset_id, owner.clone(), token_details.token_amount);
-			}
 
 			// Distribute funds from property account for each asset
 			for asset in payment_assets {
@@ -1694,6 +1638,83 @@ pub mod pallet {
 				registered_nft_details,
 			);
 
+			Ok(())
+		}
+
+		fn developer_confirmation_handling(listing_id: u32, nft_details: NftListingDetailsType<T>, payment_assets: &[PaymentAssets]) -> DispatchResult {
+			let list = <TokenBuyer<T>>::get(listing_id);		
+			let property_account = Self::property_account_id(nft_details.asset_id);
+			
+			// Process each investor once for all assets and token distribution
+			for owner in list {
+				let token_details = TokenOwner::<T>::take(owner.clone(), listing_id);
+
+				// Process each payment asset
+				for asset in payment_assets {
+					if let (Some(paid_funds), Some(paid_tax)) = (
+						token_details.paid_funds.get(asset),
+						token_details.paid_tax.get(asset),
+					) {
+						if !paid_funds.is_zero() && !paid_tax.is_zero() {
+							// Calculate investor's fee (1% of paid_funds)
+							let investor_fee = paid_funds
+								.checked_mul(&1)
+								.ok_or(Error::<T>::MultiplyError)?
+								.checked_div(100)
+								.ok_or(Error::<T>::DivisionError)?;
+
+							// Total amount to unfreeze (paid_funds + fee + tax)
+							let total_investor_amount = paid_funds
+								.checked_add(&investor_fee)
+								.ok_or(Error::<T>::ArithmeticOverflow)?
+								.checked_add(*paid_tax)
+								.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+							// Unfreeze the investor's funds
+							let frozen_balance = T::AssetsFreezer::balance_frozen(
+								asset.id(),
+								&TestId::Marketplace,
+								&owner,
+							);
+							let new_frozen_balance = frozen_balance
+								.checked_sub(total_investor_amount)
+								.ok_or(Error::<T>::ArithmeticOverflow)?;
+							T::AssetsFreezer::set_freeze(
+								asset.id(),
+								&TestId::Marketplace,
+								&owner,
+								new_frozen_balance,
+							)?;
+
+							// Transfer funds to property account
+							Self::transfer_funds(
+								owner.clone(),
+								property_account.clone(),
+								total_investor_amount,
+								asset.id(),
+							)?;
+						}
+					}
+				}
+
+				// Distribute property tokens
+				let token_amount = token_details.token_amount.into();
+
+				T::LocalCurrency::transfer(
+					nft_details.asset_id,
+					&property_account,
+					&owner,
+					token_amount,
+					Preservation::Expendable,
+				)?;
+
+				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
+					keys.try_push(owner.clone())
+						.map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+					Ok::<(), DispatchError>(())
+				})?;
+				PropertyOwnerToken::<T>::insert(nft_details.asset_id, owner.clone(), token_details.token_amount);
+			}
 			Ok(())
 		}
 
