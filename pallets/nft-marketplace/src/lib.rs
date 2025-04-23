@@ -1150,7 +1150,8 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, signer.clone()).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(offer_details.buyer == signer.clone(), Error::<T>::NoPermission);
 			let price = offer_details.get_total_amount()?;
-			Self::transfer_funds(Self::property_account_id(listing_id), offer_details.buyer, price, offer_details.payment_assets.id())?;
+			let listing_details = TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
+			Self::transfer_funds(Self::property_account_id(listing_details.asset_id), offer_details.buyer, price, offer_details.payment_assets.id())?;
 			Self::deposit_event(Event::<T>::OfferCancelled { listing_id, account_id: signer.clone() });
 			Ok(())
 		}
@@ -1540,6 +1541,7 @@ pub mod pallet {
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let pallet_account = Self::property_account_id(nft_details.asset_id);
 			let treasury_id = Self::treasury_account_id();
+			let property_account = Self::property_account_id(nft_details.asset_id);
 
 			// Get lawyer accounts
 			let real_estate_developer_lawyer_id = property_lawyer_details
@@ -1548,17 +1550,10 @@ pub mod pallet {
 			let spv_lawyer_id = property_lawyer_details
 				.spv_lawyer
 				.ok_or(Error::<T>::LawyerNotFound)?;
+
 			// Get total collected amounts for proportional calculations
 			let total_collected_funds = nft_details
 				.collected_funds
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let total_collected_tax = nft_details
-				.collected_tax
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let total_collected_fees = nft_details
-				.collected_fees
 				.get(&payment_asset)
 				.ok_or(Error::<T>::AssetNotSupported)?;
 			let real_estate_developer_lawyer_costs = property_lawyer_details
@@ -1569,11 +1564,31 @@ pub mod pallet {
 				.spv_lawyer_costs
 				.get(&payment_asset)
 				.ok_or(Error::<T>::AssetNotSupported)?;
+			let developer_amount = total_collected_funds
+				.checked_mul(&99)
+				.ok_or(Error::<T>::MultiplyError)?
+				.checked_div(100)
+				.ok_or(Error::<T>::DivisionError)?;
+			let treasury_amount = total_collected_funds
+				.checked_div(&100u128)
+				.ok_or(Error::<T>::DivisionError)?
+				.checked_add(*nft_details.collected_fees
+					.get(&payment_asset)
+					.ok_or(Error::<T>::AssetNotSupported)?)
+				.ok_or(Error::<T>::ArithmeticOverflow)?
+				.saturating_sub(*real_estate_developer_lawyer_costs)
+				.saturating_sub(*spv_lawyer_costs);
+			let tax = nft_details
+				.collected_tax
+				.get(&payment_asset)
+				.ok_or(Error::<T>::AssetNotSupported)?;
+			let real_estate_developer_amount = tax
+				.checked_add(&real_estate_developer_lawyer_costs)
+				.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 			for owner in list {
 				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::get(owner.clone(), listing_id);
 				if let Some(paid_funds) = token_details.paid_funds.get(&payment_asset) {
-					print!("I have {}\n\n\n", paid_funds);
 					let paid_funds = token_details
 						.paid_funds
 						.get(&payment_asset)
@@ -1583,7 +1598,6 @@ pub mod pallet {
 						.get(&payment_asset)
 						.ok_or(Error::<T>::AssetNotSupported)?;
 					if !paid_funds.is_zero() {
-						print!("I am here and awesome\n\n\n with {}", payment_asset.id());
 						// Calculate investor's fee (1% of paid_funds)
 						let investor_fee = paid_funds
 							.checked_mul(&1)
@@ -1602,71 +1616,40 @@ pub mod pallet {
 						let new_frozen_balance = frozen_balance.checked_sub(total_investor_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
 						T::AssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &owner, new_frozen_balance)?;
 						
-						// Transfer funds to respective accounts
-						// To seller (99% of paid_funds)
-						let developer_part = paid_funds
-							.checked_mul(&99)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(100)
-							.ok_or(Error::<T>::DivisionError)?;
 						Self::transfer_funds(
 							owner.clone(),
-							nft_details.real_estate_developer.clone(),
-							developer_part,
+							property_account.clone(),
+							total_investor_amount,
 							payment_asset.id(),
 						)?;
-
-						// To real estate developer lawyer (tax + proportional lawyer costs)
-						let real_estate_developer_lawyer_part = paid_funds
-							.checked_mul(&real_estate_developer_lawyer_costs)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(*total_collected_funds)
-							.ok_or(Error::<T>::DivisionError)?;
-						let real_estate_developer_part = paid_tax
-							.checked_add(&real_estate_developer_lawyer_part)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						Self::transfer_funds(
-							owner.clone(),
-							real_estate_developer_lawyer_id.clone(),
-							real_estate_developer_part,
-							payment_asset.id(),
-						)?;
-
-						// To SPV lawyer (proportional lawyer costs)
-						let spv_lawyer_part = paid_funds
-							.checked_mul(spv_lawyer_costs)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(*total_collected_funds)
-							.ok_or(Error::<T>::DivisionError)?;
-						Self::transfer_funds(
-							owner.clone(),
-							spv_lawyer_id.clone(),
-							spv_lawyer_part,
-							payment_asset.id(),
-						)?;
-
-						// To treasury (1% of paid_funds + fee - lawyer costs)
-						let treasury_part = investor_fee
-							.checked_add(
-								paid_funds
-									.checked_mul(total_collected_fees)
-									.ok_or(Error::<T>::MultiplyError)?
-									.checked_div(*total_collected_funds)
-									.ok_or(Error::<T>::DivisionError)?,
-							)
-							.ok_or(Error::<T>::ArithmeticOverflow)?
-							.saturating_sub(real_estate_developer_lawyer_part)
-							.saturating_sub(spv_lawyer_part);
-						Self::transfer_funds(
-							owner.clone(),
-							treasury_id.clone(),
-							treasury_part,
-							payment_asset.id(),
-						)?;
-						print!("Wow now I am here\n\n\n");
 					}
 				}
 			}
+			Self::transfer_funds(
+				property_account.clone(),
+				nft_details.real_estate_developer.clone(),
+				developer_amount,
+				payment_asset.id(),
+			)?;
+			Self::transfer_funds(
+				property_account.clone(),
+				real_estate_developer_lawyer_id.clone(),
+				real_estate_developer_amount,
+				payment_asset.id(),
+			)?;
+			Self::transfer_funds(
+				property_account.clone(),
+				spv_lawyer_id.clone(),
+				*spv_lawyer_costs,
+				payment_asset.id(),
+			)?;
+			Self::transfer_funds(
+				property_account,
+				treasury_id,
+				treasury_amount,
+				payment_asset.id(),
+			)?;
+
 			let mut registered_nft_details =
 				RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
 					.ok_or(Error::<T>::InvalidIndex)?;
@@ -1742,6 +1725,11 @@ pub mod pallet {
 			let property_account = Self::property_account_id(nft_details.asset_id);
 			let payment_asset_usdt = PaymentAssets::USDT;
 			let payment_asset_usdc = PaymentAssets::USDC;
+
+			let treasury_id = Self::treasury_account_id();
+			let spv_lawyer_id = property_lawyer_details.spv_lawyer
+				.ok_or(Error::<T>::LawyerNotFound)?;
+
 			let fees_usdt = nft_details
 				.collected_fees
 				.get(&payment_asset_usdt)
@@ -1750,54 +1738,126 @@ pub mod pallet {
 				.collected_fees
 				.get(&payment_asset_usdc)
 				.ok_or(Error::<T>::AssetNotSupported)?;
-			let treasury_id = Self::treasury_account_id();
-			let spv_lawyer_costs_usdt = 
-				property_lawyer_details
-					.spv_lawyer_costs
-					.get(&payment_asset_usdt)
-					.ok_or(Error::<T>::AssetNotSupported)?;
-			let spv_lawyer_costs_usdc = 
-				property_lawyer_details
-					.spv_lawyer_costs
-					.get(&payment_asset_usdc)
-					.ok_or(Error::<T>::AssetNotSupported)?;
+			let spv_lawyer_costs_usdt = property_lawyer_details
+				.spv_lawyer_costs
+				.get(&payment_asset_usdt)
+				.ok_or(Error::<T>::AssetNotSupported)?;
+			let spv_lawyer_costs_usdc = property_lawyer_details
+				.spv_lawyer_costs
+				.get(&payment_asset_usdc)
+				.ok_or(Error::<T>::AssetNotSupported)?;
 			let treasury_amount_usdt = fees_usdt
 				.checked_sub(spv_lawyer_costs_usdt)
 				.ok_or(Error::<T>::ArithmeticUnderflow)?;
 			let treasury_amount_usdc = fees_usdc
 				.checked_sub(spv_lawyer_costs_usdc)
 				.ok_or(Error::<T>::ArithmeticUnderflow)?;
-			Self::transfer_funds(property_account.clone(), treasury_id.clone(), treasury_amount_usdt, payment_asset_usdt.id())?;
-			Self::transfer_funds(property_account.clone(), treasury_id, treasury_amount_usdc, payment_asset_usdc.id())?;
-			let spv_lawyer_id = match property_lawyer_details.spv_lawyer {
-				Some(account_id) => account_id,
-				None => return Err(Error::<T>::LawyerNotFound.into()),
-			};
-			Self::transfer_funds(property_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
-			Self::transfer_funds(property_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
 			for owner in list {
 				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
-				let paid_tax_usdt = token_details.paid_tax.get(&PaymentAssets::USDT).ok_or(Error::<T>::AssetNotSupported)?;
-				let refund_amount_usdt = token_details
-					.paid_funds
-					.get(&PaymentAssets::USDT)
-					.ok_or(Error::<T>::AssetNotSupported)?
-					.checked_add(&paid_tax_usdt)
-					.ok_or(Error::<T>::ArithmeticOverflow)?;
 				
-				Self::transfer_funds(property_account.clone(), owner.clone(), refund_amount_usdt, payment_asset_usdt.id())?;
-				let paid_tax_usdc = token_details.paid_tax.get(&PaymentAssets::USDC).ok_or(Error::<T>::AssetNotSupported)?;
-				let refund_amount_usdc = token_details
-					.paid_funds
-					.get(&PaymentAssets::USDC)
-					.ok_or(Error::<T>::AssetNotSupported)?
-					.checked_add(&paid_tax_usdc)
-					.ok_or(Error::<T>::ArithmeticOverflow)?;
-				
-				Self::transfer_funds(property_account.clone(), owner.clone(), refund_amount_usdc, payment_asset_usdc.id())?;
+				// Process USDT payments if the owner has paid in USDT
+				if let (Some(paid_funds_usdt), Some(paid_tax_usdt)) = (
+					token_details.paid_funds.get(&payment_asset_usdt),
+					token_details.paid_tax.get(&payment_asset_usdt),
+				) {
+					if !paid_funds_usdt.is_zero() && !paid_tax_usdt.is_zero() {
+						// Calculate total refund amount (paid funds + tax)
+						let refund_amount_usdt = paid_funds_usdt
+							.checked_add(&paid_tax_usdt)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+						// Calculate investor fee (1% of paid funds)
+						let investor_fee_usdt = paid_funds_usdt
+							.checked_mul(&1)
+							.ok_or(Error::<T>::MultiplyError)?
+							.checked_div(100)
+							.ok_or(Error::<T>::DivisionError)?;
+
+						// Total amount to unfreeze (refund + fee)
+						let total_investor_amount_usdt = refund_amount_usdt
+							.checked_add(investor_fee_usdt)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+						// Unfreeze the investor's USDT funds
+						let frozen_balance_usdt = T::AssetsFreezer::balance_frozen(
+							payment_asset_usdt.id(),
+							&TestId::Marketplace,
+							&owner,
+						);
+						let new_frozen_balance_usdt = frozen_balance_usdt
+							.checked_sub(total_investor_amount_usdt)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+						T::AssetsFreezer::set_freeze(
+							payment_asset_usdt.id(),
+							&TestId::Marketplace,
+							&owner,
+							new_frozen_balance_usdt,
+						)?;
+
+						// Transfer USDT funds to property account
+						Self::transfer_funds(
+							owner.clone(),
+							property_account.clone(),
+							investor_fee_usdt,
+							payment_asset_usdt.id(),
+						)?;
+					}
+				}
+				// Process USDC payments if the owner has paid in USDC
+				if let (Some(paid_funds_usdc), Some(paid_tax_usdc)) = (
+					token_details.paid_funds.get(&payment_asset_usdc),
+					token_details.paid_tax.get(&payment_asset_usdc),
+				) {
+					if !paid_funds_usdc.is_zero() && !paid_tax_usdc.is_zero() {
+						// Calculate total refund amount (paid funds + tax)
+						let refund_amount_usdc = paid_funds_usdc
+							.checked_add(&paid_tax_usdc)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+						// Calculate investor fee (1% of paid funds)
+						let investor_fee_usdc = paid_funds_usdc
+							.checked_mul(&1)
+							.ok_or(Error::<T>::MultiplyError)?
+							.checked_div(100)
+							.ok_or(Error::<T>::DivisionError)?;
+
+						// Total amount to unfreeze (refund + fee)
+						let total_investor_amount_usdc = refund_amount_usdc
+							.checked_add(investor_fee_usdc)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+						// Unfreeze the investor's USDC funds
+						let frozen_balance_usdc = T::AssetsFreezer::balance_frozen(
+							payment_asset_usdc.id(),
+							&TestId::Marketplace,
+							&owner,
+						);
+						let new_frozen_balance_usdc = frozen_balance_usdc
+							.checked_sub(total_investor_amount_usdc)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+						T::AssetsFreezer::set_freeze(
+							payment_asset_usdc.id(),
+							&TestId::Marketplace,
+							&owner,
+							new_frozen_balance_usdc,
+						)?;
+
+						// Transfer USDC funds to treasury and SPV lawyer
+						Self::transfer_funds(
+							owner.clone(),
+							property_account.clone(),
+							investor_fee_usdc,
+							payment_asset_usdc.id(),
+						)?;
+					}
+				}				
 				PropertyOwner::<T>::take(nft_details.asset_id);
 				PropertyOwnerToken::<T>::take(nft_details.asset_id, owner);
 			}
+			Self::transfer_funds(property_account.clone(), treasury_id.clone(), treasury_amount_usdt, payment_asset_usdt.id())?;
+			Self::transfer_funds(property_account.clone(), treasury_id, treasury_amount_usdc, payment_asset_usdc.id())?;
+			Self::transfer_funds(property_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
+			Self::transfer_funds(property_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
 			Ok(())
 		}
 
@@ -1929,6 +1989,19 @@ pub mod pallet {
 			if !amount.is_zero() {
 				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
 					.map_err(|_| Error::<T>::NotEnoughFunds)?;
+			}
+			Ok(())
+		}
+
+		fn transfer_funds1(
+			from: AccountIdOf<T>,
+			to: AccountIdOf<T>,
+			amount: Balance,
+			asset: u32,
+		) -> DispatchResult {
+			if !amount.is_zero() {
+				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
+					.map_err(|_| Error::<T>::NotEnoughFunds1)?;
 			}
 			Ok(())
 		}
