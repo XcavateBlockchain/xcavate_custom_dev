@@ -605,6 +605,7 @@ pub mod pallet {
 		AssetNotSupported1,
 		ExceedsMaxEntries,
 		InitializationFailed,
+		FundsMismatch,
 	}
 
 	#[pallet::call]
@@ -701,12 +702,12 @@ pub mod pallet {
 			);
 			let item_id = NextNftId::<T>::get(collection_id);
 			let mut asset_number: u32 = NextAssetId::<T>::get();
-			let mut asset_id: LocalAssetIdOf<T> = asset_number.into();
+			let mut asset_id: LocalAssetIdOf<T> = asset_number;
 			while !T::LocalCurrency::total_issuance(asset_id)
 				.is_zero()
 			{
 				asset_number = asset_number.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
-				asset_id = asset_number.into();
+				asset_id = asset_number;
 			}
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
 			let mut listing_id = NextListingId::<T>::get();
@@ -974,7 +975,7 @@ pub mod pallet {
 				LocationRegistration::<T>::get(region, nft_details.location),
 				Error::<T>::LocationUnknown
 			);
-			let token_amount: Balance = amount.try_into().map_err(|_| Error::<T>::ConversionError)?;
+			let token_amount: Balance = amount.into();
 			let mut listing_id = NextListingId::<T>::get();
 			T::LocalCurrency::transfer(
 				nft_details.asset_id,
@@ -1177,7 +1178,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let _ = TokenListings::<T>::try_mutate(listing_id, |maybe_listing_details| {
+			TokenListings::<T>::try_mutate(listing_id, |maybe_listing_details| {
 				let listing_details = maybe_listing_details.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
 				ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
 				listing_details.token_price = new_price;
@@ -1212,7 +1213,7 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(ListedToken::<T>::contains_key(listing_id), Error::<T>::TokenNotForSale);
-			let _ = OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_nft_details| {
+			OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_nft_details| {
 				let nft_details = maybe_nft_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 				ensure!(nft_details.real_estate_developer == signer.clone(), Error::<T>::NoPermission);
 				ensure!(
@@ -1462,15 +1463,8 @@ pub mod pallet {
  					Self::execute_deal(
 						listing_id, 
 						property_lawyer_details.clone(),
-						PaymentAssets::USDT,
+						&[PaymentAssets::USDT, PaymentAssets::USDC],
 					)?; 
- 					Self::execute_deal(
-						listing_id, 
-						property_lawyer_details,
-						PaymentAssets::USDC,
-					)?; 
-					Self::distribute_property_token(listing_id)?;
-					OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 				}
 				(DocumentStatus::Rejected, DocumentStatus::Rejected) => {
 					Self::burn_tokens_and_nfts(listing_id)?;
@@ -1535,11 +1529,10 @@ pub mod pallet {
 
 		/// Sends the token to the new owners and the funds to the real estate developer once all 100 token
 		/// of a collection are sold.
-		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>, payment_asset: PaymentAssets) -> DispatchResult {
-			let list = <TokenBuyer<T>>::get(listing_id);
+		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>, payment_assets: &[PaymentAssets]) -> DispatchResult {
+			let list = <TokenBuyer<T>>::take(listing_id);
 			let nft_details =
-				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			let pallet_account = Self::property_account_id(nft_details.asset_id);
+				OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let treasury_id = Self::treasury_account_id();
 			let property_account = Self::property_account_id(nft_details.asset_id);
 
@@ -1551,139 +1544,156 @@ pub mod pallet {
 				.spv_lawyer
 				.ok_or(Error::<T>::LawyerNotFound)?;
 
-			// Get total collected amounts for proportional calculations
-			let total_collected_funds = nft_details
-				.collected_funds
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let real_estate_developer_lawyer_costs = property_lawyer_details
-				.real_estate_developer_lawyer_costs
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let spv_lawyer_costs = property_lawyer_details
-				.spv_lawyer_costs
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let developer_amount = total_collected_funds
-				.checked_mul(&99)
-				.ok_or(Error::<T>::MultiplyError)?
-				.checked_div(100)
-				.ok_or(Error::<T>::DivisionError)?;
-			let treasury_amount = total_collected_funds
-				.checked_div(&100u128)
-				.ok_or(Error::<T>::DivisionError)?
-				.checked_add(*nft_details.collected_fees
-					.get(&payment_asset)
-					.ok_or(Error::<T>::AssetNotSupported)?)
-				.ok_or(Error::<T>::ArithmeticOverflow)?
-				.saturating_sub(*real_estate_developer_lawyer_costs)
-				.saturating_sub(*spv_lawyer_costs);
-			let tax = nft_details
-				.collected_tax
-				.get(&payment_asset)
-				.ok_or(Error::<T>::AssetNotSupported)?;
-			let real_estate_developer_amount = tax
-				.checked_add(&real_estate_developer_lawyer_costs)
-				.ok_or(Error::<T>::ArithmeticOverflow)?;
-
+			// Process each investor once for all assets and token distribution
 			for owner in list {
-				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::get(owner.clone(), listing_id);
-				if let Some(paid_funds) = token_details.paid_funds.get(&payment_asset) {
-					let paid_funds = token_details
-						.paid_funds
-						.get(&payment_asset)
-						.ok_or(Error::<T>::AssetNotSupported1)?;
-					let paid_tax = token_details
-						.paid_tax
-						.get(&payment_asset)
-						.ok_or(Error::<T>::AssetNotSupported)?;
-					if !paid_funds.is_zero() {
-						// Calculate investor's fee (1% of paid_funds)
-						let investor_fee = paid_funds
-							.checked_mul(&1)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(100)
-							.ok_or(Error::<T>::DivisionError)?;
+				let token_details = TokenOwner::<T>::take(owner.clone(), listing_id);
 
-						// Total amount to unfreeze (paid_funds + fee + tax)
-						let total_investor_amount = paid_funds
-							.checked_add(&investor_fee)
-							.ok_or(Error::<T>::ArithmeticOverflow)?
-							.checked_add(*paid_tax)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						
-						let frozen_balance = T::AssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &owner);
-						let new_frozen_balance = frozen_balance.checked_sub(total_investor_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
-						T::AssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &owner, new_frozen_balance)?;
-						
-						Self::transfer_funds(
-							owner.clone(),
-							property_account.clone(),
-							total_investor_amount,
-							payment_asset.id(),
-						)?;
+				// Process each payment asset
+				for asset in payment_assets {
+					if let (Some(paid_funds), Some(paid_tax)) = (
+						token_details.paid_funds.get(asset),
+						token_details.paid_tax.get(asset),
+					) {
+						if !paid_funds.is_zero() && !paid_tax.is_zero() {
+							// Calculate investor's fee (1% of paid_funds)
+							let investor_fee = paid_funds
+								.checked_mul(&1)
+								.ok_or(Error::<T>::MultiplyError)?
+								.checked_div(100)
+								.ok_or(Error::<T>::DivisionError)?;
+
+							// Total amount to unfreeze (paid_funds + fee + tax)
+							let total_investor_amount = paid_funds
+								.checked_add(&investor_fee)
+								.ok_or(Error::<T>::ArithmeticOverflow)?
+								.checked_add(*paid_tax)
+								.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+							// Unfreeze the investor's funds
+							let frozen_balance = T::AssetsFreezer::balance_frozen(
+								asset.id(),
+								&TestId::Marketplace,
+								&owner,
+							);
+							let new_frozen_balance = frozen_balance
+								.checked_sub(total_investor_amount)
+								.ok_or(Error::<T>::ArithmeticOverflow)?;
+							T::AssetsFreezer::set_freeze(
+								asset.id(),
+								&TestId::Marketplace,
+								&owner,
+								new_frozen_balance,
+							)?;
+
+							// Transfer funds to property account
+							Self::transfer_funds(
+								owner.clone(),
+								property_account.clone(),
+								total_investor_amount,
+								asset.id(),
+							)?;
+						}
 					}
 				}
-			}
-			Self::transfer_funds(
-				property_account.clone(),
-				nft_details.real_estate_developer.clone(),
-				developer_amount,
-				payment_asset.id(),
-			)?;
-			Self::transfer_funds(
-				property_account.clone(),
-				real_estate_developer_lawyer_id.clone(),
-				real_estate_developer_amount,
-				payment_asset.id(),
-			)?;
-			Self::transfer_funds(
-				property_account.clone(),
-				spv_lawyer_id.clone(),
-				*spv_lawyer_costs,
-				payment_asset.id(),
-			)?;
-			Self::transfer_funds(
-				property_account,
-				treasury_id,
-				treasury_amount,
-				payment_asset.id(),
-			)?;
 
+				// Distribute property tokens
+				let token_amount = token_details.token_amount.into();
+
+				T::LocalCurrency::transfer(
+					nft_details.asset_id,
+					&property_account,
+					&owner,
+					token_amount,
+					Preservation::Expendable,
+				)?;
+
+				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
+					keys.try_push(owner.clone())
+						.map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+					Ok::<(), DispatchError>(())
+				})?;
+				PropertyOwnerToken::<T>::insert(nft_details.asset_id, owner.clone(), token_details.token_amount);
+			}
+
+			// Distribute funds from property account for each asset
+			for asset in payment_assets {
+				// Get total collected amounts and lawyer costs
+				let total_collected_funds = nft_details
+					.collected_funds
+					.get(asset)
+					.ok_or(Error::<T>::AssetNotSupported)?;
+				let real_estate_developer_lawyer_costs = property_lawyer_details
+					.real_estate_developer_lawyer_costs
+					.get(asset)
+					.ok_or(Error::<T>::AssetNotSupported)?;
+				let spv_lawyer_costs = property_lawyer_details
+					.spv_lawyer_costs
+					.get(asset)
+					.ok_or(Error::<T>::AssetNotSupported)?;
+				let tax = nft_details
+					.collected_tax
+					.get(asset)
+					.ok_or(Error::<T>::AssetNotSupported)?;
+				let collected_fees = nft_details
+					.collected_fees
+					.get(asset)
+					.ok_or(Error::<T>::AssetNotSupported)?;
+
+				// Calculate amounts to distribute
+				let developer_amount = total_collected_funds
+					.checked_mul(&99)
+					.ok_or(Error::<T>::MultiplyError)?
+					.checked_div(100)
+					.ok_or(Error::<T>::DivisionError)?;
+				let real_estate_developer_amount = tax
+					.checked_add(real_estate_developer_lawyer_costs)
+					.ok_or(Error::<T>::ArithmeticOverflow)?;
+				let treasury_amount = total_collected_funds
+					.checked_div(&100u128)
+					.ok_or(Error::<T>::DivisionError)?
+					.checked_add(*collected_fees)
+					.ok_or(Error::<T>::ArithmeticOverflow)?
+					.saturating_sub(*real_estate_developer_lawyer_costs)
+					.saturating_sub(*spv_lawyer_costs);
+
+				// Transfer funds from property account
+				Self::transfer_funds(
+					property_account.clone(),
+					nft_details.real_estate_developer.clone(),
+					developer_amount,
+					asset.id(),
+				)?;
+				Self::transfer_funds(
+					property_account.clone(),
+					real_estate_developer_lawyer_id.clone(),
+					real_estate_developer_amount,
+					asset.id(),
+				)?;
+				Self::transfer_funds(
+					property_account.clone(),
+					spv_lawyer_id.clone(),
+					*spv_lawyer_costs,
+					asset.id(),
+				)?;
+				Self::transfer_funds(
+					property_account.clone(),
+					treasury_id.clone(),
+					treasury_amount,
+					asset.id(),
+				)?;
+			}
+
+			// Update registered NFT details to mark SPV as created
 			let mut registered_nft_details =
-				RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
-					.ok_or(Error::<T>::InvalidIndex)?;
+					RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
+						.ok_or(Error::<T>::InvalidIndex)?;
 			registered_nft_details.spv_created = true;
 			RegisteredNftDetails::<T>::insert(
 				nft_details.collection_id,
 				nft_details.item_id,
 				registered_nft_details,
 			);
-			Ok(())
-		}
 
-		fn distribute_property_token(listing_id: u32) -> DispatchResult {
-			let list = <TokenBuyer<T>>::take(listing_id);
-			let nft_details =
-				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			let pallet_account = Self::property_account_id(nft_details.asset_id);
-			for owner in list {
-				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
-				let token_amount = token_details.token_amount.try_into().map_err(|_| Error::<T>::ConversionError)?;
-				T::LocalCurrency::transfer(
-					nft_details.asset_id,
-					&pallet_account.clone(),
-					&owner.clone(),
-					token_amount,
-					Preservation::Expendable,
-				)?;
-				
-				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
-					keys.try_push(owner.clone()).map_err(|_| Error::<T>::TooManyTokenBuyer)?;
-					Ok::<(), DispatchError>(())
-				})?;
-				PropertyOwnerToken::<T>::insert(nft_details.asset_id, owner, token_details.token_amount as u32)
-			}
 			Ok(())
 		}
 
@@ -1763,7 +1773,7 @@ pub mod pallet {
 					if !paid_funds_usdt.is_zero() && !paid_tax_usdt.is_zero() {
 						// Calculate total refund amount (paid funds + tax)
 						let refund_amount_usdt = paid_funds_usdt
-							.checked_add(&paid_tax_usdt)
+							.checked_add(paid_tax_usdt)
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 						// Calculate investor fee (1% of paid funds)
@@ -1811,7 +1821,7 @@ pub mod pallet {
 					if !paid_funds_usdc.is_zero() && !paid_tax_usdc.is_zero() {
 						// Calculate total refund amount (paid funds + tax)
 						let refund_amount_usdc = paid_funds_usdc
-							.checked_add(&paid_tax_usdc)
+							.checked_add(paid_tax_usdc)
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 						// Calculate investor fee (1% of paid funds)
@@ -1989,19 +1999,6 @@ pub mod pallet {
 			if !amount.is_zero() {
 				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
 					.map_err(|_| Error::<T>::NotEnoughFunds)?;
-			}
-			Ok(())
-		}
-
-		fn transfer_funds1(
-			from: AccountIdOf<T>,
-			to: AccountIdOf<T>,
-			amount: Balance,
-			asset: u32,
-		) -> DispatchResult {
-			if !amount.is_zero() {
-				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
-					.map_err(|_| Error::<T>::NotEnoughFunds1)?;
 			}
 			Ok(())
 		}

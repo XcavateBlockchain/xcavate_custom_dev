@@ -85,22 +85,12 @@ pub mod pallet {
 	}
 
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, PartialOrd)]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, PartialOrd, Default)]
 	#[scale_info(skip_type_params(T))]
 	pub struct PropertyReserveDetails {
 		pub usdt: Balance,
 		pub usdc: Balance,
 		pub total: Balance,
-	}
-
-	impl Default for PropertyReserveDetails {
-		fn default() -> Self {
-			Self {
-				usdt: 0,
-				usdc: 0,
-				total: 0,
-			}
-		}
 	}
 
 	#[pallet::config]
@@ -344,7 +334,7 @@ pub mod pallet {
 			LettingInfo::<T>::try_mutate(signer.clone(), |maybe_letting_info|{
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoPermission)?;
 				ensure!(!letting_info.deposited, Error::<T>::AlreadyDeposited);
-				ensure!(letting_info.locations.len() > 0, Error::<T>::NoLoactions);
+				ensure!(!letting_info.locations.is_empty(), Error::<T>::NoLoactions);
 				ensure!(
 					!LettingAgentLocations::<T>::get(
 						letting_info.region,
@@ -501,8 +491,7 @@ pub mod pallet {
 		
 			let property_price_converted: Balance = TryInto::<u64>::try_into(property_price)
 				.map_err(|_| Error::<T>::ConversionError)?
-				.try_into()
-				.map_err(|_| Error::<T>::ConversionError)?;
+				.into();
 		
 			let required_reserve = property_price_converted
 				.checked_div(25)

@@ -4,7 +4,7 @@ use frame_support::{assert_noop, assert_ok};
 use crate::{RegionCollections, LocationRegistration, ListedToken, NextNftId,
 	OngoingObjectListing, NextAssetId, RegisteredNftDetails, TokenOwner, TokenBuyer,
 	TokenListings, OngoingOffers, PropertyOwnerToken, PropertyOwner, PropertyLawyer,
-	RealEstateLawyer, TokenOwnerDetails};
+	RealEstateLawyer};
 use pallet_assets::FrozenBalance;
 
 macro_rules! bvec {

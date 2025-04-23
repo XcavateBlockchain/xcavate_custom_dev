@@ -631,13 +631,11 @@ pub mod pallet {
 							{
 								let _ = Self::execute_proposal(proposal);
 							}
-							else {
-								if yes_votes_percentage <= no_votes_percentage {
-									Self::deposit_event(Event::ProposalRejected { proposal_id });
-								} else {
-									Self::deposit_event(Event::ProposalThresHoldNotReached { proposal_id, required_threshold });
-								}								
-							}
+							else if yes_votes_percentage <= no_votes_percentage {
+								Self::deposit_event(Event::ProposalRejected { proposal_id });
+							} else {
+								Self::deposit_event(Event::ProposalThresHoldNotReached { proposal_id, required_threshold });
+							}								
 						}
 					}
 				}
@@ -692,9 +690,9 @@ pub mod pallet {
 							} else {
 								Challenges::<T>::take(challenge_id);
 								if yes_votes_percentage <= no_votes_percentage {
-									Self::deposit_event(Event::ChallengeRejected {challenge_id: challenge_id, challenge_state: challenge.state});
+									Self::deposit_event(Event::ChallengeRejected { challenge_id, challenge_state: challenge.state});
 								} else {
-									Self::deposit_event(Event::ChallengeThresHoldNotReached { challenge_id: challenge_id, required_threshold, challenge_state: challenge.state });
+									Self::deposit_event(Event::ChallengeThresHoldNotReached { challenge_id, required_threshold, challenge_state: challenge.state });
 								}	
 							}
 						}
