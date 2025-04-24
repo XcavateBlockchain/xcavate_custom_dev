@@ -33,6 +33,7 @@ use frame_support::sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero, One,
 	},
+	Saturating,
 };
 
 use pallet_nfts::{
@@ -109,6 +110,7 @@ pub mod pallet {
 		pub item_id: NftId,
 		pub collection_id: NftCollectionId,
 		pub token_amount: u32,
+		pub listing_expiry: BlockNumberFor<T>,
 	}
 
 	/// Infos regarding the listing of a token.
@@ -166,6 +168,13 @@ pub mod pallet {
 		pub token_amount: u32,
 		pub paid_funds: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
 		pub paid_tax: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
+	}
+
+	#[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct RefundInfos<T: Config> {
+		pub refund_amount: u32,
+		pub property_lawyer_details: PropertyLawyerDetails<T>,
 	}
 
 	impl<Balance, T: Config> OfferDetails<Balance, T>
@@ -338,6 +347,9 @@ pub mod pallet {
 
 		/// A deposit for listing a property.
 		type ListingDeposit: Get<Balance>;
+
+		/// Amount of blocks a listing lasts.
+		type ListingDuration: Get<BlockNumberFor<Self>>;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -506,6 +518,15 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	pub type RefundToken<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ListingId,
+		RefundInfos<T>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -606,6 +627,8 @@ pub mod pallet {
 		ExceedsMaxEntries,
 		InitializationFailed,
 		FundsMismatch,
+		/// The property is not refunded.
+		TokenNotRefunded,
 	}
 
 	#[pallet::call]
@@ -711,6 +734,9 @@ pub mod pallet {
 			}
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
 			let mut listing_id = NextListingId::<T>::get();
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let listing_expiry =
+				current_block_number.saturating_add(<T as Config>::ListingDuration::get());
 			let mut initial_funds = BoundedBTreeMap::default();
 			initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 			initial_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
@@ -724,6 +750,7 @@ pub mod pallet {
 				item_id,
 				collection_id,
 				token_amount,
+				listing_expiry,
 			};
 			let property_account = Self::property_account_id(asset_number);
 			T::NativeCurrency::transfer(
@@ -821,6 +848,14 @@ pub mod pallet {
 						.spv_created,
 					Error::<T>::SpvAlreadyCreated
 				);
+				let current_block_number = <frame_system::Pallet<T>>::block_number();
+				if nft_details.listing_expiry < current_block_number {
+					Self::burn_tokens_and_nfts(listing_id)?;
+					Self::refund_investors(listing_id, nft_details)?;
+					OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+					*maybe_listed_token = None;
+					return Ok(());
+				}
 
 				let transfer_price = nft_details
 					.token_price
@@ -912,7 +947,7 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 				}		
 				let asset_id = nft_details.asset_id;
-				OngoingObjectListing::<T>::insert(listing_id, nft_details);
+				OngoingObjectListing::<T>::insert(listing_id, &nft_details);
 				let mut initial_funds = BoundedBTreeMap::default();
 				initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 				initial_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
@@ -926,6 +961,7 @@ pub mod pallet {
 						spv_lawyer_costs: initial_funds,
 						second_attempt: false,
 					};
+					Self::developer_confirmation_handling(listing_id, nft_details, &[PaymentAssets::USDT, PaymentAssets::USDC])?;
 					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
 					*maybe_listed_token = None;
 				} 
@@ -937,21 +973,6 @@ pub mod pallet {
 				});
 				Ok::<(), DispatchError>(())
 			})?;
-			Ok(())
-		}
-
-		#[pallet::call_index(4)]
-		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn confirm_deal(
-			origin: OriginFor<T>,
-			listing_id: ListingId
-		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			let nft_details =
-				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			ensure!(nft_details.real_estate_developer == signer, Error::<T>::NoPermission);
-			Self::developer_confirmation_handling(listing_id, nft_details, &[PaymentAssets::USDT, PaymentAssets::USDC])?;
 			Ok(())
 		}
 
@@ -1061,6 +1082,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(7)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn cancel_buy(
+			origin: OriginFor<T>,
+			listing_id: ListingId,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			Ok(())
+		}
+
+
 		/// Created an offer for a token listing.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
@@ -1071,7 +1103,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token that the investor wants to buy.
 		///
 		/// Emits `OfferCreated` event when succesfful.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
 		pub fn make_offer(
 			origin: OriginFor<T>,
@@ -1107,7 +1139,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		/// - `offeror`: AccountId of the person that the seller wants to handle the offer from.
 		/// - `offer`: Enum for offer which is either Accept or Reject.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
 		pub fn handle_offer(
 			origin: OriginFor<T>,
@@ -1155,7 +1187,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `OfferCancelled` event when succesfful.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
 		pub fn cancel_offer(
 			origin: OriginFor<T>,
@@ -1172,6 +1204,80 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(19)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn withdraw_funds(
+			origin: OriginFor<T>,
+			listing_id: ListingId
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(signer.clone(), listing_id);
+			let payment_asset_usdt = PaymentAssets::USDT;
+			let payment_asset_usdc = PaymentAssets::USDC;	
+			let nft_details =
+					OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			let property_account = Self::property_account_id(nft_details.asset_id);
+			let token_amount = token_details.token_amount;
+			let mut refund_infos = RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
+			refund_infos.refund_amount = refund_infos.refund_amount.checked_sub(token_amount).ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+			
+			// Process USDT payments if the owner has paid in USDT
+			if let (Some(paid_funds_usdt), Some(paid_tax_usdt)) = (
+				token_details.paid_funds.get(&payment_asset_usdt),
+				token_details.paid_tax.get(&payment_asset_usdt),
+			) {
+				if !paid_funds_usdt.is_zero() && !paid_tax_usdt.is_zero() {
+					// Calculate total refund amount (paid funds + tax)
+					let refund_amount_usdt = paid_funds_usdt
+						.checked_add(paid_tax_usdt)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+					// Transfer USDT funds to owner account
+					Self::transfer_funds(
+						property_account.clone(),
+						signer.clone(),
+						refund_amount_usdt,
+						payment_asset_usdt.id(),
+					)?;
+				}
+			}
+			// Process USDC payments if the owner has paid in USDC
+			if let (Some(paid_funds_usdc), Some(paid_tax_usdc)) = (
+				token_details.paid_funds.get(&payment_asset_usdc),
+				token_details.paid_tax.get(&payment_asset_usdc),
+			) {
+				if !paid_funds_usdc.is_zero() && !paid_tax_usdc.is_zero() {
+					// Calculate total refund amount (paid funds + tax)
+					let refund_amount_usdc = paid_funds_usdc
+						.checked_add(paid_tax_usdc)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+					// Transfer USDC funds to owner account
+					Self::transfer_funds(
+						property_account.clone(),
+						signer.clone(),
+						refund_amount_usdc,
+						payment_asset_usdc.id(),
+					)?;
+				}
+			}				
+			T::LocalCurrency::transfer(
+				nft_details.asset_id,
+				&signer,
+				&property_account,
+				token_amount.into(),
+				Preservation::Expendable,
+			)?;	
+			if refund_infos.refund_amount == 0 {
+				Self::burn_tokens_and_nfts(listing_id)?;
+				Self::refund_investors_with_fees(listing_id, refund_infos.property_lawyer_details)?;
+			} else {
+				RefundToken::<T>::insert(listing_id, refund_infos);
+			}
+			PropertyOwnerToken::<T>::take(nft_details.asset_id, signer);
+			Ok(())
+		}
+
 		/// Upgrade the price from a listing.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds free.
@@ -1181,7 +1287,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the nft.
 		///
 		/// Emits `ListingUpdated` event when succesfful.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
 		pub fn upgrade_listing(
 			origin: OriginFor<T>,
@@ -1215,7 +1321,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the object.
 		///
 		/// Emits `ObjectUpdated` event when succesfful.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
 		pub fn upgrade_object(
 			origin: OriginFor<T>,
@@ -1253,7 +1359,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the seller wants to delist.
 		///
 		/// Emits `ListingDelisted` event when succesfful.
-		#[pallet::call_index(12)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
 		pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -1285,7 +1391,7 @@ pub mod pallet {
 		/// - `lawyer`: The lawyer that should be registered.
 		///
 		/// Emits `LawyerRegistered` event when succesfful.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn register_lawyer(
 			origin: OriginFor<T>,
@@ -1308,7 +1414,7 @@ pub mod pallet {
 		/// - `costs`: The costs thats the lawyer demands for his work.
 		///
 		/// Emits `LawyerClaimedProperty` event when succesfful.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_property(
 			origin: OriginFor<T>,
@@ -1404,7 +1510,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing from the property.
 		///
 		/// Emits `LawyerRemovedFromCase` event when succesfful.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn remove_from_case(
 			origin: OriginFor<T>,
@@ -1438,7 +1544,7 @@ pub mod pallet {
 		/// - `approve`: Approves or Rejects the case.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(16)]
+		#[pallet::call_index(17)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_confirm_documents(
 			origin: OriginFor<T>,
@@ -1480,12 +1586,17 @@ pub mod pallet {
 						property_lawyer_details.clone(),
 						&[PaymentAssets::USDT, PaymentAssets::USDC],
 					)?; 
-					<TokenBuyer<T>>::take(listing_id);
+					let list = <TokenBuyer<T>>::take(listing_id);
+					for owner in list {
+						TokenOwner::<T>::take(owner, listing_id);
+					}
 				}
 				(DocumentStatus::Rejected, DocumentStatus::Rejected) => {
-					Self::burn_tokens_and_nfts(listing_id)?;
-					Self::refund_investors(listing_id, property_lawyer_details.clone())?;
-					OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+					let nft_details = OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+					RefundToken::<T>::insert(listing_id, RefundInfos {
+						refund_amount: nft_details.token_amount,
+						property_lawyer_details :property_lawyer_details.clone(),
+					});
 				}
 				(DocumentStatus::Approved, DocumentStatus::Rejected) => {
 					if !property_lawyer_details.second_attempt {
@@ -1494,9 +1605,11 @@ pub mod pallet {
 						property_lawyer_details.second_attempt = true;
 						PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
 					} else {
-						Self::burn_tokens_and_nfts(listing_id)?;
-						Self::refund_investors(listing_id, property_lawyer_details)?;
-						OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+						let nft_details = OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+						RefundToken::<T>::insert(listing_id, RefundInfos {
+							refund_amount: nft_details.token_amount,
+							property_lawyer_details :property_lawyer_details.clone(),
+						});
 					}
 				}
 				(DocumentStatus::Rejected, DocumentStatus::Approved) => {
@@ -1506,9 +1619,11 @@ pub mod pallet {
 						property_lawyer_details.second_attempt = true;
 						PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
 					} else {
-						Self::burn_tokens_and_nfts(listing_id)?;
-						Self::refund_investors(listing_id, property_lawyer_details)?;
-						OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+						let nft_details = OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+						RefundToken::<T>::insert(listing_id, RefundInfos {
+							refund_amount: nft_details.token_amount,
+							property_lawyer_details :property_lawyer_details.clone(),
+						});
 					}
 				}
 				_ => {
@@ -1647,7 +1762,7 @@ pub mod pallet {
 			
 			// Process each investor once for all assets and token distribution
 			for owner in list {
-				let token_details = TokenOwner::<T>::take(owner.clone(), listing_id);
+				let token_details = TokenOwner::<T>::get(owner.clone(), listing_id);
 
 				// Process each payment asset
 				for asset in payment_assets {
@@ -1727,7 +1842,7 @@ pub mod pallet {
 			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(nft_details.collection_id);
 			let fractionalize_item_id = FractionalizeItemId::<T>::from(nft_details.item_id);
 			let fractionalize_asset_id = FractionalizedAssetId::<T>::from(nft_details.asset_id);
-			pallet_nft_fractionalization::Pallet::<T>::unify(
+ 			pallet_nft_fractionalization::Pallet::<T>::unify(
 				pallet_origin.clone(),
 				fractionalize_collection_id.into(),
 				fractionalize_item_id.into(),
@@ -1738,7 +1853,7 @@ pub mod pallet {
 				&nft_details.collection_id,
 				&nft_details.item_id,
 				None,
-			)?;
+			)?; 
 			Self::deposit_event(Event::<T>::PropertyNftBurned { 
 				collection_id: nft_details.collection_id, 
 				item_id: nft_details.item_id,
@@ -1749,8 +1864,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn refund_investors(listing_id: ListingId, property_lawyer_details: PropertyLawyerDetails<T>) -> DispatchResult {
-			let list = <TokenBuyer<T>>::take(listing_id);
+		fn refund_investors_with_fees(listing_id: ListingId, property_lawyer_details: PropertyLawyerDetails<T>) -> DispatchResult {
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let property_account = Self::property_account_id(nft_details.asset_id);
@@ -1783,6 +1897,20 @@ pub mod pallet {
 			let treasury_amount_usdc = fees_usdc
 				.checked_sub(spv_lawyer_costs_usdc)
 				.ok_or(Error::<T>::ArithmeticUnderflow)?;
+			PropertyOwner::<T>::take(nft_details.asset_id);
+			<TokenBuyer<T>>::take(listing_id);
+			Self::transfer_funds(property_account.clone(), treasury_id.clone(), treasury_amount_usdt, payment_asset_usdt.id())?;
+			Self::transfer_funds(property_account.clone(), treasury_id, treasury_amount_usdc, payment_asset_usdc.id())?;
+			Self::transfer_funds(property_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
+			Self::transfer_funds(property_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
+			Ok(())
+		}
+
+		fn refund_investors(listing_id: ListingId, nft_details: NftListingDetailsType<T> ) -> DispatchResult {
+			let list = <TokenBuyer<T>>::take(listing_id);
+			let payment_asset_usdt = PaymentAssets::USDT;
+			let payment_asset_usdc = PaymentAssets::USDC;
+
 			for owner in list {
 				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
 				
@@ -1824,14 +1952,6 @@ pub mod pallet {
 							&owner,
 							new_frozen_balance_usdt,
 						)?;
-
-						// Transfer USDT funds to property account
-						Self::transfer_funds(
-							owner.clone(),
-							property_account.clone(),
-							investor_fee_usdt,
-							payment_asset_usdt.id(),
-						)?;
 					}
 				}
 				// Process USDC payments if the owner has paid in USDC
@@ -1872,23 +1992,11 @@ pub mod pallet {
 							&owner,
 							new_frozen_balance_usdc,
 						)?;
-
-						// Transfer USDC funds to treasury and SPV lawyer
-						Self::transfer_funds(
-							owner.clone(),
-							property_account.clone(),
-							investor_fee_usdc,
-							payment_asset_usdc.id(),
-						)?;
 					}
 				}				
 				PropertyOwner::<T>::take(nft_details.asset_id);
 				PropertyOwnerToken::<T>::take(nft_details.asset_id, owner);
 			}
-			Self::transfer_funds(property_account.clone(), treasury_id.clone(), treasury_amount_usdt, payment_asset_usdt.id())?;
-			Self::transfer_funds(property_account.clone(), treasury_id, treasury_amount_usdc, payment_asset_usdc.id())?;
-			Self::transfer_funds(property_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
-			Self::transfer_funds(property_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
 			Ok(())
 		}
 

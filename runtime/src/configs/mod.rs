@@ -556,6 +556,7 @@ parameter_types! {
 	pub const MaxPaymentOption: u32 = 2;
 	pub const ListingDepositAmount: Balance = 100 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const ListingTime: BlockNumber = 200;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -582,6 +583,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ListingDepositAmount;
+	type ListingDuration = ListingTime;
 }
 
 parameter_types! {

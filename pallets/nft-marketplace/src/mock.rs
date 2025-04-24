@@ -231,6 +231,7 @@ parameter_types! {
 	pub const CommunityProjectPalletId: PalletId = PalletId(*b"py/cmprj");
 	pub const Postcode: u32 = 10;
 	pub const MaxPaymentOption: u32 = 2;
+	pub const ListingTime: BlockNumber = 30;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -257,6 +258,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ConstU128<100>;
+	type ListingDuration = ListingTime;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -270,6 +272,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([2; 32].into(), 1_150_000),
 			([3; 32].into(), 5_000),
 			([6; 32].into(), 5_000),
+			([7; 32].into(), 5_000),
 			((NftMarketplace::account_id()), 20_000_000),
 		],
 	}
@@ -303,6 +306,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1337, [4; 32].into(), 50),
 			(1337, [5; 32].into(), 500),
 			(1337, [6; 32].into(), 1_500_000_000_000_000_000),
+			(1337, [7; 32].into(), 500_000),
 		], // Genesis accounts: id, account_id, balance
 		next_asset_id: None,
 	}
