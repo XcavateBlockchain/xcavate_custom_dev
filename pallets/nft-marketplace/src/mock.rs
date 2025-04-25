@@ -238,6 +238,7 @@ parameter_types! {
 	pub const Postcode: u32 = 10;
 	pub const MaxPaymentOption: u32 = 2;
 	pub const ListingTime: BlockNumber = 30;
+	pub const RegionDepositAmount: Balance = 100_000;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -245,6 +246,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type NativeCurrency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
 	type LocalAssetsFreezer = LocalAssetsFreezer;
@@ -266,6 +268,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ConstU128<100>;
 	type ListingDuration = ListingTime;
+	type RegionDeposit = RegionDepositAmount;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -280,6 +283,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([3; 32].into(), 5_000),
 			([6; 32].into(), 5_000),
 			([7; 32].into(), 5_000),
+			([8; 32].into(), 400_000),
 			((NftMarketplace::account_id()), 20_000_000),
 		],
 	}

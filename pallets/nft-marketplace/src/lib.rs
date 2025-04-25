@@ -17,7 +17,7 @@ pub use weights::*;
 use frame_support::{
 	traits::{
 		tokens::{fungible, fungibles, nonfungibles_v2},
-		fungible::Mutate,	
+		fungible::{Mutate, MutateHold},	
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
 		fungibles::{InspectFreeze, MutateFreeze},
@@ -224,6 +224,13 @@ pub mod pallet {
 		USDC,
 	}
 
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// Funds are held to register for free transactions.
+		#[codec(index = 0)]
+		RegionDepositReserve,
+	}
+
 	impl PaymentAssets {
 		pub const fn id(&self) -> u32 {
 			match self {
@@ -257,7 +264,12 @@ pub mod pallet {
 		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
 			+ fungible::Mutate<AccountIdOf<Self>>
 			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
-			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>
+			+ fungible::hold::Inspect<Self::AccountId>
+			+ fungible::hold::Mutate<Self::AccountId, Reason = <Self as pallet::Config>::RuntimeHoldReason>;
+
+		/// The overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
 
 		type LocalCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
 			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
@@ -353,6 +365,9 @@ pub mod pallet {
 
 		/// Amount of blocks a listing lasts.
 		type ListingDuration: Get<BlockNumberFor<Self>>;
+
+		/// A deposit for operating a region.
+		type RegionDeposit: Get<Balance>;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -408,6 +423,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RegionCollections<T: Config> =
 		StorageMap<_, Blake2_128Concat, RegionId, <T as pallet::Config>::NftCollectionId, OptionQuery>;
+
+	/// Mapping of region to the set time limit for property sells.
+	#[pallet::storage]
+	pub type RegionListingDuration<T: Config> =
+		StorageMap<_, Blake2_128Concat, RegionId, BlockNumberFor<T>, OptionQuery>;
 
 	/// Mapping from the Nft to the Nft details.
 	#[pallet::storage]
@@ -632,6 +652,8 @@ pub mod pallet {
 		FundsMismatch,
 		/// The property is not refunded.
 		TokenNotRefunded,
+		/// The duration of a listing can not be zero.
+		ListingDurationCantBeZero,
 	}
 
 	#[pallet::call]
@@ -644,9 +666,10 @@ pub mod pallet {
 		/// Emits `RegionCreated` event when succesfful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
-		pub fn create_new_region(origin: OriginFor<T>) -> DispatchResult {
-			T::LocationOrigin::ensure_origin(origin)?;
-			//let collection_id: CollectionId<T> = collection_id.into();
+		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
+			T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, T::RegionDeposit::get())?;
 			let pallet_id: AccountIdOf<T> =
 				Self::account_id();
 			let collection_id = <T as pallet::Config>::Nfts::create_collection(
@@ -656,6 +679,7 @@ pub mod pallet {
 			)?;
 			let mut region_id = NextRegionId::<T>::get();
 			RegionCollections::<T>::insert(region_id, collection_id);
+			RegionListingDuration::<T>::insert(region_id, listing_duration);
 			region_id = region_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
 			NextRegionId::<T>::put(region_id);
 			Self::deposit_event(Event::<T>::RegionCreated { region_id, collection_id });

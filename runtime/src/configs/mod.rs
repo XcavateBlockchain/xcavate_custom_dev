@@ -562,6 +562,7 @@ parameter_types! {
 	pub const ListingDepositAmount: Balance = 100 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const ListingTime: BlockNumber = 200;
+	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -569,6 +570,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
 	type NativeCurrency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = RealEstateAssets;
 	type ForeignCurrency = Assets;
 	type LocalAssetsFreezer = RealEstateAssetsFreezer;
@@ -590,6 +592,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ListingDepositAmount;
 	type ListingDuration = ListingTime;
+	type RegionDeposit = RegionDepositAmount;
 }
 
 parameter_types! {

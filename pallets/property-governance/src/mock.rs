@@ -52,7 +52,8 @@ frame_support::construct_runtime!(
 		LocalAssets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
-		AssetsFreezer: pallet_assets_freezer::<Instance2>,
+		LocalAssetsFreezer: pallet_assets_freezer::<Instance1>,
+		ForeignAssetsFreezer: pallet_assets_freezer::<Instance2>,
 	}
 );
 
@@ -187,6 +188,11 @@ impl pallet_assets::Config<Instance2> for Test {
 	type RemoveItemsLimit = ConstU32<1000>;
 }
 
+impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
+	type RuntimeFreezeReason = TestId;
+	type RuntimeEvent = RuntimeEvent;
+} 
+
 impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Test {
 	type RuntimeFreezeReason = TestId;
 	type RuntimeEvent = RuntimeEvent;
@@ -236,6 +242,7 @@ parameter_types! {
 	pub const Postcode: u32 = 10;
 	pub const MaxPaymentOption: u32 = 2;
 	pub const ListingTime: BlockNumber = 30;
+	pub const RegionDepositAmount: Balance = 100_000;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -243,9 +250,11 @@ impl pallet_nft_marketplace::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Test>;
 	type NativeCurrency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
-	type AssetsFreezer = AssetsFreezer;
+	type LocalAssetsFreezer = LocalAssetsFreezer;
+	type ForeignAssetsFreezer = ForeignAssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
@@ -261,6 +270,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ConstU128<100>;
 	type ListingDuration = ListingTime;
+	type RegionDeposit = RegionDepositAmount;
 }
 
 parameter_types! {
@@ -328,6 +338,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([2; 32].into(), 1_150_000),
 			([3; 32].into(), 1_005_000),
 			([4; 32].into(), 5_000),
+			([6; 32].into(), 200_000),
 			((NftMarketplace::account_id()), 20_000_000),
 			((PropertyGovernance::account_id()), 500_000),
 			((PropertyManagement::account_id()), 1),
