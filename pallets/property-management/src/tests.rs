@@ -448,7 +448,7 @@ fn set_letting_agent_fails() {
 				bvec![22, 22]
 			));
 			assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [(x + 1); 32].into()));
-			Balances::make_free_balance_be(&[x; 32].into(), 100_000);
+			Balances::make_free_balance_be(&[x + 1; 32].into(), 100_000);
 			assert_ok!(ForeignAssets::mint(
 				RuntimeOrigin::signed([0; 32].into()),
 				1984.into(),

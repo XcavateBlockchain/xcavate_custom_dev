@@ -288,10 +288,12 @@ mod runtime {
 	#[runtime::pallet_index(13)]
 	pub type Assets = pallet_assets::Pallet<Runtime, Instance2>;
 	#[runtime::pallet_index(14)]
+	pub type RealEstateAssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance1>;
+	#[runtime::pallet_index(15)]
 	pub type AssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance2>;
 
 	// Governance
-	#[runtime::pallet_index(15)]
+	#[runtime::pallet_index(16)]
 	pub type Sudo = pallet_sudo;
 
 	// Collator support. The order of these 4 are important and shall not change.

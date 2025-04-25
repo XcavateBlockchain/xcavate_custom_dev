@@ -48,7 +48,8 @@ frame_support::construct_runtime!(
 		LocalAssets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
-		AssetsFreezer: pallet_assets_freezer::<Instance2>,
+		LocalAssetsFreezer: pallet_assets_freezer::<Instance1>,
+		ForeignAssetsFreezer: pallet_assets_freezer::<Instance2>,
 	}
 );
 
@@ -166,7 +167,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type MetadataDepositPerByte = ConstU128<1>;
 	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
-	type Freezer = ();
+	type Freezer = LocalAssetsFreezer;
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
@@ -187,12 +188,17 @@ impl pallet_assets::Config<Instance2> for Test {
 	type MetadataDepositPerByte = ConstU128<1>;
 	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
-	type Freezer = ();
+	type Freezer = ForeignAssetsFreezer;
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
 	type RemoveItemsLimit = ConstU32<1000>;
 }
+
+impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
+	type RuntimeFreezeReason = TestId;
+	type RuntimeEvent = RuntimeEvent;
+} 
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Test {
 	type RuntimeFreezeReason = TestId;
@@ -241,7 +247,8 @@ impl pallet_nft_marketplace::Config for Test {
 	type NativeCurrency = Balances;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
-	type AssetsFreezer = AssetsFreezer;
+	type LocalAssetsFreezer = LocalAssetsFreezer;
+	type ForeignAssetsFreezer = ForeignAssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;

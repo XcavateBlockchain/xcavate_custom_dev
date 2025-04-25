@@ -200,7 +200,7 @@ fn buy_token_works() {
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 1);
 		assert_eq!(Balances::free_balance(&([6; 32].into())), 5_000);
 		assert_eq!(ForeignAssets::balance(1984, &[6; 32].into()), 1_500_000_000_000_000_000);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[6; 32].into()), Some(312_000_000_000_000_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[6; 32].into()), Some(312_000_000_000_000_000));
 	})
 }
 
@@ -225,13 +225,13 @@ fn buy_token_works_expired_timelimit() {
 		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 50);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 1);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(520_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(520_000));
 		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listing_expiry, 31);
 		run_to_block(32);
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, crate::PaymentAssets::USDT));
 		assert_eq!(ListedToken::<Test>::get(0), None);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 0);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
 		assert_eq!(OngoingObjectListing::<Test>::get(0).is_none(), true);
 		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
 	})
@@ -272,6 +272,31 @@ fn buy_token_doesnt_work_2() {
 	})
 }
 
+#[test]
+fn buy_token_fails_insufficient_balance() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::root()));
+		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
+		assert_ok!(NftMarketplace::list_object(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+			bvec![10, 10],
+			10_000_000_000_000_000,
+			100,
+			bvec![22, 22]
+		));
+		assert_noop!(
+			NftMarketplace::buy_token(RuntimeOrigin::signed([4; 32].into()), 0, 30, crate::PaymentAssets::USDT),
+			Error::<Test>::NotEnoughFunds
+		);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 50);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[6; 32].into()), None);
+	})
+}
+
 /* #[test]
 fn confirm_deal_works() {
 	new_test_ext().execute_with(|| {
@@ -293,11 +318,11 @@ fn confirm_deal_works() {
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
 		assert_eq!(LocalAssets::balance(0, &NftMarketplace::property_account_id(0)), 100);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 0);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(1_040_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(1_040_000));
 		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 1_040_000);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 460_000);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 100);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
 	})
 }
 
@@ -336,17 +361,17 @@ fn confirm_deal_works_2() {
 		assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_500_000);
 		assert_eq!(LocalAssets::balance(0, &NftMarketplace::property_account_id(0)), 100);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 0);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(1_040_000));
-		assert_eq!(AssetsFreezer::frozen_balance(1337, &[1; 32].into()), Some(104_000));
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(104_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(1_040_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1337, &[1; 32].into()), Some(104_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(104_000));
 		assert_ok!(NftMarketplace::confirm_deal(RuntimeOrigin::signed([0; 32].into()), 0));
 		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 936_000);
 		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::property_account_id(0)), 104_000);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 668_000);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 90);
 		assert_eq!(LocalAssets::balance(0, &[2; 32].into()), 10);
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(208_000));
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[2; 32].into()), None);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(208_000));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), None);
 	})
 } */
 
@@ -796,8 +821,8 @@ fn reject_contract_and_refund() {
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_status, crate::DocumentStatus::Rejected);
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), false);
 
-		assert_eq!(AssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
-		assert_eq!(AssetsFreezer::frozen_balance(1337, &[1; 32].into()), None);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1337, &[1; 32].into()), None);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 876_000);
 		assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_084_000);
  		assert_eq!(
@@ -1101,8 +1126,8 @@ fn relist_a_nft() {
 		));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(TokenListings::<Test>::get(1).unwrap().item_id, 0);
-		assert_eq!(LocalAssets::balance(0, NftMarketplace::account_id()), 1);
-		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 99);
+		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 100);
+		assert_eq!(LocalAssetsFreezer::frozen_balance(0, &[1; 32].into()), Some(1));
 	})
 }
 
@@ -1369,8 +1394,9 @@ fn make_offer_works() {
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 2000, 1, crate::PaymentAssets::USDT));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
-		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 0);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(2000));
 	})
 }
 
@@ -1493,21 +1519,23 @@ fn handle_offer_works() {
 			20
 		));
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 1, crate::PaymentAssets::USDT));
-		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([3; 32].into()), 1, 150, 1, crate::PaymentAssets::USDT));
+		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([3; 32].into()), 1, 150, 1, crate::PaymentAssets::USDC));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(200));
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1337, &[3; 32].into()), Some(150));
 		assert_ok!(NftMarketplace::handle_offer(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
 			[2; 32].into(),
 			crate::Offer::Reject
 		));
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 150);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), None);
 		assert_ok!(NftMarketplace::cancel_offer(RuntimeOrigin::signed([3; 32].into()), 1));
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_none(), true);
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 2000, 10, crate::PaymentAssets::USDT));
-		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_130_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 20000);
+		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(20000));
 		assert_ok!(NftMarketplace::handle_offer(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -1517,14 +1545,14 @@ fn handle_offer_works() {
 		assert_eq!(TokenListings::<Test>::get(1).unwrap().amount, 10);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_none(), true);
 		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 0);
-		assert_eq!(LocalAssets::balance(0, &([1; 32].into())), 80);
+		assert_eq!(LocalAssets::balance(0, &([1; 32].into())), 90);
 		assert_eq!(LocalAssets::balance(0, &([2; 32].into())), 10);
-		assert_eq!(LocalAssets::balance(0, &NftMarketplace::account_id()), 10);
+		assert_eq!(LocalAssetsFreezer::frozen_balance(0, &[1; 32].into()), Some(10));
 		assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 479_800);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_130_000);
 	})
 }
- 
+
 #[test]
 fn handle_offer_fails() {
 	new_test_ext().execute_with(|| {
@@ -1656,8 +1684,8 @@ fn cancel_offer_works() {
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 2000, 1, crate::PaymentAssets::USDT));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
-		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(2000));
 		assert_ok!(NftMarketplace::cancel_offer(RuntimeOrigin::signed([2; 32].into()), 1));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), false);
@@ -1721,8 +1749,8 @@ fn cancel_offer_fails() {
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 2000, 1, crate::PaymentAssets::USDT));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
-		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
+		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(2000));
 		assert_noop!(
 			NftMarketplace::cancel_offer(RuntimeOrigin::signed([1; 32].into()), 1),
 			Error::<Test>::InvalidIndex
@@ -2238,4 +2266,4 @@ fn listing_objects_in_different_regions() {
 		assert_eq!(LocalAssets::balance(1, &[2; 32].into()), 100);
 		assert_eq!(LocalAssets::balance(2, &[2; 32].into()), 100);
 	})
-}     
+}

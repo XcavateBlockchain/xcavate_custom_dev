@@ -271,7 +271,10 @@ pub mod pallet {
 			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
 			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
-		type AssetsFreezer: fungibles::MutateFreeze<AccountIdOf<Self>, AssetId = u32, Balance = Balance, Id = TestId>
+		type LocalAssetsFreezer: fungibles::MutateFreeze<AccountIdOf<Self>, AssetId = u32, Balance = Balance, Id = TestId>
+			+ fungibles::InspectFreeze<AccountIdOf<Self>, AssetId = u32>;
+
+		type ForeignAssetsFreezer: fungibles::MutateFreeze<AccountIdOf<Self>, AssetId = u32, Balance = Balance, Id = TestId>
 			+ fungibles::InspectFreeze<AccountIdOf<Self>, AssetId = u32>;
 		
 		type Nfts: nonfungibles_v2::Inspect<AccountIdOf<Self>, ItemId = <Self as pallet::Config>::NftId,
@@ -880,10 +883,13 @@ pub mod pallet {
 					.checked_add(tax)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 
-				//Self::transfer_funds(signer.clone(), Self::property_account_id(nft_details.asset_id), total_transfer_price, payment_asset.id())?;
-				let frozen_balance = T::AssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &signer);
+				let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &signer);
+				let balance = T::ForeignCurrency::balance(payment_asset.id(), &signer);
+				let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
+				ensure!(available_balance >= total_transfer_price, Error::<T>::NotEnoughFunds);
+
 				let new_frozen_balance = frozen_balance.checked_add(total_transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
-				T::AssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &signer, new_frozen_balance)?;
+				T::ForeignAssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &signer, new_frozen_balance)?;
 				*listed_token =
 					listed_token.checked_sub(amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
 				if !TokenBuyer::<T>::get(listing_id).contains(&signer) {
@@ -1013,14 +1019,14 @@ pub mod pallet {
 			);
 			let token_amount: Balance = amount.into();
 			let mut listing_id = NextListingId::<T>::get();
-			T::LocalCurrency::transfer(
-				nft_details.asset_id,
-				&signer,
-				&Self::account_id(),
-				token_amount,
-				Preservation::Expendable,
-			)
-			.map_err(|_| Error::<T>::NotEnoughFunds)?;
+
+			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(nft_details.asset_id, &TestId::Marketplace, &signer);
+			let balance = T::LocalCurrency::balance(nft_details.asset_id, &signer);
+			let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
+			ensure!(available_balance >= token_amount, Error::<T>::NotEnoughFunds);
+			let new_frozen_balance = frozen_balance.checked_add(token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::LocalAssetsFreezer::set_freeze(nft_details.asset_id, &TestId::Marketplace, &signer, new_frozen_balance)?;
+			
 			let token_listing = TokenListingDetails {
 				seller: signer.clone(),
 				token_price,
@@ -1086,9 +1092,9 @@ pub mod pallet {
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn cancel_buy(
 			origin: OriginFor<T>,
-			listing_id: ListingId,
+			_listing_id: ListingId,
 		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
+			let _signer = ensure_signed(origin)?;
 			Ok(())
 		}
 
@@ -1124,7 +1130,13 @@ pub mod pallet {
 			let price = offer_price
 				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
-			Self::transfer_funds(signer.clone(), Self::property_account_id(listing_details.asset_id), price, payment_asset.id())?;
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &signer);
+			let balance = T::ForeignCurrency::balance(payment_asset.id(), &signer);
+			let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
+			ensure!(available_balance >= price, Error::<T>::NotEnoughFunds);
+
+			let new_frozen_balance = frozen_balance.checked_add(price).ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::ForeignAssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &signer, new_frozen_balance)?;
 			let offer_details = OfferDetails { buyer: signer.clone(), token_price: offer_price, amount, payment_assets: payment_asset };
 			OngoingOffers::<T>::insert(listing_id, signer, offer_details);
 			Self::deposit_event(Event::<T>::OfferCreated { listing_id, price: offer_price });
@@ -1159,12 +1171,14 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, offeror).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(listing_details.amount >= offer_details.amount, Error::<T>::NotEnoughTokenAvailable);
 			let price = offer_details.get_total_amount()?;
-			let pallet_account = Self::property_account_id(listing_details.asset_id);
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer);
+			let new_frozen_balance = frozen_balance.checked_sub(price).ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
 			match offer {
 				Offer::Accept => {
 					Self::buying_token_process(
 						listing_id,
-						pallet_account,
+						offer_details.buyer.clone(),
 						offer_details.buyer,
 						listing_details,
 						price,
@@ -1173,7 +1187,7 @@ pub mod pallet {
 					)?;
 				}
 				Offer::Reject => {
-					Self::transfer_funds(pallet_account, offer_details.buyer, price, offer_details.payment_assets.id())?;
+					
 				}
 			}
 			Ok(())
@@ -1198,8 +1212,9 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, signer.clone()).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(offer_details.buyer == signer.clone(), Error::<T>::NoPermission);
 			let price = offer_details.get_total_amount()?;
-			let listing_details = TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
-			Self::transfer_funds(Self::property_account_id(listing_details.asset_id), offer_details.buyer, price, offer_details.payment_assets.id())?;
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer);
+			let new_frozen_balance = frozen_balance.checked_sub(price).ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
 			Self::deposit_event(Event::<T>::OfferCancelled { listing_id, account_id: signer.clone() });
 			Ok(())
 		}
@@ -1371,14 +1386,11 @@ pub mod pallet {
 				TokenListings::<T>::take(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
 			ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
 			let token_amount = listing_details.amount.into();
-			T::LocalCurrency::transfer(
-				listing_details.asset_id,
-				&Self::account_id(),
-				&signer.clone(),
-				token_amount,
-				Preservation::Expendable,
-			)
-			.map_err(|_| Error::<T>::NotEnoughFunds)?;
+
+			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(listing_details.asset_id, &TestId::Marketplace, &signer);
+			let new_frozen_balance = frozen_balance.checked_sub(token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::ForeignAssetsFreezer::set_freeze(listing_details.asset_id, &TestId::Marketplace, &signer, new_frozen_balance)?;
+
 			Self::deposit_event(Event::<T>::ListingDelisted { listing_index: listing_id });
 			Ok(())
 		}
@@ -1786,7 +1798,7 @@ pub mod pallet {
 								.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 							// Unfreeze the investor's funds
-							let frozen_balance = T::AssetsFreezer::balance_frozen(
+							let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(
 								asset.id(),
 								&TestId::Marketplace,
 								&owner,
@@ -1794,7 +1806,7 @@ pub mod pallet {
 							let new_frozen_balance = frozen_balance
 								.checked_sub(total_investor_amount)
 								.ok_or(Error::<T>::ArithmeticOverflow)?;
-							T::AssetsFreezer::set_freeze(
+							T::ForeignAssetsFreezer::set_freeze(
 								asset.id(),
 								&TestId::Marketplace,
 								&owner,
@@ -1938,7 +1950,7 @@ pub mod pallet {
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 						// Unfreeze the investor's USDT funds
-						let frozen_balance_usdt = T::AssetsFreezer::balance_frozen(
+						let frozen_balance_usdt = T::ForeignAssetsFreezer::balance_frozen(
 							payment_asset_usdt.id(),
 							&TestId::Marketplace,
 							&owner,
@@ -1946,7 +1958,7 @@ pub mod pallet {
 						let new_frozen_balance_usdt = frozen_balance_usdt
 							.checked_sub(total_investor_amount_usdt)
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						T::AssetsFreezer::set_freeze(
+						T::ForeignAssetsFreezer::set_freeze(
 							payment_asset_usdt.id(),
 							&TestId::Marketplace,
 							&owner,
@@ -1978,7 +1990,7 @@ pub mod pallet {
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 						// Unfreeze the investor's USDC funds
-						let frozen_balance_usdc = T::AssetsFreezer::balance_frozen(
+						let frozen_balance_usdc = T::ForeignAssetsFreezer::balance_frozen(
 							payment_asset_usdc.id(),
 							&TestId::Marketplace,
 							&owner,
@@ -1986,7 +1998,7 @@ pub mod pallet {
 						let new_frozen_balance_usdc = frozen_balance_usdc
 							.checked_sub(total_investor_amount_usdc)
 							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						T::AssetsFreezer::set_freeze(
+						T::ForeignAssetsFreezer::set_freeze(
 							payment_asset_usdc.id(),
 							&TestId::Marketplace,
 							&owner,
@@ -2011,9 +2023,23 @@ pub mod pallet {
 		) -> DispatchResult {
 			Self::calculate_fees(price, transfer_from.clone(), listing_details.seller.clone(), payment_asset.id())?;
 			let token_amount = amount.into();
+			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(
+				listing_details.asset_id,
+				&TestId::Marketplace,
+				&listing_details.seller,
+			);
+			let new_frozen_balance = frozen_balance
+				.checked_sub(token_amount)
+				.ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::LocalAssetsFreezer::set_freeze(
+				listing_details.asset_id,
+				&TestId::Marketplace,
+				&listing_details.seller,
+				new_frozen_balance,
+			)?;
 			T::LocalCurrency::transfer(
 				listing_details.asset_id,
-				&Self::account_id(),
+				&listing_details.seller,
 				&account.clone(),
 				token_amount,
 				Preservation::Expendable,

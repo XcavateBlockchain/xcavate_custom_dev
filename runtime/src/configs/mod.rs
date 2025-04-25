@@ -62,7 +62,7 @@ use super::{
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, HOURS,
 	MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION, deposit,
-	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsFreezer, Assets,
+	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsFreezer, RealEstateAssetsFreezer, Assets,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -436,7 +436,7 @@ impl pallet_assets::Config<pallet_assets::Instance1> for Runtime {
     type Currency = Balances;
     type Extra = ();
     type ForceOrigin = EnsureRoot<AccountId>;
-    type Freezer = ();
+    type Freezer = RealEstateAssetsFreezer;
     type MetadataDepositBase = ZeroDeposit;
     type MetadataDepositPerByte = ZeroDeposit;
     type RemoveItemsLimit = RemoveItemsLimit;
@@ -469,6 +469,11 @@ impl pallet_assets::Config<pallet_assets::Instance2> for Runtime {
     /// Rerun benchmarks if you are making changes to runtime configuration.
     type WeightInfo = ();
 }
+
+impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Runtime {
+	type RuntimeFreezeReason = TestId;
+	type RuntimeEvent = RuntimeEvent;
+} 
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Runtime {
 	type RuntimeFreezeReason = TestId;
@@ -566,7 +571,8 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type NativeCurrency = Balances;
 	type LocalCurrency = RealEstateAssets;
 	type ForeignCurrency = Assets;
-	type AssetsFreezer = AssetsFreezer;
+	type LocalAssetsFreezer = RealEstateAssetsFreezer;
+	type ForeignAssetsFreezer = AssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
