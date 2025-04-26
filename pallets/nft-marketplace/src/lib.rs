@@ -226,7 +226,7 @@ pub mod pallet {
 
 	#[pallet::composite_enum]
 	pub enum HoldReason {
-		/// Funds are held to register for free transactions.
+		/// Funds are held for operating a region.
 		#[codec(index = 0)]
 		RegionDepositReserve,
 	}
@@ -348,10 +348,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type TreasuryId: Get<PalletId>;
 
-		/// The CommunityProjects's pallet id, used for deriving its sovereign account ID.
-		#[pallet::constant]
-		type CommunityProjectsId: Get<PalletId>;
-
 		/// The maximum length of data stored in for post codes.
 		#[pallet::constant]
 		type PostcodeLimit: Get<u32>;
@@ -362,9 +358,6 @@ pub mod pallet {
 
 		/// A deposit for listing a property.
 		type ListingDeposit: Get<Balance>;
-
-		/// Amount of blocks a listing lasts.
-		type ListingDuration: Get<BlockNumberFor<Self>>;
 
 		/// A deposit for operating a region.
 		type RegionDeposit: Get<Balance>;
@@ -762,8 +755,9 @@ pub mod pallet {
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
 			let mut listing_id = NextListingId::<T>::get();
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let listing_duration = RegionListingDuration::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			let listing_expiry =
-				current_block_number.saturating_add(<T as Config>::ListingDuration::get());
+				current_block_number.saturating_add(listing_duration);
 			let mut initial_funds = BoundedBTreeMap::default();
 			initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 			initial_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
@@ -1683,11 +1677,6 @@ pub mod pallet {
 		/// Get the account id of the treasury pallet
 		pub fn treasury_account_id() -> AccountIdOf<T> {
 			T::TreasuryId::get().into_account_truncating()
-		}
-
-		/// Get the account id of the community pallet
-		pub fn community_account_id() -> AccountIdOf<T> {
-			T::CommunityProjectsId::get().into_account_truncating()
 		}
 
 		pub fn next_listing_id(listing_id: ListingId) -> Result<ListingId, Error<T>> {

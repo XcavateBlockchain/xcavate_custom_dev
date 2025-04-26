@@ -234,10 +234,8 @@ parameter_types! {
 	pub const MaxNftTokens: u32 = 100;
 	pub const MaxNftsInCollection: u32 = 100;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const CommunityProjectPalletId: PalletId = PalletId(*b"py/cmprj");
 	pub const Postcode: u32 = 10;
 	pub const MaxPaymentOption: u32 = 2;
-	pub const ListingTime: BlockNumber = 30;
 	pub const RegionDepositAmount: Balance = 100_000;
 }
 
@@ -260,14 +258,12 @@ impl pallet_nft_marketplace::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = NftHelper;
 	type TreasuryId = TreasuryPalletId;
-	type CommunityProjectsId = CommunityProjectPalletId;
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
-	type ListingDeposit = ConstU128<100>;
-	type ListingDuration = ListingTime;
+	type ListingDeposit = ConstU128<200>;
 	type RegionDeposit = RegionDepositAmount;
 }
 
