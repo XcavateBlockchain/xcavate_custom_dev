@@ -34,7 +34,7 @@ pallet-nft-marketplace = { workspace = true }
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
-types = { path = "../../types", default-features = false }
+primitives = { path = "../../primitives", default-features = false }
 pallet-assets-freezer = { workspace = true }
 
 [features]
@@ -53,7 +53,7 @@ std = [
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"sp-api/std",
-	"types/std",
+	"primitives/std",
 	"pallet-assets-freezer/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]

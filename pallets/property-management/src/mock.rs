@@ -16,7 +16,7 @@ use pallet_nfts::PalletFeatures;
 
 use pallet_assets::{Instance1, Instance2};
 
-use types::TestId;
+use primitives::TestId;
 
 pub type Block = frame_system::mocking::MockBlock<Test>;
 

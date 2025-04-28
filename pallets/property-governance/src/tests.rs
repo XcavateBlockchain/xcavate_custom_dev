@@ -12,7 +12,7 @@ use pallet_property_management::{
 	LettingAgentLocations, LettingInfo
 };
 
-use pallet_nft_marketplace::{LegalProperty, PaymentAssets};
+use pallet_nft_marketplace::types::{LegalProperty, PaymentAssets};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {

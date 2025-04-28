@@ -30,7 +30,7 @@ pallet-nft-fractionalization = { workspace = true }
 
 # Local dependencies
 pallet-xcavate-whitelist = { workspace = true }
-types = { path = "../../types", default-features = false }
+primitives = { path = "../../primitives", default-features = false }
 
 [dev-dependencies]
 sp-core = { workspace = true }
@@ -53,7 +53,7 @@ std = [
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"sp-api/std",
-	"types/std",
+	"primitives/std",
 	"pallet-assets-freezer/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]

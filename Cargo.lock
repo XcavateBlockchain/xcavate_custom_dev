@@ -6871,6 +6871,7 @@ dependencies = [
  "pallet-nfts",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
+ "primitives",
  "scale-info",
  "serde",
  "sp-api",
@@ -6878,7 +6879,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
- "types",
 ]
 
 [[package]]
@@ -7058,13 +7058,13 @@ dependencies = [
  "pallet-property-management",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
+ "primitives",
  "scale-info",
  "serde",
  "sp-api",
  "sp-core",
  "sp-io",
  "sp-runtime",
- "types",
 ]
 
 [[package]]
@@ -7082,13 +7082,13 @@ dependencies = [
  "pallet-nfts",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
+ "primitives",
  "scale-info",
  "serde",
  "sp-api",
  "sp-core",
  "sp-io",
  "sp-runtime",
- "types",
 ]
 
 [[package]]
@@ -7654,6 +7654,7 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-parachain-primitives",
  "polkadot-runtime-common",
+ "primitives",
  "scale-info",
  "smallvec",
  "sp-api",
@@ -7672,7 +7673,6 @@ dependencies = [
  "staging-xcm-builder",
  "staging-xcm-executor",
  "substrate-wasm-builder",
- "types",
 ]
 
 [[package]]
@@ -9349,6 +9349,16 @@ dependencies = [
  "impl-serde",
  "scale-info",
  "uint",
+]
+
+[[package]]
+name = "primitives"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -14249,16 +14259,6 @@ name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
-
-[[package]]
-name = "types"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "parity-scale-codec",
- "scale-info",
- "sp-runtime",
-]
 
 [[package]]
 name = "ucd-trie"

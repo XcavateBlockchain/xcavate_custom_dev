@@ -7,7 +7,7 @@ use crate::{PropertyReserve, LettingStorage, LettingInfo, LettingAgentLocations,
 
 use sp_runtime::TokenError;
 
-use pallet_nft_marketplace::{LegalProperty, PaymentAssets};
+use pallet_nft_marketplace::types::{LegalProperty, PaymentAssets};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {

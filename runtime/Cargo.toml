@@ -82,7 +82,7 @@ cumulus-primitives-storage-weight-reclaim.workspace = true
 pallet-collator-selection.workspace = true
 parachains-common.workspace = true
 parachain-info.workspace = true
-types = { path = "../types", default-features = false }
+primitives = { path = "../primitives", default-features = false }
 
 # Local Dependencies
 pallet-nft-marketplace.workspace = true
@@ -147,7 +147,7 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
-	"types/std",
+	"primitives/std",
 	"xcm-builder/std",
 	"xcm-executor/std",
 	"xcm/std",

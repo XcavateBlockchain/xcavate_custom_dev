@@ -30,7 +30,7 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
-use pallet_nft_marketplace::PaymentAssets;
+use pallet_nft_marketplace::types::PaymentAssets;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;

@@ -68,7 +68,7 @@ use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use pallet_nfts::PalletFeatures;
-use types::TestId;
+use primitives::TestId;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;

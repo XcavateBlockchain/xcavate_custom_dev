@@ -9,6 +9,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod types;
+
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
@@ -25,7 +27,7 @@ use frame_support::{
 		nonfungibles_v2::{Create, Transfer},
 		tokens::Preservation,
 	},
-	PalletId, DefaultNoBound,
+	PalletId,
 	storage::bounded_btree_map::BoundedBTreeMap,
 };
 
@@ -44,7 +46,9 @@ use frame_system::RawOrigin;
 
 use codec::Codec;
 
-use types::TestId;
+use primitives::TestId;
+
+use types::*;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
@@ -86,165 +90,11 @@ pub mod pallet {
 		}
 	}
 
-	/// Infos regarding a listed nft of a real estate object on the marketplace.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct NftDetails<T: Config> {
-		pub spv_created: bool,
-		pub asset_id: LocalAssetIdOf<T>,
-		pub region: u32,
-		pub location: LocationId<T>,
-	}
-
-	/// Infos regarding the listing of a real estate object.
-	#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
-		pub real_estate_developer: AccountIdOf<T>,
-		pub token_price: Balance,
-		pub collected_funds: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub collected_tax: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub collected_fees: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub asset_id: u32,
-		pub item_id: NftId,
-		pub collection_id: NftCollectionId,
-		pub token_amount: u32,
-		pub listing_expiry: BlockNumberFor<T>,
-	}
-
-	/// Infos regarding the listing of a token.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
-		pub seller: AccountIdOf<T>,
-		pub token_price: Balance,
-		pub asset_id: u32,
-		pub item_id: NftId,
-		pub collection_id: NftCollectionId,
-		pub amount: u32,
-	}
-
-	/// Infos regarding the asset id.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
-		pub collection_id: NftCollectionId,
-		pub item_id: NftId,
-		pub region: u32,
-		pub location: LocationId<T>,
-		pub price: Balance,
-		pub token_amount: u32,
-	}
-
-	/// Infos regarding an offer.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct OfferDetails<Balance, T: Config> {
-		pub buyer: AccountIdOf<T>,
-		pub token_price: Balance,
-		pub amount: u32,
-		pub payment_assets: PaymentAssets,
-	}
-
-	#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct PropertyLawyerDetails<T: Config> {
-		pub real_estate_developer_lawyer: Option<AccountIdOf<T>>,
-		pub spv_lawyer: Option<AccountIdOf<T>>,
-		pub real_estate_developer_status: DocumentStatus,
-		pub spv_status: DocumentStatus,
-		pub real_estate_developer_lawyer_costs: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub spv_lawyer_costs: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub second_attempt: bool,
-	}
-
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, DefaultNoBound)]
-	#[scale_info(skip_type_params(T))]
-	pub struct TokenOwnerDetails<Balance, T: Config> {
-		pub token_amount: u32,
-		pub paid_funds: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-		pub paid_tax: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
-	}
-
-	#[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	#[scale_info(skip_type_params(T))]
-	pub struct RefundInfos<T: Config> {
-		pub refund_amount: u32,
-		pub property_lawyer_details: PropertyLawyerDetails<T>,
-	}
-
-	impl<Balance, T: Config> OfferDetails<Balance, T>
-	where
-		Balance: CheckedMul + TryFrom<u128>,
-	{
-		pub fn get_total_amount(&self) -> Result<Balance, Error<T>> {
-			let amount_in_balance: Balance = (self.amount as u128)
-				.try_into()
-				.map_err(|_| Error::<T>::ConversionError)?;
-	
-			self.token_price
-				.checked_mul(&amount_in_balance)
-				.ok_or(Error::<T>::MultiplyError)
-		}
-	}
-
-	/// Offer enum.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	pub enum Offer {
-		Accept,
-		Reject,
-	}
-
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	pub enum LegalProperty {
-		RealEstateDeveloperSide,
-		SpvSide,
-	}
-
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	pub enum DocumentStatus {
-		Pending,
-		Approved,
-		Rejected,
-	}
-
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, Ord, PartialOrd)]
-	pub enum PaymentAssets {
-		#[codec(index = 0)]
-		USDT,
-		#[codec(index = 1)]
-		USDC,
-	}
-
 	#[pallet::composite_enum]
 	pub enum HoldReason {
 		/// Funds are held for operating a region.
 		#[codec(index = 0)]
 		RegionDepositReserve,
-	}
-
-	impl PaymentAssets {
-		pub const fn id(&self) -> u32 {
-			match self {
-				PaymentAssets::USDT => 1984,
-				PaymentAssets::USDC => 1337,
-			}
-		}
-	}
-
-	/// AccountId storage.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	pub struct PalletIdStorage<T: Config> {
-		pallet_id: AccountIdOf<T>,
 	}
 
 	/// The module configuration trait.
@@ -647,6 +497,12 @@ pub mod pallet {
 		TokenNotRefunded,
 		/// The duration of a listing can not be zero.
 		ListingDurationCantBeZero,
+		/// The property is already sold.
+		PropertyAlreadySold,
+		/// Listing has already expired.
+		ListingExpired,
+		/// Signer has not bought any token.
+		NoTokenBought,
 	}
 
 	#[pallet::call]
@@ -1110,9 +966,69 @@ pub mod pallet {
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn cancel_buy(
 			origin: OriginFor<T>,
-			_listing_id: ListingId,
+			listing_id: ListingId,
 		) -> DispatchResult {
-			let _signer = ensure_signed(origin)?;
+			let signer = ensure_signed(origin)?;
+			let nft_details =
+				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
+			ensure!(nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(), Error::<T>::ListingExpired);
+
+			let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(signer.clone(), listing_id);
+			ensure!(!token_details.token_amount.is_zero(), Error::<T>::NoTokenBought);
+			
+			// Process refunds for supported assets (USDT and USDC)
+			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+				if let (Some(paid_funds), Some(paid_tax)) = (
+					token_details.paid_funds.get(&asset),
+					token_details.paid_tax.get(&asset),
+				) {
+					if paid_funds.is_zero() || paid_tax.is_zero() {
+						continue;
+					}
+
+					// Calculate refund and investor fee (1% of paid funds)
+					let refund_amount = paid_funds
+						.checked_add(paid_tax)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+					let investor_fee = paid_funds
+						.checked_div(&100)
+						.ok_or(Error::<T>::DivisionError)?; // 1% = paid_funds / 100
+					let total_investor_amount = refund_amount
+						.checked_add(investor_fee)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+					// Unfreeze funds
+					let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(
+						asset.id(),
+						&TestId::Marketplace,
+						&signer,
+					);
+					let new_frozen_balance = frozen_balance
+						.checked_sub(total_investor_amount)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+					T::ForeignAssetsFreezer::set_freeze(
+						asset.id(),
+						&TestId::Marketplace,
+						&signer,
+						new_frozen_balance,
+					)?;
+				}
+			}
+			ListedToken::<T>::try_mutate_exists(listing_id, |maybe_listed_token| {
+				let listed_token = maybe_listed_token.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
+				*listed_token =
+					listed_token.checked_add(token_details.token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
+				Ok::<(), DispatchError>(())
+			})?;
+			TokenBuyer::<T>::try_mutate(nft_details.asset_id, |buyer_list| {
+				let index = buyer_list
+					.iter()
+					.position(|x| x == &signer)
+					.ok_or(Error::<T>::InvalidIndex)?;
+				buyer_list.remove(index);
+				Ok::<(), DispatchError>(())
+			})?;
 			Ok(())
 		}
 
