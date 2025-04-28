@@ -503,6 +503,10 @@ pub mod pallet {
 		ListingExpired,
 		/// Signer has not bought any token.
 		NoTokenBought,
+		/// All token have been sold.
+		TokenSold,
+		/// The listing has not expired.
+		ListingNotExpired,
 	}
 
 	#[pallet::call]
@@ -726,13 +730,7 @@ pub mod pallet {
 					Error::<T>::SpvAlreadyCreated
 				);
 				let current_block_number = <frame_system::Pallet<T>>::block_number();
-				if nft_details.listing_expiry < current_block_number {
-					Self::burn_tokens_and_nfts(listing_id)?;
-					Self::refund_investors(listing_id, nft_details)?;
-					OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-					*maybe_listed_token = None;
-					return Ok(());
-				}
+				ensure!(nft_details.listing_expiry > current_block_number, Error::<T>::ListingExpired);
 
 				let transfer_price = nft_details
 					.token_price
@@ -1161,55 +1159,35 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(signer.clone(), listing_id);
-			let payment_asset_usdt = PaymentAssets::USDT;
-			let payment_asset_usdc = PaymentAssets::USDC;	
 			let nft_details =
 					OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let property_account = Self::property_account_id(nft_details.asset_id);
 			let token_amount = token_details.token_amount;
 			let mut refund_infos = RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
 			refund_infos.refund_amount = refund_infos.refund_amount.checked_sub(token_amount).ok_or(Error::<T>::NotEnoughTokenAvailable)?;
-			
-			// Process USDT payments if the owner has paid in USDT
-			if let (Some(paid_funds_usdt), Some(paid_tax_usdt)) = (
-				token_details.paid_funds.get(&payment_asset_usdt),
-				token_details.paid_tax.get(&payment_asset_usdt),
-			) {
-				if !paid_funds_usdt.is_zero() && !paid_tax_usdt.is_zero() {
-					// Calculate total refund amount (paid funds + tax)
-					let refund_amount_usdt = paid_funds_usdt
-						.checked_add(paid_tax_usdt)
+
+			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+				if let (Some(paid_funds), Some(paid_tax)) = (
+					token_details.paid_funds.get(&asset),
+					token_details.paid_tax.get(&asset),
+				) {
+					if paid_funds.is_zero() || paid_tax.is_zero() {
+						continue;
+					}
+
+					let refund_amount = paid_funds
+						.checked_add(paid_tax)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 					// Transfer USDT funds to owner account
 					Self::transfer_funds(
 						property_account.clone(),
 						signer.clone(),
-						refund_amount_usdt,
-						payment_asset_usdt.id(),
-					)?;
+						refund_amount,
+						asset.id(),
+					)?;	
 				}
 			}
-			// Process USDC payments if the owner has paid in USDC
-			if let (Some(paid_funds_usdc), Some(paid_tax_usdc)) = (
-				token_details.paid_funds.get(&payment_asset_usdc),
-				token_details.paid_tax.get(&payment_asset_usdc),
-			) {
-				if !paid_funds_usdc.is_zero() && !paid_tax_usdc.is_zero() {
-					// Calculate total refund amount (paid funds + tax)
-					let refund_amount_usdc = paid_funds_usdc
-						.checked_add(paid_tax_usdc)
-						.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-					// Transfer USDC funds to owner account
-					Self::transfer_funds(
-						property_account.clone(),
-						signer.clone(),
-						refund_amount_usdc,
-						payment_asset_usdc.id(),
-					)?;
-				}
-			}				
 			T::LocalCurrency::transfer(
 				nft_details.asset_id,
 				&signer,
@@ -1224,6 +1202,98 @@ pub mod pallet {
 				RefundToken::<T>::insert(listing_id, refund_infos);
 			}
 			PropertyOwnerToken::<T>::take(nft_details.asset_id, signer);
+			Ok(())
+		}
+
+		#[pallet::call_index(20)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn refund_expired(
+			origin: OriginFor<T>,
+			listing_id: ListingId
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let nft_details =
+            	OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			ensure!(
+				nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+				Error::<T>::ListingNotExpired
+			);
+
+			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
+
+			let token_details = TokenOwner::<T>::take(&signer, listing_id);
+			ensure!(
+				!token_details.token_amount.is_zero(),
+				Error::<T>::NoTokenBought,
+			);
+
+			// Process refunds for supported assets (USDT and USDC)
+			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+				if let (Some(paid_funds), Some(paid_tax)) = (
+					token_details.paid_funds.get(&asset),
+					token_details.paid_tax.get(&asset),
+				) {
+					if paid_funds.is_zero() || paid_tax.is_zero() {
+						continue;
+					}
+
+					// Calculate refund and investor fee (1% of paid funds)
+					let refund_amount = paid_funds
+						.checked_add(paid_tax)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+					let investor_fee = paid_funds
+						.checked_div(&100)
+						.ok_or(Error::<T>::DivisionError)?;
+					let total_investor_amount = refund_amount
+						.checked_add(investor_fee)
+						.ok_or(Error::<T>::ArithmeticOverflow)?;
+
+					// Unfreeze funds
+					let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(
+						asset.id(),
+						&TestId::Marketplace,
+						&signer,
+					);
+					let new_frozen_balance = frozen_balance
+						.checked_sub(total_investor_amount)
+						.ok_or(Error::<T>::ArithmeticUnderflow)?;
+					T::ForeignAssetsFreezer::set_freeze(
+						asset.id(),
+						&TestId::Marketplace,
+						&signer,
+						new_frozen_balance,
+					)?;
+				}
+			}
+
+			// Update ListedToken
+			ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
+				let listed_token = maybe_listed_token.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
+				*listed_token = listed_token
+					.checked_add(token_details.token_amount)
+					.ok_or(Error::<T>::ArithmeticOverflow)?;
+				
+				// Check if all tokens are returned
+				if *listed_token >= nft_details.token_amount {
+					// Listing is over, burn and clean everything
+					Self::burn_tokens_and_nfts(listing_id)?;
+					OngoingObjectListing::<T>::remove(listing_id);
+					ListedToken::<T>::remove(listing_id);
+					TokenBuyer::<T>::remove(listing_id);
+					*maybe_listed_token = None;
+				} else {
+					TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
+						let index = buyers
+							.iter()
+							.position(|b| b == &signer)
+							.ok_or(Error::<T>::InvalidIndex)?;
+						buyers.swap_remove(index); 
+						Ok::<(), DispatchError>(())
+					})?;
+				}
+				
+				Ok::<(), DispatchError>(())
+			})?;
 			Ok(())
 		}
 
@@ -1844,100 +1914,6 @@ pub mod pallet {
 			Self::transfer_funds(property_account.clone(), treasury_id, treasury_amount_usdc, payment_asset_usdc.id())?;
 			Self::transfer_funds(property_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
 			Self::transfer_funds(property_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
-			Ok(())
-		}
-
-		fn refund_investors(listing_id: ListingId, nft_details: NftListingDetailsType<T> ) -> DispatchResult {
-			let list = <TokenBuyer<T>>::take(listing_id);
-			let payment_asset_usdt = PaymentAssets::USDT;
-			let payment_asset_usdc = PaymentAssets::USDC;
-
-			for owner in list {
-				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
-				
-				// Process USDT payments if the owner has paid in USDT
-				if let (Some(paid_funds_usdt), Some(paid_tax_usdt)) = (
-					token_details.paid_funds.get(&payment_asset_usdt),
-					token_details.paid_tax.get(&payment_asset_usdt),
-				) {
-					if !paid_funds_usdt.is_zero() && !paid_tax_usdt.is_zero() {
-						// Calculate total refund amount (paid funds + tax)
-						let refund_amount_usdt = paid_funds_usdt
-							.checked_add(paid_tax_usdt)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-						// Calculate investor fee (1% of paid funds)
-						let investor_fee_usdt = paid_funds_usdt
-							.checked_mul(&1)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(100)
-							.ok_or(Error::<T>::DivisionError)?;
-
-						// Total amount to unfreeze (refund + fee)
-						let total_investor_amount_usdt = refund_amount_usdt
-							.checked_add(investor_fee_usdt)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-						// Unfreeze the investor's USDT funds
-						let frozen_balance_usdt = T::ForeignAssetsFreezer::balance_frozen(
-							payment_asset_usdt.id(),
-							&TestId::Marketplace,
-							&owner,
-						);
-						let new_frozen_balance_usdt = frozen_balance_usdt
-							.checked_sub(total_investor_amount_usdt)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						T::ForeignAssetsFreezer::set_freeze(
-							payment_asset_usdt.id(),
-							&TestId::Marketplace,
-							&owner,
-							new_frozen_balance_usdt,
-						)?;
-					}
-				}
-				// Process USDC payments if the owner has paid in USDC
-				if let (Some(paid_funds_usdc), Some(paid_tax_usdc)) = (
-					token_details.paid_funds.get(&payment_asset_usdc),
-					token_details.paid_tax.get(&payment_asset_usdc),
-				) {
-					if !paid_funds_usdc.is_zero() && !paid_tax_usdc.is_zero() {
-						// Calculate total refund amount (paid funds + tax)
-						let refund_amount_usdc = paid_funds_usdc
-							.checked_add(paid_tax_usdc)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-						// Calculate investor fee (1% of paid funds)
-						let investor_fee_usdc = paid_funds_usdc
-							.checked_mul(&1)
-							.ok_or(Error::<T>::MultiplyError)?
-							.checked_div(100)
-							.ok_or(Error::<T>::DivisionError)?;
-
-						// Total amount to unfreeze (refund + fee)
-						let total_investor_amount_usdc = refund_amount_usdc
-							.checked_add(investor_fee_usdc)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-						// Unfreeze the investor's USDC funds
-						let frozen_balance_usdc = T::ForeignAssetsFreezer::balance_frozen(
-							payment_asset_usdc.id(),
-							&TestId::Marketplace,
-							&owner,
-						);
-						let new_frozen_balance_usdc = frozen_balance_usdc
-							.checked_sub(total_investor_amount_usdc)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-						T::ForeignAssetsFreezer::set_freeze(
-							payment_asset_usdc.id(),
-							&TestId::Marketplace,
-							&owner,
-							new_frozen_balance_usdc,
-						)?;
-					}
-				}				
-				PropertyOwner::<T>::take(nft_details.asset_id);
-				PropertyOwnerToken::<T>::take(nft_details.asset_id, owner);
-			}
 			Ok(())
 		}
 

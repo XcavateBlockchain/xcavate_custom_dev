@@ -24,13 +24,6 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 pub type Signature = MultiSignature;
 pub type AccountPublic = <Signature as Verify>::Signer;
 
-/* let id = [0: u32].into();
-
-pub const ALICE: AccountId = id;
-pub const BOB: AccountId = 2;
-pub const CHARLIE: AccountId = 3;
-pub const DAVE: AccountId = 4;  */
-
 pub const MILLISECS_PER_BLOCK: u64 = 6000;
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
