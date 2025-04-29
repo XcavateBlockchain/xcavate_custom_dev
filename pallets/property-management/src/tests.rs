@@ -568,9 +568,9 @@ fn distribute_income_works() {
 			PaymentAssets::USDT,
 		));
 		assert_eq!(PropertyReserve::<Test>::get(0).total, 3000);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 40);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([2; 32].into(), PaymentAssets::USDT), 60);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([3; 32].into(), PaymentAssets::USDT), 100);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDT)), 40);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([2; 32].into(), 0, PaymentAssets::USDT)), 60);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([3; 32].into(), 0, PaymentAssets::USDT)), 100);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 1800);
 	});
 }
@@ -596,7 +596,7 @@ fn distribute_income_fails() {
 			PropertyManagement::distribute_income(RuntimeOrigin::signed([5; 32].into()), 0, 200, PaymentAssets::USDT),
 			Error::<Test>::NoLettingAgentFound
 		);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 0);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDT)), 0);
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::root(),
 			0,
@@ -682,17 +682,17 @@ fn withdraw_funds_works() {
 			PaymentAssets::USDC,
 		));
 		assert_eq!(PropertyReserve::<Test>::get(0).total, 3000);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 0);
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDC), 200);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDT)), 0);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDC)), 200);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2800);
 		assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
-		assert_eq!(Balances::free_balance(&PropertyManagement::account_id()), 5000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyManagement::account_id()), 0);
-		assert_eq!(ForeignAssets::balance(1337, &PropertyManagement::account_id()), 200);
-		assert_ok!(PropertyManagement::withdraw_funds(RuntimeOrigin::signed([1; 32].into()), PaymentAssets::USDC));
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 0);
-		assert_eq!(Balances::free_balance(&PropertyManagement::account_id()), 5000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyManagement::governance_account_id()), 2200);
+		assert_eq!(Balances::free_balance(&PropertyManagement::property_account_id(0)), 5085);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyManagement::property_account_id(0)), 2200);
+		assert_eq!(ForeignAssets::balance(1337, &PropertyManagement::property_account_id(0)), 1000);
+		assert_ok!(PropertyManagement::withdraw_funds(RuntimeOrigin::signed([1; 32].into()), 0, PaymentAssets::USDC));
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDT)), 0);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyManagement::property_account_id(0)), 2200);
+		assert_eq!(ForeignAssets::balance(1337, &PropertyManagement::property_account_id(0)), 800);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
 		assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 200);
 	});
@@ -756,9 +756,9 @@ fn withdraw_funds_fails() {
 			3200,
 			PaymentAssets::USDT,
 		));
-		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 200);
+		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, PaymentAssets)>(([1; 32].into(), 0, PaymentAssets::USDT)), 200);
 		assert_noop!(
-			PropertyManagement::withdraw_funds(RuntimeOrigin::signed([2; 32].into()), PaymentAssets::USDT),
+			PropertyManagement::withdraw_funds(RuntimeOrigin::signed([2; 32].into()), 0, PaymentAssets::USDT),
 			Error::<Test>::UserHasNoFundsStored
 		);
 	});

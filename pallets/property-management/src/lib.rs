@@ -123,7 +123,7 @@ pub mod pallet {
 
 		/// The property management's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
-		type PalletId: Get<PalletId>;
+		type MarketplacePalletId: Get<PalletId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		type Helper: crate::BenchmarkHelper<
@@ -149,10 +149,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxLocations: Get<u32>;
 
-		/// The Governance's pallet id, used for deriving its sovereign account ID.
-		#[pallet::constant]
-		type GovernanceId: Get<PalletId>;
-
 		/// The reserve a property needs to have.
 		type PropertyReserve: Get<Balance>;
 
@@ -168,10 +164,13 @@ pub mod pallet {
 
 	/// Mapping from account to currently stored balance.
 	#[pallet::storage]
-	pub type InvestorFunds<T> = StorageDoubleMap<
+	pub type InvestorFunds<T> = StorageNMap<
 		_,
-		Blake2_128Concat, AccountIdOf<T>,
-		Blake2_128Concat, PaymentAssets,
+		(
+			NMapKey<Blake2_128Concat, AccountIdOf<T>>,
+			NMapKey<Blake2_128Concat, u32>,
+			NMapKey<Blake2_128Concat, PaymentAssets>,
+		),
 		Balance,
 		ValueQuery
 	>;
@@ -476,7 +475,7 @@ pub mod pallet {
 			<T as pallet::Config>::ForeignCurrency::transfer(
 				payment_asset.id(), 
 				&signer, 
-				&Self::account_id(), 
+				&Self::property_account_id(asset_id), 
 				scaled_amount, 
 				Preservation::Expendable,
 			)
@@ -506,7 +505,7 @@ pub mod pallet {
 			if amount_to_pay_debts > Balance::zero() {
 				<T as pallet::Config>::ForeignCurrency::transfer(
 					payment_asset.id(), 
-					&Self::account_id(), 
+					&Self::property_account_id(asset_id), 
 					&letting_agent, 
 					amount_to_pay_debts, 
 					Preservation::Expendable,
@@ -529,14 +528,6 @@ pub mod pallet {
 				let reserve_amount = core::cmp::min(remaining_amount, missing_amount);
 		
 				if reserve_amount > Balance::zero() {		
-					<T as pallet::Config>::ForeignCurrency::transfer(
-						payment_asset.id(), 
-						&Self::account_id(), 
-						&Self::governance_account_id(), 
-						reserve_amount, 
-						Preservation::Expendable,
-					)
-					.map_err(|_| Error::<T>::NotEnoughFunds)?;
 					property_reserve.total = property_reserve.total
 						.checked_add(reserve_amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
@@ -572,7 +563,7 @@ pub mod pallet {
 					.ok_or(Error::<T>::MultiplyError)?
 					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
-				InvestorFunds::<T>::try_mutate(owner.clone(), payment_asset.clone(), |stored| {
+				InvestorFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset.clone()), |stored| {
 					*stored = stored.checked_add(amount_for_owner).ok_or(Error::<T>::ArithmeticOverflow)?;
 					Ok::<(), DispatchError>(())
 				})?;
@@ -592,16 +583,16 @@ pub mod pallet {
 		/// Emits `WithdrawFunds` event when succesfful.
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
-		pub fn withdraw_funds(origin: OriginFor<T>, payment_asset: PaymentAssets) -> DispatchResult {
+		pub fn withdraw_funds(origin: OriginFor<T>, asset_id: u32, payment_asset: PaymentAssets) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let amount = InvestorFunds::<T>::take(signer.clone(), payment_asset.clone());
+			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset.clone()));
 			ensure!(
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored
 			);
 			<T as pallet::Config>::ForeignCurrency::transfer(
 				payment_asset.id(), 
-				&Self::account_id(), 
+				&Self::property_account_id(asset_id), 
 				&signer, 
 				amount, 
 				Preservation::Expendable,
@@ -613,14 +604,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Get the account id of the pallet
-		pub fn account_id() -> AccountIdOf<T> {
-			<T as pallet::Config>::PalletId::get().into_account_truncating()
-		}
-
-		/// Get the account id of the governance pallet
-		pub fn governance_account_id() -> AccountIdOf<T> {
-			<T as pallet::Config>::GovernanceId::get().into_account_truncating()
+		pub fn property_account_id(asset_id: u32) -> AccountIdOf<T> {
+			<T as pallet::Config>::MarketplacePalletId::get().into_sub_account_truncating(("pr", asset_id))
 		}
 
 		/// Converts a u64 to a balance.

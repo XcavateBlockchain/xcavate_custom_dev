@@ -267,11 +267,9 @@ impl pallet_nft_marketplace::Config for Test {
 }
 
 parameter_types! {
-	pub const PropertyManagementPalletId: PalletId = PalletId(*b"py/ppmmt");
 	pub const MaxProperty: u32 = 100;
 	pub const MaxLettingAgent: u32 = 100;
 	pub const MaxLocation: u32 = 100;
-	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
 }
 
 /// Configure the pallet-property-management in pallets/property-management.
@@ -281,7 +279,7 @@ impl pallet_property_management::Config for Test {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
 	type ForeignCurrency = ForeignAssets;
-	type PalletId = PropertyManagementPalletId;
+	type MarketplacePalletId = NftMarketplacePalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = AssetHelper;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
@@ -289,7 +287,6 @@ impl pallet_property_management::Config for Test {
 	type MaxProperties = MaxProperty;
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
-	type GovernanceId = PropertyGovernancePalletId;
 	type PropertyReserve = ConstU128<3000>;
 	type PolkadotJsMultiplier = ConstU128<1>;
 }
@@ -307,7 +304,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([4; 32].into(), 5_000),
 			([6; 32].into(), 200_000),
 			((NftMarketplace::account_id()), 20_000_000),
-			((PropertyManagement::account_id()), 5_000),
+			((PropertyManagement::property_account_id(0)), 5_000),
 		],
 	}
 	.assimilate_storage(&mut test)

@@ -177,7 +177,7 @@ pub mod pallet {
 
 		/// The property governance's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
-		type PalletId: Get<PalletId>;
+		type MarketplacePalletId: Get<PalletId>;
 
 		/// Multiplier for polkadot js.
 		type PolkadotJsMultiplier: Get<Balance>;
@@ -564,8 +564,8 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn account_id() -> AccountIdOf<T> {
-			<T as pallet::Config>::PalletId::get().into_account_truncating()
+		pub fn property_account_id(asset_id: u32) -> AccountIdOf<T> {
+			<T as pallet::Config>::MarketplacePalletId::get().into_sub_account_truncating(("pr", asset_id))
 		}
 
 		// Slashes the letting agent.
@@ -577,7 +577,7 @@ pub mod pallet {
 			let _slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
 				&<T as pallet_property_management::Config>::RuntimeHoldReason::from(pallet_property_management::HoldReason::LettingAgent),
 				&letting_agent, 
-				&Self::account_id(),
+				&Self::property_account_id(challenge.asset_id),
 				amount,
 				Precision::Exact,
 				Restriction::Free,
@@ -720,7 +720,7 @@ pub mod pallet {
 				}
 				<T as pallet::Config>::ForeignCurrency::transfer(
 					currency.id(),
-					&Self::account_id(),
+					&Self::property_account_id(asset_id),
 					&letting_agent,
 					amount,
 					Preservation::Expendable,

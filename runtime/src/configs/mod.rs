@@ -603,7 +603,6 @@ impl pallet_xcavate_whitelist::Config for Runtime {
 
 parameter_types! {
 	pub const MinimumStakingAmount: Balance = 100 * UNIT;
-	pub const PropertyManagementPalletId: PalletId = PalletId(*b"py/ppmmt");
 	pub const MaxProperty: u32 = 1000;
 	pub const MaxLettingAgent: u32 = 100;
 	pub const MaxLocation: u32 = 100;
@@ -618,7 +617,7 @@ impl pallet_property_management::Config for Runtime {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
 	type ForeignCurrency = Assets;
-	type PalletId = PropertyManagementPalletId;
+	type MarketplacePalletId = NftMarketplacePalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_property_management::AssetHelper;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
@@ -626,7 +625,6 @@ impl pallet_property_management::Config for Runtime {
 	type MaxProperties = MaxProperty;
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
-	type GovernanceId = PropertyGovernancePalletId;
 	type PropertyReserve = PropertyReserves;
 	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
@@ -640,7 +638,6 @@ parameter_types! {
 	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
 	pub const LowProposal: Balance = 500 * UNIT;
 	pub const HighProposal: Balance = 10_000 * UNIT;
-	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -659,7 +656,7 @@ impl pallet_property_governance::Config for Runtime {
 	type Helper = pallet_property_governance::AssetHelper;
 	type LowProposal = LowProposal;
 	type HighProposal = HighProposal;
-	type PalletId = PropertyGovernancePalletId;
+	type MarketplacePalletId = NftMarketplacePalletId;
 	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
 
