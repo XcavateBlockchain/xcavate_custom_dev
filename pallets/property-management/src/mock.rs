@@ -238,7 +238,6 @@ parameter_types! {
 	pub const MaxNftsInCollection: u32 = 100;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const Postcode: u32 = 10;
-	pub const MaxPaymentOption: u32 = 2;
 	pub const RegionDepositAmount: Balance = 100_000;
 }
 
@@ -263,7 +262,6 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
-	type MaxPaymentOptions = MaxPaymentOption;
 	type ListingDeposit = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
 }
