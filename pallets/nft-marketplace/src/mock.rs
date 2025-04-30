@@ -111,11 +111,11 @@ impl pallet_nfts::Config for Test {
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Locker = ();
-	type CollectionDeposit = ConstU128<2>;
-	type ItemDeposit = ConstU128<1>;
-	type MetadataDepositBase = ConstU128<1>;
-	type AttributeDepositBase = ConstU128<1>;
-	type DepositPerByte = ConstU128<1>;
+	type CollectionDeposit = ConstU128<0>;
+	type ItemDeposit = ConstU128<0>;
+	type MetadataDepositBase = ConstU128<0>;
+	type AttributeDepositBase = ConstU128<0>;
+	type DepositPerByte = ConstU128<0>;
 	type StringLimit = ConstU32<50>;
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
@@ -154,11 +154,11 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = ConstU128<1>;
-	type AssetAccountDeposit = ConstU128<1>;
-	type MetadataDepositBase = ConstU128<1>;
-	type MetadataDepositPerByte = ConstU128<1>;
-	type ApprovalDeposit = ConstU128<1>;
+	type AssetDeposit = ConstU128<0>;
+	type AssetAccountDeposit = ConstU128<0>;
+	type MetadataDepositBase = ConstU128<0>;
+	type MetadataDepositPerByte = ConstU128<0>;
+	type ApprovalDeposit = ConstU128<0>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = LocalAssetsFreezer;
 	type Extra = ();
@@ -206,7 +206,7 @@ parameter_types! {
 
 impl pallet_nft_fractionalization::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Deposit = ConstU128<1>;
+	type Deposit = ConstU128<0>;
 	type Currency = Balances;
 	type NewAssetSymbol = NewAssetSymbol;
 	type NewAssetName = NewAssetName;
@@ -254,7 +254,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
-	type ListingDeposit = ConstU128<200>;
+	type ListingDeposit = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
 }
 
@@ -271,6 +271,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([6; 32].into(), 5_000),
 			([7; 32].into(), 5_000),
 			([8; 32].into(), 400_000),
+			([14; 32].into(), 200_000_000_000_000_000_000),
 			((NftMarketplace::account_id()), 20_000_000),
 		],
 	}

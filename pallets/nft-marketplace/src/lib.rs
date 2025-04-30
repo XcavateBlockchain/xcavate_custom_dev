@@ -18,7 +18,7 @@ pub use weights::*;
 
 use frame_support::{
 	traits::{
-		tokens::{fungible, fungibles, nonfungibles_v2},
+		tokens::{fungible, fungibles, nonfungibles_v2, Precision},
 		fungible::{Mutate, MutateHold},	
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
@@ -95,6 +95,8 @@ pub mod pallet {
 		/// Funds are held for operating a region.
 		#[codec(index = 0)]
 		RegionDepositReserve,
+		#[codec(index = 1)]
+		ListingDepositReserve,
 	}
 
 	/// The module configuration trait.
@@ -389,6 +391,14 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	pub type ListingDeposits<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ListingId,
+		(AccountIdOf<T>, Balance),
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -675,17 +685,25 @@ pub mod pallet {
 			let nft_balance: FrationalizedNftBalanceOf<T> = token_amount.into();
 			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(collection_id);
 			let fractionalize_item_id = FractionalizeItemId::<T>::from(item_id);
-  			pallet_nft_fractionalization::Pallet::<T>::fractionalize(
+   			pallet_nft_fractionalization::Pallet::<T>::fractionalize(
 				property_origin.clone(),
 				fractionalize_collection_id.into(),
 				fractionalize_item_id.into(),
 				asset_id.into(),
 				user_lookup,
 				nft_balance,
-			)?;  
+			)?;   
 			let property_price = token_price
 				.checked_mul(token_amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
+			let deposit_amount = property_price
+				.checked_mul(T::ListingDeposit::get())
+				.ok_or(Error::<T>::MultiplyError)?
+				.checked_div(100)
+				.ok_or(Error::<T>::DivisionError)?;
+			T::NativeCurrency::hold(&HoldReason::ListingDepositReserve.into(), &signer, deposit_amount)?;
+			
+			ListingDeposits::<T>::insert(listing_id, (signer.clone(), deposit_amount));
 			let asset_details =
 				AssetDetails { collection_id, item_id, region, location, price: property_price, token_amount };
 			AssetIdDetails::<T>::insert(asset_number, asset_details);
@@ -1746,6 +1764,13 @@ pub mod pallet {
 				nft_details.item_id,
 				registered_nft_details,
 			);
+			let (depositor, deposit_amount) = ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			T::NativeCurrency::release(
+				&HoldReason::ListingDepositReserve.into(),
+				&depositor,
+				deposit_amount,
+				Precision::Exact,			
+			)?;
 			Self::deposit_event(Event::<T>::PropertySuccessfullySold{ listing_id, item_index: nft_details.item_id, asset_id: nft_details.asset_id });
 			Ok(())
 		}

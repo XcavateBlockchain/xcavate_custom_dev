@@ -557,7 +557,7 @@ parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MaxNftTokens: u32 = 250;
 	pub const Postcode: u32 = 10;
-	pub const ListingDepositAmount: Balance = 100 * UNIT;
+	pub const ListingDepositAmount: Balance = 10 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
 }
