@@ -263,7 +263,8 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
-	type ListingDeposit = ConstU128<100>;
+	type ListingDeposit = ConstU128<10>;
+	type PropertyAccountFundingAmount = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
 }
 
@@ -287,7 +288,6 @@ impl pallet_property_management::Config for Test {
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
 	type PropertyReserve = ConstU128<3000>;
-	type PolkadotJsMultiplier = ConstU128<1>;
 }
 
 parameter_types! {
@@ -316,7 +316,6 @@ impl pallet_property_governance::Config for Test {
 	type LowProposal = ConstU128<500>;
 	type HighProposal = ConstU128<2000>;
 	type MarketplacePalletId = NftMarketplacePalletId;
-	type PolkadotJsMultiplier = ConstU128<1>;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -151,9 +151,6 @@ pub mod pallet {
 
 		/// The reserve a property needs to have.
 		type PropertyReserve: Get<Balance>;
-
-		/// Multiplier for polkadot js.
-		type PolkadotJsMultiplier: Get<Balance>;
 	}
 
 	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;

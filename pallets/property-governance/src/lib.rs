@@ -178,9 +178,6 @@ pub mod pallet {
 		/// The property governance's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type MarketplacePalletId: Get<PalletId>;
-
-		/// Multiplier for polkadot js.
-		type PolkadotJsMultiplier: Get<Balance>;
 	}
 
 	/// Number of proposals that have been made.
@@ -402,9 +399,7 @@ pub mod pallet {
 			};
 
 			// Check if the amount is less than LowProposal
-			if amount.saturating_mul(
-				<T as Config>::PolkadotJsMultiplier::get(),
-			) <= <T as Config>::LowProposal::get() {
+			if amount <= <T as Config>::LowProposal::get() {
 				// Execute the proposal immediately
 				return Self::execute_proposal(proposal);
 			}

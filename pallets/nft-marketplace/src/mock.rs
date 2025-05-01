@@ -254,7 +254,8 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
-	type ListingDeposit = ConstU128<100>;
+	type ListingDeposit = ConstU128<10>;
+	type PropertyAccountFundingAmount = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
 }
 
@@ -272,6 +273,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([7; 32].into(), 5_000),
 			([8; 32].into(), 400_000),
 			([14; 32].into(), 200_000_000_000_000_000_000),
+			([15; 32].into(), 3_500_000),
 			((NftMarketplace::account_id()), 20_000_000),
 		],
 	}

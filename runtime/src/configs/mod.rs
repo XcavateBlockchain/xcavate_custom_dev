@@ -560,6 +560,7 @@ parameter_types! {
 	pub const ListingDepositAmount: Balance = 10 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
+	pub const PropertyFundingAmount: Balance = 10 * UNIT;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -586,6 +587,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type ListingDeposit = ListingDepositAmount;
+	type PropertyAccountFundingAmount = PropertyFundingAmount;
 	type RegionDeposit = RegionDepositAmount;
 }
 
@@ -607,7 +609,6 @@ parameter_types! {
 	pub const MaxLettingAgent: u32 = 100;
 	pub const MaxLocation: u32 = 100;
 	pub const PropertyReserves: Balance = 1000 * UNIT;
-	pub const PolkadotJsMultiply: Balance = UNIT;
 }
 
 /// Configure the pallet-property-management in pallets/property-management.
@@ -626,7 +627,6 @@ impl pallet_property_management::Config for Runtime {
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
 	type PropertyReserve = PropertyReserves;
-	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
 
 parameter_types! {
@@ -657,6 +657,5 @@ impl pallet_property_governance::Config for Runtime {
 	type LowProposal = LowProposal;
 	type HighProposal = HighProposal;
 	type MarketplacePalletId = NftMarketplacePalletId;
-	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
 

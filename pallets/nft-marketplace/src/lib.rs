@@ -19,7 +19,7 @@ pub use weights::*;
 use frame_support::{
 	traits::{
 		tokens::{fungible, fungibles, nonfungibles_v2, Precision},
-		fungible::{Mutate, MutateHold},	
+		fungible::{Mutate, MutateHold, Inspect},	
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
 		fungibles::{InspectFreeze, MutateFreeze},
@@ -206,6 +206,9 @@ pub mod pallet {
 
 		/// A deposit for listing a property.
 		type ListingDeposit: Get<Balance>;
+
+		/// Amount to fund a property account.
+		type PropertyAccountFundingAmount: Get<Balance>;
 
 		/// A deposit for operating a region.
 		type RegionDeposit: Get<Balance>;
@@ -652,7 +655,7 @@ pub mod pallet {
 			T::NativeCurrency::transfer(
 				&signer,
 				&property_account,
-				T::ListingDeposit::get(),
+				T::PropertyAccountFundingAmount::get(),
 				Preservation::Expendable
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
@@ -1225,6 +1228,22 @@ pub mod pallet {
 			if refund_infos.refund_amount == 0 {
 				Self::burn_tokens_and_nfts(listing_id)?;
 				Self::refund_investors_with_fees(listing_id, refund_infos.property_lawyer_details)?;
+				let (depositor, deposit_amount) = ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+				T::NativeCurrency::release(
+					&HoldReason::ListingDepositReserve.into(),
+					&depositor,
+					deposit_amount,
+					Precision::Exact,			
+				)?;
+				let native_balance = T::NativeCurrency::balance(&property_account);
+				if !native_balance.is_zero() {
+					T::NativeCurrency::transfer(
+						&property_account,
+						&nft_details.real_estate_developer,
+						native_balance,
+						Preservation::Expendable,
+					)?;
+				}
 			} else {
 				RefundToken::<T>::insert(listing_id, refund_infos);
 			}
@@ -1277,6 +1296,23 @@ pub mod pallet {
 				if *listed_token >= nft_details.token_amount {
 					// Listing is over, burn and clean everything
 					Self::burn_tokens_and_nfts(listing_id)?;
+					let (depositor, deposit_amount) = ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+					T::NativeCurrency::release(
+						&HoldReason::ListingDepositReserve.into(),
+						&depositor,
+						deposit_amount,
+						Precision::Exact,			
+					)?;
+					let property_account = Self::property_account_id(nft_details.asset_id);
+					let native_balance = T::NativeCurrency::balance(&property_account);
+					if !native_balance.is_zero() {
+						T::NativeCurrency::transfer(
+							&property_account,
+							&nft_details.real_estate_developer,
+							native_balance,
+							Preservation::Expendable,
+						)?;
+					}
 					OngoingObjectListing::<T>::remove(listing_id);
 					ListedToken::<T>::remove(listing_id);
 					TokenBuyer::<T>::remove(listing_id);
