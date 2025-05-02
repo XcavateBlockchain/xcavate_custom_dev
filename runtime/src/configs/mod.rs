@@ -561,6 +561,8 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
 	pub const PropertyFundingAmount: Balance = 10 * UNIT;
+	pub const MarketplaceFeePercent: Balance = 1;
+	pub const MarketplaceTaxPercent: Balance = 3;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -589,6 +591,8 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type ListingDeposit = ListingDepositAmount;
 	type PropertyAccountFundingAmount = PropertyFundingAmount;
 	type RegionDeposit = RegionDepositAmount;
+	type MarketplaceFeePercentage = MarketplaceFeePercent;
+	type MarketplaceTaxPercentage = MarketplaceTaxPercent;
 }
 
 parameter_types! {
