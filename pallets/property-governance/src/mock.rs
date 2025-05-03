@@ -266,6 +266,8 @@ impl pallet_nft_marketplace::Config for Test {
 	type ListingDeposit = ConstU128<10>;
 	type PropertyAccountFundingAmount = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
+	type MarketplaceFeePercentage = ConstU128<1>;
+	type MarketplaceTaxPercentage =  ConstU128<3>;
 }
 
 parameter_types! {

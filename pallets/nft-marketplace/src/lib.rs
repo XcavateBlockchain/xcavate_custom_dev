@@ -460,6 +460,8 @@ pub mod pallet {
 		OfferRejected { listing_id: ListingId, offeror: AccountIdOf<T>, amount: u32, price: Balance },
 		/// A buy has been cancelled.
 		BuyCancelled { listing_id: ListingId, buyer: AccountIdOf<T>, amount: u32 },
+		/// Property token have been sent to another account.
+		PropertyTokenSend { asset_id: u32, sender: AccountIdOf<T>, receiver: AccountIdOf<T>, amount: u32 },
 	}
 
 	// Errors inform users that something went wrong.
@@ -532,6 +534,10 @@ pub mod pallet {
 		AmountCannotBeZero,
 		/// Marketplace fee needs to be below 100 %.
 		InvalidFeePercentage,
+		/// Marketplace tax needs to be below 100 %.
+		InvalidTaxPercentage,
+		/// The sender has not enough token.
+		NotEnoughToken,
 	}
 
 	#[pallet::call]
@@ -811,7 +817,9 @@ pub mod pallet {
 					.ok_or(Error::<T>::MultiplyError)?;
 
 				let fee_percent = T::MarketplaceFeePercentage::get();
+				ensure!(fee_percent < 100, Error::<T>::InvalidFeePercentage);
 				let tax_percent = T::MarketplaceTaxPercentage::get();
+				ensure!(tax_percent < 100, Error::<T>::InvalidTaxPercentage);
 
 				let fee = transfer_price
  					.checked_mul(fee_percent)
@@ -1728,6 +1736,77 @@ pub mod pallet {
 			}
 			Ok(())
 		} 
+
+		/// Lets the sender send property token to another account.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `asset_id`: The asset id of the property.
+		/// - `receiver`: AccountId of the person that the seller wants to handle the offer from.
+		/// - `token_amount`: The amount of token the sender wants to send.
+		///
+		/// Emits `DocumentsConfirmed` event when succesfful.
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn send_property_token(
+			origin: OriginFor<T>,
+			asset_id: u32,
+			receiver: AccountIdOf<T>,
+			token_amount: u32,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(sender.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(receiver.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let sender_token_amount = PropertyOwnerToken::<T>::take(asset_id, sender.clone());
+			let new_sender_token_amount = sender_token_amount.checked_sub(token_amount)
+				.ok_or(Error::<T>::NotEnoughToken)?;
+			T::LocalCurrency::transfer(
+				asset_id,
+				&sender,
+				&receiver,
+				token_amount.into(),
+				Preservation::Expendable,
+			)
+			.map_err(|_| Error::<T>::NotEnoughToken)?;
+			if new_sender_token_amount == 0 {
+				let mut owner_list = PropertyOwner::<T>::take(asset_id);
+				let index = owner_list
+					.iter()
+					.position(|x| *x == sender.clone())
+					.ok_or(Error::<T>::InvalidIndex)?;
+				owner_list.remove(index);
+				PropertyOwner::<T>::insert(asset_id, owner_list);
+			} else {
+				PropertyOwnerToken::<T>::insert(asset_id, sender.clone(), new_sender_token_amount);
+			}
+			if PropertyOwner::<T>::get(asset_id).contains(&receiver) {
+				PropertyOwnerToken::<T>::try_mutate(asset_id, &receiver, |receiver_balance| {
+					*receiver_balance = receiver_balance.checked_add(token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
+					Ok::<(), DispatchError>(())
+				})?;
+			} else {
+				PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
+					owner_list.try_push(receiver.clone()).map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+					Ok::<(), DispatchError>(())
+				})?;
+				PropertyOwnerToken::<T>::insert(asset_id, receiver.clone(), token_amount);
+			}
+			Self::deposit_event(Event::<T>::PropertyTokenSend { 
+				asset_id, 
+				sender, 
+				receiver, 
+				amount: token_amount, 
+			});
+			Ok(())
+		}
+
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -1876,9 +1955,11 @@ pub mod pallet {
 						token_details.paid_tax.get(asset),
 					) {
 						if !paid_funds.is_zero() && !paid_tax.is_zero() {
+							let fee_percent = T::MarketplaceFeePercentage::get(); 
+							ensure!(fee_percent < 100, Error::<T>::InvalidFeePercentage);
 							// Calculate investor's fee (1% of paid_funds)
 							let investor_fee = paid_funds
-								.checked_mul(&T::MarketplaceFeePercentage::get())
+								.checked_mul(&fee_percent)
 								.ok_or(Error::<T>::MultiplyError)?
 								.checked_div(100)
 								.ok_or(Error::<T>::DivisionError)?;
