@@ -45,12 +45,15 @@ use frame_system::{
 	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,
 };
 use pallet_xcm::{EnsureXcm, IsVoiceOfBody};
-use parachains_common::message_queue::{NarrowOriginToSibling, ParaIdToSibling};
+use parachains_common::{
+	impls::AssetsToBlockAuthor,
+	message_queue::{NarrowOriginToSibling, ParaIdToSibling},
+};
 use polkadot_runtime_common::{
 	xcm_sender::NoPriceForMessageDelivery, BlockHashCount, SlowAdjustingFeeUpdate,
 };
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_runtime::{Perbill, RuntimeDebug, traits::{BlakeTwo256, Verify}, Percent, MultiSignature};
+use sp_runtime::{Perbill, RuntimeDebug, traits::{BlakeTwo256, Verify, ConvertInto}, Percent, MultiSignature};
 use sp_version::RuntimeVersion;
 use xcm::latest::prelude::BodyId;
 
@@ -552,6 +555,20 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type BenchmarkHelper = ();
 	type RuntimeHoldReason = RuntimeHoldReason;
 }  
+
+impl pallet_asset_tx_payment::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Fungibles = Assets;
+	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
+		pallet_assets::BalanceToAssetBalance<
+			Balances,
+			Runtime,
+			ConvertInto,
+			pallet_assets::Instance2,
+		>,
+		AssetsToBlockAuthor<Runtime, pallet_assets::Instance2>,
+	>;
+}
 
 parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");

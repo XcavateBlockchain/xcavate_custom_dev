@@ -7628,6 +7628,7 @@ dependencies = [
  "frame-try-runtime",
  "hex-literal",
  "log",
+ "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-assets-freezer",
  "pallet-aura",

@@ -52,6 +52,7 @@ pallet-assets.workspace = true
 pallet-assets-freezer.workspace = true
 pallet-nfts.workspace = true
 pallet-nft-fractionalization.workspace = true
+pallet-asset-tx-payment.workspace = true
 
 sp-api.workspace = true
 sp-block-builder.workspace = true
@@ -129,6 +130,7 @@ std = [
 	"pallet-assets-freezer/std",
 	"pallet-nfts/std",
 	"pallet-nft-fractionalization/std",
+	"pallet-asset-tx-payment/std",
 	"pallet-xcm/std",
 	"parachain-info/std",
 	"parachains-common/std",
@@ -217,6 +219,7 @@ try-runtime = [
 	"pallet-assets-freezer/try-runtime",
 	"pallet-nfts/try-runtime",
 	"pallet-nft-fractionalization/try-runtime",
+	"pallet-asset-tx-payment/std",
 	"pallet-xcm/try-runtime",
 	"parachain-info/try-runtime",
 	"polkadot-runtime-common/try-runtime",

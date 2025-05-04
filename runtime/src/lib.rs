@@ -81,9 +81,9 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	cumulus_primitives_storage_weight_reclaim::StorageWeightReclaim<Runtime>,
 	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
+	pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
 );
 
 /// Unchecked extrinsic type as expected by this runtime.
@@ -291,9 +291,11 @@ mod runtime {
 	pub type RealEstateAssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance1>;
 	#[runtime::pallet_index(15)]
 	pub type AssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance2>;
+	#[runtime::pallet_index(16)]
+	pub type AssetTxPayment = pallet_asset_tx_payment;
 
 	// Governance
-	#[runtime::pallet_index(16)]
+	#[runtime::pallet_index(17)]
 	pub type Sudo = pallet_sudo;
 
 	// Collator support. The order of these 4 are important and shall not change.
