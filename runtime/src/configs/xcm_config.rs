@@ -1,11 +1,12 @@
 use crate::{
 	AccountId, AllPalletsWithSystem, Balances, ParachainInfo, ParachainSystem, PolkadotXcm,
-	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, WeightToFee, XcmpQueue,
+	Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, WeightToFee, XcmpQueue, Assets,
+	Balance,
 };
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, Contains, Everything, Nothing},
-	weights::Weight,
+	traits::{ConstU32, Contains, Everything, Nothing, ProcessMessageError, ContainsPair},
+	weights::Weight, ensure,
 };
 use frame_system::EnsureRoot;
 use pallet_xcm::XcmPassthrough;
@@ -18,9 +19,25 @@ use xcm_builder::{
 	FrameTransactionalProcessor, FungibleAdapter, IsConcrete, NativeAsset, ParentIsPreset,
 	RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
 	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
-	TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, WithUniqueTopic,
+	TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, WithUniqueTopic, FungiblesAdapter,
+	MatchedConvertedConcreteId, NoChecking, AllowKnownQueryResponses, AllowSubscriptionsFrom,
+	CreateMatcher, MatchXcm, FixedRateOfFungible,
 };
-use xcm_executor::XcmExecutor;
+use xcm_executor::{XcmExecutor, traits::{JustTry, ShouldExecute, Properties}};
+
+pub const USDT_JUNCTION: &[Junction] = &[Parachain(1000), PalletInstance(50), GeneralIndex(1984)];
+pub const USDC_JUNCTION: &[Junction] = &[Parachain(1000), PalletInstance(50), GeneralIndex(1337)];
+
+use sp_runtime::traits::MaybeEquivalence;
+use alloc::vec::Vec;
+
+// USDT from Polkadot Asset Hub
+const USDT_PER_SECOND_EXECUTION: u128 = 1_000_000;
+const USDT_PER_MB_PROOF: u128 = 1_000_000; 
+
+// USDC from Polkadot Asset Hub
+const USDC_PER_SECOND_EXECUTION: u128 = 1_000_000; 
+const USDC_PER_MB_PROOF: u128 = 1_000_000; 
 
 parameter_types! {
 	pub const RelayLocation: Location = Location::parent();
@@ -29,7 +46,16 @@ parameter_types! {
 	// For the real deployment, it is recommended to set `RelayNetwork` according to the relay chain
 	// and prepend `UniversalLocation` with `GlobalConsensus(RelayNetwork::get())`.
 	pub UniversalLocation: InteriorLocation = Parachain(ParachainInfo::parachain_id().into()).into();
+	pub CheckAccount: AccountId = PolkadotXcm::check_account();
+	pub AssetHubLocation: Location = (Parent, Parachain(1000)).into();
+	
+	pub UsdtLocation: Location = Location::new(1, [Parachain(1000), PalletInstance(50), GeneralIndex(1984)]);
+    pub UsdtTraderParams: (AssetId, u128, u128) = (UsdtLocation::get().into(), USDT_PER_SECOND_EXECUTION, USDT_PER_MB_PROOF);
+    pub UsdcLocation: Location = Location::new(1, [Parachain(1000), PalletInstance(50), GeneralIndex(1337)]);
+    pub UsdcTraderParams: (AssetId, u128, u128) = (UsdcLocation::get().into(), USDC_PER_SECOND_EXECUTION, USDC_PER_MB_PROOF);
 }
+
+type AssetIdForPoolAssets = u32;
 
 /// Type for specifying how a `Location` can be converted into an `AccountId`. This is used
 /// when determining ownership of accounts for asset transacting and when attempting to use XCM
@@ -56,6 +82,57 @@ pub type LocalAssetTransactor = FungibleAdapter<
 	// We don't track any teleports.
 	(),
 >;
+
+pub struct SupportedAssets;
+impl frame_support::traits::Contains<Location> for SupportedAssets {
+	fn contains(l: &Location) -> bool {
+		matches!(l.unpack(), (1, USDT_JUNCTION) | (1, USDC_JUNCTION) )
+	}
+}
+
+impl MaybeEquivalence<Location, AssetIdForPoolAssets> for SupportedAssets {
+	fn convert(asset_id: &Location) -> Option<AssetIdForPoolAssets> {
+		match asset_id.unpack() {
+			(1, USDT_JUNCTION) => Some(1984),
+            (1, USDC_JUNCTION) => Some(1337),
+			_ => None,
+		}
+	}
+
+	fn convert_back(asset_id: &AssetIdForPoolAssets) -> Option<Location> {
+		match asset_id {
+			1984 => Some(UsdtLocation::get()),
+            1337 => Some(UsdcLocation::get()),
+			_ => None,
+		}
+	}
+}    
+
+/// Means for transacting assets besides the native currency on this chain.
+pub type ReservedFungiblesTransactor = FungiblesAdapter<
+    // Use this fungibles implementation:
+    Assets,
+    // Use this currency when it is a fungible asset matching the given location or name:
+    MatchedConvertedConcreteId<
+        AssetIdForPoolAssets,
+        Balance,
+        SupportedAssets,
+        SupportedAssets,
+        JustTry,
+    >,
+    // Convert an XCM MultiLocation into a local account id:
+    LocationToAccountId,
+    // Our chain's account ID type (we can't get away without mentioning it explicitly):
+    AccountId,
+    // We don't track any teleports of `Assets`.
+    NoChecking,
+    // We don't track any teleports of `Assets`, but a placeholder account is provided due to trait
+    // bounds.
+    CheckAccount,
+>;
+
+/// Means for transacting assets on this chain.
+pub type AssetTransactors = (LocalAssetTransactor, ReservedFungiblesTransactor);
 
 /// This is the type we use to convert an (incoming) XCM origin into a local `Origin` instance,
 /// ready for dispatching a transaction with Xcm's `Transact`. There is an `OriginKind` which can
@@ -92,16 +169,39 @@ impl Contains<Location> for ParentOrParentsExecutivePlurality {
 	}
 }
 
+pub struct CommonGoodAssetsParachain;
+impl Contains<Location> for CommonGoodAssetsParachain {
+	fn contains(location: &Location) -> bool {
+		matches!(location.unpack(), (1, [Parachain(1000)]))
+	}
+}
+
+pub struct ParentOrSiblings;
+impl Contains<Location> for ParentOrSiblings {
+	fn contains(location: &Location) -> bool {
+		matches!(location.unpack(), (1, []) | (1, [Parachain(_)]))
+	}
+}
+
 pub type Barrier = TrailingSetTopicAsId<
 	DenyThenTry<
 		DenyReserveTransferToRelayChain,
 		(
 			TakeWeightCredit,
+			// Expected responses are OK.
+			AllowKnownQueryResponses<PolkadotXcm>,
+			// Allow XCMs with some computed origins to pass through.
 			WithComputedOrigin<
 				(
+                    // HRMP notifications from the relay chain are OK.
+					AllowHrmpNotificationsFromRelayChain,
+					// If the message is one that immediately attemps to pay for execution, then allow it.
 					AllowTopLevelPaidExecutionFrom<Everything>,
-					AllowExplicitUnpaidExecutionFrom<ParentOrParentsExecutivePlurality>,
-					// ^^^ Parent and its exec plurality get free execution
+					// Common Good Assets parachain, parent and its exec plurality get free execution
+					AllowExplicitUnpaidExecutionFrom<(CommonGoodAssetsParachain, ParentOrParentsExecutivePlurality)>,
+					// Subscriptions for version tracking are OK.
+					AllowSubscriptionsFrom<ParentOrSiblings>,
+                    
 				),
 				UniversalLocation,
 				ConstU32<8>,
@@ -110,84 +210,147 @@ pub type Barrier = TrailingSetTopicAsId<
 	>,
 >;
 
+pub struct AssetHubAssetsAsReserve;
+impl ContainsPair<Asset, Location> for AssetHubAssetsAsReserve {
+	fn contains(asset: &Asset, origin: &Location) -> bool {
+		// The `origin` location must be Polkadot Asset Hub
+		let asset_hub_loc = AssetHubLocation::get();
+		if &asset_hub_loc != origin {
+			return false;
+		}
+		SupportedAssets::contains(&asset.id.0)
+	}
+}
+impl Contains<(Location, Vec<Asset>)> for AssetHubAssetsAsReserve {
+	fn contains(item: &(Location, Vec<Asset>)) -> bool {
+		// We allow all signed origins to send back the AssetHub reserve assets.
+		let (_, assets) = item;
+		assets.iter().all(|asset| SupportedAssets::contains(&asset.id.0))
+	}
+}
+
+pub type Reserves = (NativeAsset, AssetHubAssetsAsReserve);
+
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
-	type RuntimeCall = RuntimeCall;
-	type XcmSender = XcmRouter;
-	// How to withdraw and deposit an asset.
-	type AssetTransactor = LocalAssetTransactor;
-	type OriginConverter = XcmOriginToTransactDispatchOrigin;
-	type IsReserve = NativeAsset;
-	type IsTeleporter = (); // Teleporting is disabled.
-	type UniversalLocation = UniversalLocation;
-	type Barrier = Barrier;
-	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
-	type Trader =
-		UsingComponents<WeightToFee, RelayLocation, AccountId, Balances, ToAuthor<Runtime>>;
-	type ResponseHandler = PolkadotXcm;
-	type AssetTrap = PolkadotXcm;
-	type AssetClaims = PolkadotXcm;
-	type SubscriptionService = PolkadotXcm;
-	type PalletInstancesInfo = AllPalletsWithSystem;
-	type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
-	type AssetLocker = ();
-	type AssetExchanger = ();
-	type FeeManager = ();
-	type MessageExporter = ();
-	type UniversalAliases = Nothing;
-	type CallDispatcher = RuntimeCall;
-	type SafeCallFilter = Everything;
-	type Aliasers = Nothing;
-	type TransactionalProcessor = FrameTransactionalProcessor;
-	type HrmpNewChannelOpenRequestHandler = ();
-	type HrmpChannelAcceptedHandler = ();
-	type HrmpChannelClosingHandler = ();
+    type Aliasers = Nothing;
+    type AssetClaims = PolkadotXcm;
+    type AssetExchanger = ();
+    type AssetLocker = ();
+    // How to withdraw and deposit an asset.
+    type AssetTransactor = AssetTransactors;
+    type AssetTrap = PolkadotXcm;
+    type Barrier = Barrier;
+    type CallDispatcher = RuntimeCall;
+    /// When changing this config, keep in mind, that you should collect fees.
+    type FeeManager = ();
+    type HrmpChannelAcceptedHandler = ();
+    type HrmpChannelClosingHandler = ();
+    type HrmpNewChannelOpenRequestHandler = ();
+    /// Please, keep these two configs (`IsReserve` and `IsTeleporter`) mutually exclusive
+    type IsReserve = Reserves;
+    type IsTeleporter = ();
+    type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
+    type MessageExporter = ();
+    type OriginConverter = XcmOriginToTransactDispatchOrigin;
+    type PalletInstancesInfo = AllPalletsWithSystem;
+    type ResponseHandler = PolkadotXcm;
+    type RuntimeCall = RuntimeCall;
+    type SafeCallFilter = Nothing;
+    type SubscriptionService = PolkadotXcm;
+    type Trader = (
+        UsingComponents<WeightToFee, RelayLocation, AccountId, Balances, ToAuthor<Runtime>>,
+        FixedRateOfFungible<UsdtTraderParams, ()>,
+        FixedRateOfFungible<UsdcTraderParams, ()>,
+    );
+    type TransactionalProcessor = FrameTransactionalProcessor;
+    type UniversalAliases = Nothing;
+    // Teleporting is disabled.
+    type UniversalLocation = UniversalLocation;
+    type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+    type XcmSender = XcmRouter;
 	type XcmRecorder = PolkadotXcm;
 }
 
 /// No local origins on this chain are allowed to dispatch XCM sends/executions.
 pub type LocalOriginToLocation = SignedToAccountId32<RuntimeOrigin, AccountId, RelayNetwork>;
 
-/// The means for routing XCM messages which are not for local execution into the right message
-/// queues.
+/// The means for routing XCM messages which are not for local execution into
+/// the right message queues.
 pub type XcmRouter = WithUniqueTopic<(
-	// Two routers - use UMP to communicate with the relay chain:
-	cumulus_primitives_utility::ParentAsUmp<ParachainSystem, (), ()>,
-	// ..and XCMP to communicate with the sibling chains.
-	XcmpQueue,
+    // Two routers - use UMP to communicate with the relay chain:
+    cumulus_primitives_utility::ParentAsUmp<ParachainSystem, PolkadotXcm, ()>,
+    // ..and XCMP to communicate with the sibling chains.
+    XcmpQueue,
 )>;
 
-impl pallet_xcm::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type SendXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-	type XcmRouter = XcmRouter;
-	type ExecuteXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-	type XcmExecuteFilter = Nothing;
-	// ^ Disable dispatchable execute on the XCM pallet.
-	// Needs to be `Everything` for local testing.
-	type XcmExecutor = XcmExecutor<XcmConfig>;
-	type XcmTeleportFilter = Everything;
-	type XcmReserveTransferFilter = Nothing;
-	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
-	type UniversalLocation = UniversalLocation;
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+parameter_types! {
+    pub const MaxLockers: u32 = 8;
+    pub const MaxRemoteLockConsumers: u32 = 0;
+}
 
-	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
+impl pallet_xcm::Config for Runtime {
+	type AdminOrigin = EnsureRoot<AccountId>;
 	// ^ Override for AdvertisedXcmVersion default
 	type AdvertisedXcmVersion = pallet_xcm::CurrentXcmVersion;
 	type Currency = Balances;
 	type CurrencyMatcher = ();
-	type TrustedLockers = ();
-	type SovereignAccountOf = LocationToAccountId;
+	type ExecuteXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
 	type MaxLockers = ConstU32<8>;
-	type WeightInfo = pallet_xcm::TestWeightInfo;
-	type AdminOrigin = EnsureRoot<AccountId>;
 	type MaxRemoteLockConsumers = ConstU32<0>;
 	type RemoteLockConsumerIdentifier = ();
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type SendXcmOrigin = EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+	type SovereignAccountOf = LocationToAccountId;
+	type TrustedLockers = ();
+	type UniversalLocation = UniversalLocation;
+	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
+	type WeightInfo = pallet_xcm::TestWeightInfo;
+	type XcmExecuteFilter = Nothing;
+	// ^ Disable dispatchable execute on the XCM pallet.
+	// Needs to be `Everything` for local testing.
+	type XcmExecutor = XcmExecutor<XcmConfig>;
+	// We only allow reserve based transfers of AssetHub reserve assets back to AssetHub.
+	type XcmReserveTransferFilter = AssetHubAssetsAsReserve;
+	type XcmRouter = XcmRouter;
+	// We do not allow teleportation of PLMC or other assets.
+	type XcmTeleportFilter = Nothing;
+
+	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
 }
 
 impl cumulus_pallet_xcm::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type XcmExecutor = XcmExecutor<XcmConfig>;
+    type RuntimeEvent = RuntimeEvent;
+    type XcmExecutor = XcmExecutor<XcmConfig>;
+}
+
+pub struct AllowHrmpNotificationsFromRelayChain;
+impl ShouldExecute for AllowHrmpNotificationsFromRelayChain {
+	fn should_execute<RuntimeCall>(
+		origin: &Location,
+		instructions: &mut [Instruction<RuntimeCall>],
+		_max_weight: Weight,
+		_properties: &mut Properties,
+	) -> Result<(), ProcessMessageError> {
+		log::trace!(
+			target: "xcm::barriers",
+			"AllowHrmpNotificationsFromRelayChain origin: {:?}, instructions: {:?}, max_weight: {:?}, properties: {:?}",
+			origin, instructions, _max_weight, _properties,
+		);
+		// accept only the Relay Chain
+		ensure!(matches!(origin.unpack(), (1, [])), ProcessMessageError::Unsupported);
+		// accept only HRMP notifications and nothing else
+		instructions
+			.matcher()
+			.assert_remaining_insts(1)?
+			.match_next_inst(|inst| match inst {
+				HrmpNewChannelOpenRequest { .. } |
+				HrmpChannelAccepted { .. } |
+				HrmpChannelClosing { .. } => Ok(()),
+				_ => Err(ProcessMessageError::BadFormat),
+			})?;
+		Ok(())
+	}
 }
