@@ -538,6 +538,8 @@ pub mod pallet {
 		InvalidTaxPercentage,
 		/// The sender has not enough token.
 		NotEnoughToken,
+		/// Token have not been returned yet.
+		TokenNotReturned,
 	}
 
 	#[pallet::call]
@@ -634,6 +636,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
+			ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
 			ensure!(token_amount <= T::MaxNftToken::get(), Error::<T>::TooManyToken);
 			ensure!(token_price > 0, Error::<T>::InvalidTokenPrice);
 
@@ -1382,6 +1385,57 @@ pub mod pallet {
 				Ok::<(), DispatchError>(())
 			})?;
 			Self::deposit_event(Event::<T>::FundsRefunded{signer, listing_id});
+			Ok(())
+		}
+
+		#[pallet::call_index(21)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn reclaim_unsold(
+			origin: OriginFor<T>,
+			listing_id: ListingId,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let nft_details =
+				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			ensure!(nft_details.real_estate_developer == signer, Error::<T>::NoPermission);
+			ensure!(
+				nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+				Error::<T>::ListingNotExpired
+			);
+
+			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
+			
+			// Update ListedToken
+			ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
+				let listed_token = maybe_listed_token.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
+				
+				// Check if all tokens are returned
+				ensure!(*listed_token >= nft_details.token_amount, Error::<T>::TokenNotReturned);
+				// Listing is over, burn and clean everything
+				Self::burn_tokens_and_nfts(listing_id)?;
+				let (depositor, deposit_amount) = ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+				T::NativeCurrency::release(
+					&HoldReason::ListingDepositReserve.into(),
+					&depositor,
+					deposit_amount,
+					Precision::Exact,			
+				)?;
+				let property_account = Self::property_account_id(nft_details.asset_id);
+				let native_balance = T::NativeCurrency::balance(&property_account);
+				if !native_balance.is_zero() {
+					T::NativeCurrency::transfer(
+						&property_account,
+						&nft_details.real_estate_developer,
+						native_balance,
+						Preservation::Expendable,
+					)?;
+				}
+				OngoingObjectListing::<T>::remove(listing_id);
+				ListedToken::<T>::remove(listing_id);
+				TokenBuyer::<T>::remove(listing_id);
+				*maybe_listed_token = None;
+				Ok::<(), DispatchError>(())
+			})?;
 			Ok(())
 		}
 

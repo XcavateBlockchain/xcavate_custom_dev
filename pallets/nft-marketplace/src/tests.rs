@@ -189,6 +189,17 @@ fn list_object_fails() {
 			),
 			Error::<Test>::TooManyToken
 		);
+		assert_noop!(
+			NftMarketplace::list_object(
+				RuntimeOrigin::signed([0; 32].into()),
+				0,
+				bvec![10, 10],
+				10_000,
+				0,
+				bvec![22, 22]
+			),
+			Error::<Test>::AmountCannotBeZero
+		);
 	})
 }
 
@@ -2514,3 +2525,77 @@ fn send_property_token_fails() {
 		), Error::<Test>::NotEnoughToken);
 	})
 } 
+
+#[test]
+fn reclaim_unsold_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30));
+		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(NftMarketplace::list_object(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+			bvec![10, 10],
+			10_000,
+			100,
+			bvec![22, 22]
+		));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 100_000);
+		run_to_block(40);
+		assert_ok!(NftMarketplace::reclaim_unsold(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_eq!(ListedToken::<Test>::get(0), None);
+		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 0);
+	})
+}
+
+#[test]
+fn reclaim_unsold_fails() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30));
+		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(NftMarketplace::list_object(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+			bvec![10, 10],
+			10_000,
+			100,
+			bvec![22, 22]
+		));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 100_000);
+		run_to_block(20);
+		assert_noop!(NftMarketplace::reclaim_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::ListingNotExpired);
+		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 10, crate::PaymentAssets::USDT));
+		assert_noop!(NftMarketplace::reclaim_unsold(RuntimeOrigin::signed([0; 32].into()), 1), Error::<Test>::InvalidIndex);
+		run_to_block(40);
+		assert_noop!(NftMarketplace::reclaim_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::TokenNotReturned);
+	})
+}
+
+#[test]
+fn reclaim_unsold_fails_2() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30));
+		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(NftMarketplace::list_object(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+			bvec![10, 10],
+			10_000,
+			100,
+			bvec![22, 22]
+		));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 100_000);
+		run_to_block(20);
+		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, crate::PaymentAssets::USDT));
+		run_to_block(40);
+		assert_noop!(NftMarketplace::reclaim_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::PropertyAlreadySold);
+	})
+}
