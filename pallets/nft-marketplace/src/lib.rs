@@ -462,6 +462,8 @@ pub mod pallet {
 		BuyCancelled { listing_id: ListingId, buyer: AccountIdOf<T>, amount: u32 },
 		/// Property token have been sent to another account.
 		PropertyTokenSend { asset_id: u32, sender: AccountIdOf<T>, receiver: AccountIdOf<T>, amount: u32 },
+		/// The deposit of the real estate developer has been released.
+		ListingDepositReleased { signer: AccountIdOf<T>, listing_id: ListingId },
 	}
 
 	// Errors inform users that something went wrong.
@@ -1057,7 +1059,7 @@ pub mod pallet {
 			listing_id: ListingId,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let nft_details =
+			let mut nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(), Error::<T>::ListingExpired);
 			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
@@ -1066,7 +1068,7 @@ pub mod pallet {
 			ensure!(!token_details.token_amount.is_zero(), Error::<T>::NoTokenBought);
 			
 			// Process refunds
-			Self::unfreeze_token(&token_details, &signer)?;
+			Self::unfreeze_token(&mut nft_details, &token_details, &signer)?;
 
 			ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
 				let listed_token = maybe_listed_token.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
@@ -1082,6 +1084,7 @@ pub mod pallet {
 				buyer_list.remove(index);
 				Ok::<(), DispatchError>(())
 			})?;
+			OngoingObjectListing::<T>::insert(listing_id, &nft_details);
 
 			Self::deposit_event(Event::<T>::BuyCancelled {
 				listing_id,
@@ -1121,6 +1124,8 @@ pub mod pallet {
 			let listing_details =
 				TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
 			ensure!(listing_details.amount >= amount, Error::<T>::NotEnoughTokenAvailable);
+			ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
+			ensure!(offer_price > 0, Error::<T>::InvalidTokenPrice);
 			let price = offer_price
 				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
@@ -1321,7 +1326,7 @@ pub mod pallet {
 			listing_id: ListingId
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let nft_details =
+			let mut nft_details =
             	OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(
 				nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
@@ -1337,7 +1342,7 @@ pub mod pallet {
 			);
 
 			// Process refunds for supported assets (USDT and USDC)
-			Self::unfreeze_token(&token_details, &signer)?;
+			Self::unfreeze_token(&mut nft_details, &token_details, &signer)?;
 			
 			// Update ListedToken
 			ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
@@ -1380,6 +1385,7 @@ pub mod pallet {
 						buyers.swap_remove(index); 
 						Ok::<(), DispatchError>(())
 					})?;
+					OngoingObjectListing::<T>::insert(listing_id, &nft_details);
 				}
 				
 				Ok::<(), DispatchError>(())
@@ -1388,7 +1394,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(21)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn reclaim_unsold(
 			origin: OriginFor<T>,
@@ -1436,6 +1442,10 @@ pub mod pallet {
 				*maybe_listed_token = None;
 				Ok::<(), DispatchError>(())
 			})?;
+			Self::deposit_event(Event::<T>::ListingDepositReleased {
+				signer,
+				listing_id,
+			});
 			Ok(())
 		}
 
@@ -1448,7 +1458,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the nft.
 		///
 		/// Emits `ListingUpdated` event when succesfful.
-		#[pallet::call_index(12)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
 		pub fn upgrade_listing(
 			origin: OriginFor<T>,
@@ -1482,7 +1492,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the object.
 		///
 		/// Emits `ObjectUpdated` event when succesfful.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
 		pub fn upgrade_object(
 			origin: OriginFor<T>,
@@ -1520,7 +1530,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the seller wants to delist.
 		///
 		/// Emits `ListingDelisted` event when succesfful.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
 		pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -1549,7 +1559,7 @@ pub mod pallet {
 		/// - `lawyer`: The lawyer that should be registered.
 		///
 		/// Emits `LawyerRegistered` event when succesfful.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn register_lawyer(
 			origin: OriginFor<T>,
@@ -1572,7 +1582,7 @@ pub mod pallet {
 		/// - `costs`: The costs thats the lawyer demands for his work.
 		///
 		/// Emits `LawyerClaimedProperty` event when succesfful.
-		#[pallet::call_index(16)]
+		#[pallet::call_index(17)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_property(
 			origin: OriginFor<T>,
@@ -1668,7 +1678,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing from the property.
 		///
 		/// Emits `LawyerRemovedFromCase` event when succesfful.
-		#[pallet::call_index(17)]
+		#[pallet::call_index(18)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn remove_from_case(
 			origin: OriginFor<T>,
@@ -1702,7 +1712,7 @@ pub mod pallet {
 		/// - `approve`: Approves or Rejects the case.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(18)]
+		#[pallet::call_index(19)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_confirm_documents(
 			origin: OriginFor<T>,
@@ -1801,7 +1811,7 @@ pub mod pallet {
 		/// - `token_amount`: The amount of token the sender wants to send.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(19)]
+		#[pallet::call_index(20)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn send_property_token(
 			origin: OriginFor<T>,
@@ -2227,7 +2237,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn unfreeze_token(token_details: &TokenOwnerDetails<Balance, T>, signer: &AccountIdOf<T>) -> DispatchResult {
+		fn unfreeze_token(nft_details: &mut NftListingDetailsType<T>, token_details: &TokenOwnerDetails<Balance, T>, signer: &AccountIdOf<T>) -> DispatchResult {
 			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
 				if let (Some(paid_funds), Some(paid_tax)) = (
 					token_details.paid_funds.get(&asset),
@@ -2263,6 +2273,15 @@ pub mod pallet {
 						signer,
 						new_frozen_balance,
 					)?;
+					if let Some(funds) = nft_details.collected_funds.get_mut(&asset) {
+						*funds = funds.checked_sub(*paid_funds).ok_or(Error::<T>::ArithmeticUnderflow)?;
+					} 
+					if let Some(tax) = nft_details.collected_tax.get_mut(&asset) {
+						*tax = tax.checked_sub(*paid_tax).ok_or(Error::<T>::ArithmeticUnderflow)?;
+					}
+					if let Some(fee) = nft_details.collected_fees.get_mut(&asset) {
+						*fee = fee.checked_sub(investor_fee).ok_or(Error::<T>::ArithmeticUnderflow)?;
+					}
 				}
 			}
 			Ok(())
@@ -2287,8 +2306,8 @@ pub mod pallet {
 				.checked_sub(fees)
 				.ok_or(Error::<T>::ArithmeticUnderflow)?;
 
-			Self::transfer_funds(&sender, &treasury_id, fees, asset)?;
-			Self::transfer_funds(&sender, &receiver, seller_part, asset)?;
+			Self::transfer_funds(sender, &treasury_id, fees, asset)?;
+			Self::transfer_funds(sender, receiver, seller_part, asset)?;
 			Ok(())
 		}
 
@@ -2325,7 +2344,7 @@ pub mod pallet {
 			asset: u32,
 		) -> DispatchResult {
 			if !amount.is_zero() {
-				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
+				T::ForeignCurrency::transfer(asset, from, to, amount, Preservation::Expendable)
 					.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			}
 			Ok(())

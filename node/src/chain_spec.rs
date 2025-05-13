@@ -205,8 +205,8 @@ fn testnet_genesis(
 				.iter()
 				.cloned()
 				.flat_map(|x| vec![
-					(1337, x.clone(), 10_000_000),
-					(1984, x.clone(), 10_000_000),
+					(1337, x.clone(), 100_000),
+					(1984, x.clone(), 100_000),
 				])
 				.collect::<Vec<_>>(),
 		},   

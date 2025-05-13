@@ -1132,6 +1132,20 @@ fn relist_a_nft_fails() {
 			NftMarketplace::relist_token(RuntimeOrigin::signed([0; 32].into()), 0, 0, 1000, 1),
 			Error::<Test>::NotEnoughFunds
 		);
+		assert_noop!(NftMarketplace::relist_token(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
+			0,
+			1000,
+			0
+		), Error::<Test>::AmountCannotBeZero);
+		assert_noop!(NftMarketplace::relist_token(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
+			0,
+			0,
+			1
+		), Error::<Test>::InvalidTokenPrice);
 	})
 }
 
@@ -1382,6 +1396,14 @@ fn make_offer_fails() {
 		assert_noop!(
 			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 2, crate::PaymentAssets::USDT),
 			Error::<Test>::NotEnoughTokenAvailable
+		);
+		assert_noop!(
+			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 0, crate::PaymentAssets::USDT),
+			Error::<Test>::AmountCannotBeZero
+		);
+		assert_noop!(
+			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 0, 1, crate::PaymentAssets::USDT),
+			Error::<Test>::InvalidTokenPrice
 		);
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 1, crate::PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([3; 32].into()), 1, 300, 1, crate::PaymentAssets::USDT));
@@ -2221,7 +2243,9 @@ fn cancel_buy_works() {
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
 		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(312_000));
 		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[2; 32].into()), Some(312_000));
+		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().collected_funds.get(&crate::PaymentAssets::USDT).copied(), Some(600_000));
 		assert_ok!(NftMarketplace::cancel_buy(RuntimeOrigin::signed([1; 32].into()), 0));
+		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().collected_funds.get(&crate::PaymentAssets::USDT).copied(), Some(300_000));
 		assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
 		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), None);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 1);
@@ -2313,6 +2337,7 @@ fn refund_expired_works() {
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 1);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
 		assert_eq!(ForeignAssetsFreezer::frozen_balance(1984, &[1; 32].into()), Some(312_000));
+		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().collected_funds.get(&crate::PaymentAssets::USDT).copied(), Some(300_000));
 		run_to_block(40);
 		assert_ok!(NftMarketplace::refund_expired(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(ListedToken::<Test>::get(0), None);
