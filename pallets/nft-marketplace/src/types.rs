@@ -6,6 +6,16 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{DefaultNoBound, sp_runtime::RuntimeDebug};
 use scale_info::TypeInfo;
 
+/// Infos regarding the listing of a real estate object.
+#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct RegionInfo<T: Config> {
+    pub collection_id: <T as pallet::Config>::NftCollectionId,
+    pub listing_duration: BlockNumberFor<T>,
+	pub owner: AccountIdOf<T>,
+	pub tax: Balance,
+}
+
 /// Infos regarding a listed nft of a real estate object on the marketplace.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -110,6 +120,14 @@ where
             .checked_mul(&amount_in_balance)
             .ok_or(Error::<T>::MultiplyError)
     }
+}
+
+/// Offer enum.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum TakeoverAction {
+    Accept,
+    Reject,
 }
 
 /// Offer enum.

@@ -572,14 +572,16 @@ impl pallet_asset_tx_payment::Config for Runtime {
 
 parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
+	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 250;
 	pub const Postcode: u32 = 10;
 	pub const ListingDepositAmount: Balance = 10 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
+	pub const LocationDepositAmount: Balance = 10_000 * UNIT;
 	pub const PropertyFundingAmount: Balance = 10 * UNIT;
 	pub const MarketplaceFeePercent: Balance = 1;
-	pub const MarketplaceTaxPercent: Balance = 3;
+	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -594,6 +596,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type ForeignAssetsFreezer = AssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
+	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
@@ -608,8 +611,9 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type ListingDeposit = ListingDepositAmount;
 	type PropertyAccountFundingAmount = PropertyFundingAmount;
 	type RegionDeposit = RegionDepositAmount;
+	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = MarketplaceFeePercent;
-	type MarketplaceTaxPercentage = MarketplaceTaxPercent;
+	type MaxListingDuration = MaximumListingDuration;
 }
 
 parameter_types! {

@@ -94,6 +94,8 @@ pub mod pallet {
 		#[codec(index = 0)]
 		RegionDepositReserve,
 		#[codec(index = 1)]
+		LocationDepositReserve,
+		#[codec(index = 2)]
 		ListingDepositReserve,
 	}
 
@@ -156,6 +158,10 @@ pub mod pallet {
 			Self,
 		>;
 
+		/// The minimum amount of token of a nft.
+		#[pallet::constant]
+		type MinNftToken: Get<u32>;
+
 		/// The maximum amount of token of a nft.
 		#[pallet::constant]
 		type MaxNftToken: Get<u32>;
@@ -211,11 +217,13 @@ pub mod pallet {
 		/// A deposit for operating a region.
 		type RegionDeposit: Get<Balance>;
 
+		/// A deposit for operating a location.
+		type LocationDeposit: Get<Balance>;
+
 		/// The fee percentage charged by the marketplace (e.g., 1 for 1%).
 		type MarketplaceFeePercentage: Get<Balance>;
 		
-		/// The tax percentage collected (e.g., 3 for 3%).
-		type MarketplaceTaxPercentage: Get<Balance>;
+		type MaxListingDuration: Get<BlockNumberFor<Self>>;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -267,15 +275,25 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NextListingId<T: Config> = StorageValue<_, ListingId, ValueQuery>;
 
-	/// Mapping of a collection id to the region.
+	/// Mapping of region to the region information.
 	#[pallet::storage]
-	pub type RegionCollections<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, <T as pallet::Config>::NftCollectionId, OptionQuery>;
+	pub type Regions<T: Config> = 
+		StorageMap<_, Blake2_128Concat, RegionId, RegionInfo<T>, OptionQuery>;
 
-	/// Mapping of region to the set time limit for property sells.
+	/// Mapping of region to the owner.
 	#[pallet::storage]
-	pub type RegionListingDuration<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, BlockNumberFor<T>, OptionQuery>;
+	pub type RegionOwner<T: Config> =
+		StorageMap<_, Blake2_128Concat, RegionId, AccountIdOf<T>, OptionQuery>;
+
+	/// Mapping of region to the tax.
+	#[pallet::storage]
+	pub type RegionTax<T: Config> =
+		StorageMap<_, Blake2_128Concat, RegionId, Balance, OptionQuery>;
+
+	/// Mapping of region to requests for takeover.
+	#[pallet::storage]
+	pub type TakeoverRequests<T: Config> =
+		StorageMap<_, Blake2_128Concat, RegionId, AccountIdOf<T>, OptionQuery>;
 
 	/// Mapping from the Nft to the Nft details.
 	#[pallet::storage]
@@ -464,6 +482,14 @@ pub mod pallet {
 		PropertyTokenSend { asset_id: u32, sender: AccountIdOf<T>, receiver: AccountIdOf<T>, amount: u32 },
 		/// The deposit of the real estate developer has been released.
 		ListingDepositReleased { signer: AccountIdOf<T>, listing_id: ListingId },
+		/// Someone proposed to take over a region.
+		TakeoverProposed { region: RegionId, signer:AccountIdOf<T> },
+		/// A takeover has been accepted from the region owner.
+		TakeoverAccepted { region: RegionId, new_owner:AccountIdOf<T> },
+		/// A takeover has been rejected from the region owner.
+		TakeoverRejected { region: RegionId },
+		/// Listing duration of a region changed.
+		ListingDurationChanged { region: RegionId, listing_duration: BlockNumberFor<T> },
 	}
 
 	// Errors inform users that something went wrong.
@@ -503,6 +529,8 @@ pub mod pallet {
 		LocationUnknown,
 		/// The object can not be divided in so many token.
 		TooManyToken,
+		/// The object needs more token.
+		TokenAmountTooLow,
 		/// A user can only make one offer per listing.
 		OnlyOneOfferPerUser,
 		/// The lawyer has already been registered.
@@ -542,6 +570,14 @@ pub mod pallet {
 		NotEnoughToken,
 		/// Token have not been returned yet.
 		TokenNotReturned,
+		/// Listing limit is set too high.
+		ListingDurationTooHigh,
+		/// The proposer is already owner of this region.
+		AlreadyRegionOwner,
+		/// There is already a takeover request pending.
+		TakeoverAlreadyPending,
+		/// There is no pending takeover request.
+		NoTakeoverRequest,
 	}
 
 	#[pallet::call]
@@ -557,9 +593,14 @@ pub mod pallet {
 		/// Emits `RegionCreated` event when succesfful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
-		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>) -> DispatchResult {
+		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>, tax: Balance) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
 			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
+			ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
 			T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, T::RegionDeposit::get())?;
 			
 			let pallet_id: AccountIdOf<T> = Self::account_id();
@@ -572,11 +613,109 @@ pub mod pallet {
 			let current_region_id = NextRegionId::<T>::get();
 			let next_region_id = current_region_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
 			
-			RegionCollections::<T>::insert(current_region_id, collection_id);
-			RegionListingDuration::<T>::insert(current_region_id, listing_duration);
+			let region_info = RegionInfo {
+				collection_id,
+				listing_duration,
+				owner: signer,
+				tax,
+			};
+			Regions::<T>::insert(current_region_id, region_info);
+			//RegionOwner::<T>::insert(current_region_id, signer);
+			RegionTax::<T>::insert(current_region_id, tax);
 			NextRegionId::<T>::put(next_region_id);
 			
 			Self::deposit_event(Event::<T>::RegionCreated { region_id: current_region_id, collection_id });
+			Ok(())
+		}
+
+		#[pallet::call_index(30)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn adjust_listing_duration(origin: OriginFor<T>, region: RegionId, listing_duration: BlockNumberFor<T>) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+
+			let mut region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(signer == region_info.owner, Error::<T>::NoPermission);
+
+			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
+			ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
+
+			region_info.listing_duration = listing_duration;
+
+			Regions::<T>::insert(region, region_info);
+
+			Self::deposit_event(Event::<T>::ListingDurationChanged { region, listing_duration });
+			Ok(())
+		}
+
+		#[pallet::call_index(31)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn propose_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let current_owner = RegionOwner::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+		
+			ensure!(signer != current_owner, Error::<T>::AlreadyRegionOwner);
+			ensure!(!TakeoverRequests::<T>::contains_key(region), Error::<T>::TakeoverAlreadyPending);
+		
+			T::NativeCurrency::hold(
+				&HoldReason::RegionDepositReserve.into(),
+				&signer,
+				T::RegionDeposit::get(),
+			)?;
+		
+			TakeoverRequests::<T>::insert(region, signer.clone());
+			Self::deposit_event(Event::<T>::TakeoverProposed { region, signer });
+			Ok(())
+		}
+
+		#[pallet::call_index(32)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn handle_takeover(
+			origin: OriginFor<T>,
+			region: RegionId,
+			action: TakeoverAction,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let current_owner = RegionOwner::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(signer == current_owner, Error::<T>::NoPermission);
+
+			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
+
+			match action {
+				TakeoverAction::Accept => {	
+					T::NativeCurrency::release(
+						&HoldReason::RegionDepositReserve.into(),
+						&current_owner,
+						T::RegionDeposit::get(),
+						Precision::Exact,
+					)?;
+	
+					RegionOwner::<T>::insert(region, requester.clone());
+	
+					Self::deposit_event(Event::<T>::TakeoverAccepted { region, new_owner: requester });
+				},
+				TakeoverAction::Reject => {
+					T::NativeCurrency::release(
+						&HoldReason::RegionDepositReserve.into(),
+						&requester,
+						T::RegionDeposit::get(),
+						Precision::Exact,
+					)?;
+	
+					Self::deposit_event(Event::<T>::TakeoverRejected { region });
+				},
+			}
 			Ok(())
 		}
 
@@ -596,12 +735,17 @@ pub mod pallet {
 			region: RegionId,
 			location: LocationId<T>,
 		) -> DispatchResult {
-			T::LocationOrigin::ensure_origin(origin)?;
-			ensure!(RegionCollections::<T>::contains_key(region), Error::<T>::RegionUnknown);
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			ensure!(Regions::<T>::contains_key(region), Error::<T>::RegionUnknown);
 			ensure!(
 				!LocationRegistration::<T>::contains_key(region, &location),
 				Error::<T>::LocationRegistered
 			);
+			T::NativeCurrency::hold(&HoldReason::LocationDepositReserve.into(), &signer, T::LocationDeposit::get())?;
 			LocationRegistration::<T>::insert(region, &location, true);
 			Self::deposit_event(Event::<T>::LocationCreated {
 				region_id: region,
@@ -640,14 +784,15 @@ pub mod pallet {
 			);
 			ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
 			ensure!(token_amount <= T::MaxNftToken::get(), Error::<T>::TooManyToken);
+			ensure!(token_amount >= T::MinNftToken::get(), Error::<T>::TokenAmountTooLow);
 			ensure!(token_price > 0, Error::<T>::InvalidTokenPrice);
 
-			let collection_id = RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(
 				LocationRegistration::<T>::get(region, location.clone()),
 				Error::<T>::LocationUnknown
 			);
-			let item_id = NextNftId::<T>::get(collection_id);
+			let item_id = NextNftId::<T>::get(region_info.collection_id);
 			let mut asset_number: u32 = NextAssetId::<T>::get();
 			let mut asset_id: LocalAssetIdOf<T> = asset_number;
 			while !T::LocalCurrency::total_issuance(asset_id)
@@ -659,7 +804,7 @@ pub mod pallet {
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
 			let listing_id = NextListingId::<T>::get();
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			let listing_duration = RegionListingDuration::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let listing_duration = region_info.listing_duration;
 			let listing_expiry =
 				current_block_number.saturating_add(listing_duration);
 
@@ -694,7 +839,7 @@ pub mod pallet {
 
 			let pallet_account = Self::account_id();
 			<T as pallet::Config>::Nfts::mint_into(
-				&collection_id,
+				&region_info.collection_id,
 				&item_id,
 				&property_account.clone(),
 				&Self::default_item_config(),
@@ -702,14 +847,14 @@ pub mod pallet {
 			)?;
 			<T as pallet::Config>::Nfts::set_item_metadata(
 				Some(&pallet_account),
-				&collection_id,
+				&region_info.collection_id,
 				&item_id,
 				&data,
 			)?;
 
 			// Register the NFT metadata
 			RegisteredNftDetails::<T>::insert(
-				collection_id,
+				region_info.collection_id,
 				item_id,
 				NftDetails {
 					spv_created: false,
@@ -727,7 +872,7 @@ pub mod pallet {
 				collected_fees: collected_funds,
 				asset_id: asset_number,
 				item_id,
-				collection_id,
+				collection_id: region_info.collection_id,
 				token_amount,
 				listing_expiry,
 			};
@@ -737,7 +882,7 @@ pub mod pallet {
 			// Fractionalize NFT
 			let property_origin: OriginFor<T> = RawOrigin::Signed(property_account.clone()).into();
 			let user_lookup = <T::Lookup as StaticLookup>::unlookup(property_account.clone());
-			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(collection_id);
+			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(region_info.collection_id);
 			let fractionalize_item_id = FractionalizeItemId::<T>::from(item_id);
 
    			pallet_nft_fractionalization::Pallet::<T>::fractionalize(
@@ -757,7 +902,7 @@ pub mod pallet {
 			AssetIdDetails::<T>::insert(
 				asset_number,
 				AssetDetails {
-					collection_id,
+					collection_id: region_info.collection_id,
 					item_id,
 					region,
 					location,
@@ -769,12 +914,12 @@ pub mod pallet {
 			asset_number = asset_number.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
 			let next_listing_id = Self::next_listing_id(listing_id)?;
 
-			NextNftId::<T>::insert(collection_id, next_item_id);
+			NextNftId::<T>::insert(region_info.collection_id, next_item_id);
 			NextAssetId::<T>::put(asset_number);			
 			NextListingId::<T>::put(next_listing_id);
 
 			Self::deposit_event(Event::<T>::ObjectListed {
-				collection_index: collection_id,
+				collection_index: region_info.collection_id,
 				item_index: item_id,
 				price: token_price,
 				seller: signer,
@@ -823,7 +968,7 @@ pub mod pallet {
 
 				let fee_percent = T::MarketplaceFeePercentage::get();
 				ensure!(fee_percent < 100, Error::<T>::InvalidFeePercentage);
-				let tax_percent = T::MarketplaceTaxPercentage::get();
+				let tax_percent = RegionTax::<T>::get(registered_details.region).ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(tax_percent < 100, Error::<T>::InvalidTaxPercentage);
 
 				let fee = transfer_price
@@ -963,7 +1108,8 @@ pub mod pallet {
 			ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
 			ensure!(token_price > 0, Error::<T>::InvalidTokenPrice);
 
-			let collection_id = RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let collection_id = region_info.collection_id;
 
 			let nft_details = RegisteredNftDetails::<T>::get(collection_id, item_id)
 				.ok_or(Error::<T>::NftNotFound)?;

@@ -234,11 +234,14 @@ impl pallet_xcavate_whitelist::Config for Test {
 
 parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
+	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 1000;
 	pub const MaxNftsInCollection: u32 = 100;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const Postcode: u32 = 10;
 	pub const RegionDepositAmount: Balance = 100_000;
+	pub const LocationDepositAmount: Balance = 10_000;
+	pub const MaximumListingDuration: BlockNumber = 10_000;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -253,6 +256,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type ForeignAssetsFreezer = ForeignAssetsFreezer;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
+	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
@@ -265,8 +269,10 @@ impl pallet_nft_marketplace::Config for Test {
 	type ListingDeposit = ConstU128<10>;
 	type PropertyAccountFundingAmount = ConstU128<100>;
 	type RegionDeposit = RegionDepositAmount;
+	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = ConstU128<1>;
-	type MarketplaceTaxPercentage =  ConstU128<3>;
+	type MarketplaceTaxPercentage = ConstU128<3>;
+	type MaxListingDuration = MaximumListingDuration;
 }
 
 parameter_types! {
