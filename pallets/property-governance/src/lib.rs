@@ -14,19 +14,16 @@ pub mod weights;
 pub use weights::*;
 
 use frame_support::{
-	sp_runtime::{traits::{AccountIdConversion, Zero}, Saturating, Percent},
+	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
 		tokens::{fungible, fungibles},
 		fungible::MutateHold,
-		fungibles::Mutate as FungiblesMutate,
-		tokens::{Preservation, Fortitude, Precision, Restriction},
+		tokens::{Fortitude, Precision, Restriction},
 	},
 	PalletId,
 };
 
 use codec::Codec;
-
-use pallet_nft_marketplace::types::PaymentAssets;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;

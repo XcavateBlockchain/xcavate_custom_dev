@@ -323,9 +323,11 @@ pub mod pallet {
 			location: LocationId<T>,
 			letting_agent: AccountIdOf<T>,
 		) -> DispatchResult {
-			T::AgentOrigin::ensure_origin(origin)?;
+			let signer = ensure_signed(origin)?;
 			LettingInfo::<T>::try_mutate(letting_agent.clone(), |maybe_letting_info| {
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoLettingAgentFound)?;
+				let region_info = pallet_nft_marketplace::Regions::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
+				ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 				ensure!(letting_info.deposited, Error::<T>::NotDeposited);
 				ensure!(
 					pallet_nft_marketplace::LocationRegistration::<T>::get(

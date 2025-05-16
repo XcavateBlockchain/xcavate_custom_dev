@@ -195,7 +195,7 @@ fn add_letting_agent_to_location_works() {
 			[0; 32].into()
 		)));
 		assert_ok!(PropertyManagement::add_letting_agent_to_location(
-			RuntimeOrigin::root(),
+			RuntimeOrigin::signed([6; 32].into()),
 			bvec![10, 10],
 			[0; 32].into()
 		));
@@ -215,7 +215,7 @@ fn add_letting_agent_to_location_fails() {
 		System::set_block_number(1);
 		assert_noop!(
 			PropertyManagement::add_letting_agent_to_location(
-				RuntimeOrigin::root(),
+				RuntimeOrigin::signed([6; 32].into()),
 				bvec![10, 10],
 				[0; 32].into()
 			),
@@ -234,7 +234,15 @@ fn add_letting_agent_to_location_fails() {
 		assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(), true);
 		assert_noop!(
 			PropertyManagement::add_letting_agent_to_location(
-				RuntimeOrigin::root(),
+				RuntimeOrigin::signed([7; 32].into()),
+				bvec![10, 10],
+				[0; 32].into()
+			),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			PropertyManagement::add_letting_agent_to_location(
+				RuntimeOrigin::signed([6; 32].into()),
 				bvec![10, 10],
 				[0; 32].into()
 			),
@@ -245,7 +253,7 @@ fn add_letting_agent_to_location_fails() {
 		)));
 		assert_noop!(
 			PropertyManagement::add_letting_agent_to_location(
-				RuntimeOrigin::root(),
+				RuntimeOrigin::signed([6; 32].into()),
 				bvec![5, 10],
 				[0; 32].into()
 			),
@@ -253,7 +261,7 @@ fn add_letting_agent_to_location_fails() {
 		);
 		assert_noop!(
 			PropertyManagement::add_letting_agent_to_location(
-				RuntimeOrigin::root(),
+				RuntimeOrigin::signed([6; 32].into()),
 				bvec![10, 10],
 				[0; 32].into()
 			),
