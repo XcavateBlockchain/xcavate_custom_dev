@@ -701,63 +701,7 @@ pub mod pallet {
 		fn execute_proposal(proposal: Proposal<T>) -> DispatchResult {
 			let asset_id = proposal.asset_id;
 			let proposal_amount = proposal.amount;
-		
-			let letting_agent = pallet_property_management::LettingStorage::<T>::get(asset_id)
-				.ok_or(Error::<T>::NoLettingAgentFound)?;
-		
-			let reserves = pallet_property_management::PropertyReserve::<T>::get(asset_id);
-			let total_available = reserves.usdt.saturating_add(reserves.usdc);
-		
-			// Helper closure to transfer and decrease reserves
-			let transfer_reserve = |amount: Balance, currency: PaymentAssets| -> DispatchResult {
-				if amount.is_zero() {
-					return Ok(())
-				}
-				<T as pallet::Config>::ForeignCurrency::transfer(
-					currency.id(),
-					&Self::property_account_id(asset_id),
-					&letting_agent,
-					amount,
-					Preservation::Expendable,
-				).map_err(|_| Error::<T>::NotEnoughFunds)?;
-		
-				pallet_property_management::Pallet::<T>::decrease_reserves(
-					asset_id,
-					amount,
-					currency,
-				)
-			};
-		
-			if total_available >= proposal_amount {
-				// Handle cases where reserves fully cover the proposal
-				match (
-					reserves.usdt >= proposal_amount,
-					reserves.usdc >= proposal_amount,
-				) {
-					(true, _) => transfer_reserve(proposal_amount, PaymentAssets::USDT)?,
-					(_, true) => transfer_reserve(proposal_amount, PaymentAssets::USDC)?,
-					_ => {
-						// Use both USDT and USDC
-						let usdt_part = reserves.usdt;
-						let usdc_part = proposal_amount.saturating_sub(usdt_part);
-						transfer_reserve(usdt_part, PaymentAssets::USDT)?;
-						transfer_reserve(usdc_part, PaymentAssets::USDC)?;
-					}
-				}
-			} else {
-				// Use up all available reserves, record remaining as debt
-				ensure!(total_available < proposal_amount, Error::<T>::NotEnoughFunds);
-		
-				transfer_reserve(reserves.usdt, PaymentAssets::USDT)?;
-				transfer_reserve(reserves.usdc, PaymentAssets::USDC)?;
-		
-				let remaining = proposal_amount
-					.saturating_sub(reserves.usdt)
-					.saturating_sub(reserves.usdc);
-		
-				pallet_property_management::Pallet::<T>::increase_debts(asset_id, remaining)?;
-			}
-		
+					
 			Self::deposit_event(Event::ProposalExecuted {
 				asset_id,
 				amount: proposal_amount,

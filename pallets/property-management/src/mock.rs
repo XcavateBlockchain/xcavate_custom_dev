@@ -271,7 +271,6 @@ impl pallet_nft_marketplace::Config for Test {
 	type RegionDeposit = RegionDepositAmount;
 	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = ConstU128<1>;
-	type MarketplaceTaxPercentage = ConstU128<3>;
 	type MaxListingDuration = MaximumListingDuration;
 }
 
@@ -296,7 +295,6 @@ impl pallet_property_management::Config for Test {
 	type MaxProperties = MaxProperty;
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
-	type PropertyReserve = ConstU128<3000>;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -84,15 +84,6 @@ pub mod pallet {
 		pub deposited: bool,
 	}
 
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, PartialOrd, Default)]
-	#[scale_info(skip_type_params(T))]
-	pub struct PropertyReserveDetails {
-		pub usdt: Balance,
-		pub usdc: Balance,
-		pub total: Balance,
-	}
-
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
@@ -148,9 +139,6 @@ pub mod pallet {
 		/// The maximum amount of locations a letting agent can be assigned to.
 		#[pallet::constant]
 		type MaxLocations: Get<u32>;
-
-		/// The reserve a property needs to have.
-		type PropertyReserve: Get<Balance>;
 	}
 
 	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
@@ -172,32 +160,10 @@ pub mod pallet {
 		ValueQuery
 	>;
 
-	/// Mapping of asset id to the stored balance for a property.
-	#[pallet::storage]
-	pub type PropertyReserve<T> =
-		StorageMap<_, Blake2_128Concat, u32, PropertyReserveDetails, ValueQuery>;
-
-	/// Mapping of asset id to the stored debts of a property.
-	#[pallet::storage]
-	pub type PropertyDebts<T> =
-		StorageMap<_, Blake2_128Concat, u32, Balance, ValueQuery>;
-
 	/// Mapping from account to letting agent info
 	#[pallet::storage]
 	pub type LettingInfo<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountIdOf<T>, LettingAgentInfo<T>, OptionQuery>;
-
-	/// Mapping from region and location to the letting agents of this location.
-	#[pallet::storage]
-	pub type LettingAgentLocations<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		Blake2_128Concat,
-		LocationId<T>,
-		BoundedVec<AccountIdOf<T>, T::MaxLettingAgents>,
-		ValueQuery,
-	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -258,8 +224,6 @@ pub mod pallet {
 		NotDeposited,
 		/// The letting agent is already registered.
 		LettingAgentExists,
-		/// The property does not have enough reserves to make this proposal.
-		NotEnoughReserves,
 		/// This asset has no token.
 		AssetNotFound,
 		/// This letting agent has no location.
@@ -286,11 +250,9 @@ pub mod pallet {
 			location: LocationId<T>,
 			letting_agent: AccountIdOf<T>,
 		) -> DispatchResult {
-			T::AgentOrigin::ensure_origin(origin)?;
-			ensure!(
-				pallet_nft_marketplace::RegionCollections::<T>::get(region).is_some(),
-				Error::<T>::RegionUnknown
-			);
+			let signer = ensure_signed(origin)?;
+			let region_info = pallet_nft_marketplace::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 			ensure!(
 				pallet_nft_marketplace::LocationRegistration::<T>::get(
 					region,
@@ -331,14 +293,7 @@ pub mod pallet {
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoPermission)?;
 				ensure!(!letting_info.deposited, Error::<T>::AlreadyDeposited);
 				ensure!(!letting_info.locations.is_empty(), Error::<T>::NoLoactions);
-				ensure!(
-					!LettingAgentLocations::<T>::get(
-						letting_info.region,
-						letting_info.locations[0].clone()
-					)
-					.contains(&signer),
-					Error::<T>::LettingAgentInLocation
-				);
+
 				<T as pallet::Config>::NativeCurrency::hold(
 					&HoldReason::LettingAgent.into(),
 					&signer, 
@@ -346,14 +301,6 @@ pub mod pallet {
 				)?;
 
 				letting_info.deposited = true;
-				LettingAgentLocations::<T>::try_mutate(
-					letting_info.region,
-					letting_info.locations[0].clone(),
-					|keys| {
-						keys.try_push(signer.clone()).map_err(|_| Error::<T>::TooManyLettingAgents)?;
-						Ok::<(), DispatchError>(())
-					},
-				)?;
 				Ok::<(), DispatchError>(())
 			})?;
 			Self::deposit_event(Event::<T>::Deposited { who: signer });
@@ -387,20 +334,7 @@ pub mod pallet {
 					),
 					Error::<T>::LocationUnknown
 				);
-				ensure!(
-					!LettingAgentLocations::<T>::get(letting_info.region, location.clone())
-						.contains(&letting_agent),
-					Error::<T>::LettingAgentInLocation
-				);
-				LettingAgentLocations::<T>::try_mutate(
-					letting_info.region,
-					location.clone(),
-					|keys| {
-						keys.try_push(letting_agent.clone())
-							.map_err(|_| Error::<T>::TooManyLettingAgents)?;
-						Ok::<(), DispatchError>(())
-					},
-				)?;
+				ensure!(!letting_info.locations.contains(&location), Error::<T>::LettingAgentInLocation);
 				letting_info
 					.locations
 					.try_push(location.clone())
@@ -479,76 +413,10 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
-			let mut governance_amount = Balance::zero();
-			let mut property_reserve = PropertyReserve::<T>::get(asset_id);
 			let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 				.ok_or(Error::<T>::NoObjectFound)?;
-			let property_price = property_info.price;
-		
-			let property_price_converted: Balance = TryInto::<u64>::try_into(property_price)
-				.map_err(|_| Error::<T>::ConversionError)?
-				.into();
-		
-			let required_reserve = property_price_converted
-				.checked_div(25)
-				.ok_or(Error::<T>::DivisionError)?
-				.checked_div(12)
-				.ok_or(Error::<T>::DivisionError)?;
-		
-			let property_debts = PropertyDebts::<T>::get(asset_id);
-		
-			// Pay property debts first
-			let amount_to_pay_debts = core::cmp::min(amount, property_debts);
-			if amount_to_pay_debts > Balance::zero() {
-				<T as pallet::Config>::ForeignCurrency::transfer(
-					payment_asset.id(), 
-					&Self::property_account_id(asset_id), 
-					&letting_agent, 
-					amount_to_pay_debts, 
-					Preservation::Expendable,
-				)
-				.map_err(|_| Error::<T>::NotEnoughFunds)?;
-
-				let new_debts = property_debts.checked_sub(amount_to_pay_debts)
-					.ok_or(Error::<T>::ArithmeticUnderflow)?;
-				PropertyDebts::<T>::insert(asset_id, new_debts);
-		
-				governance_amount = amount_to_pay_debts;
-			}
-		
-			// Calculate remaining amount after paying debts
-			let remaining_amount = amount.saturating_sub(governance_amount);
-		
-			// Fill property reserves with remaining amount
-			if property_reserve.total < required_reserve {
-				let missing_amount = required_reserve.saturating_sub(property_reserve.total);
-				let reserve_amount = core::cmp::min(remaining_amount, missing_amount);
-		
-				if reserve_amount > Balance::zero() {		
-					property_reserve.total = property_reserve.total
-						.checked_add(reserve_amount)
-						.ok_or(Error::<T>::ArithmeticOverflow)?;
-
-					if payment_asset.id() == 1984 {
-						property_reserve.usdt = property_reserve.usdt
-							.checked_add(reserve_amount)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-					} else {
-						property_reserve.usdc = property_reserve.usdc
-							.checked_add(reserve_amount)
-							.ok_or(Error::<T>::ArithmeticOverflow)?;
-					}
-					
-					PropertyReserve::<T>::insert(asset_id, property_reserve);
-				}
-		
-				governance_amount = governance_amount
-					.checked_add(reserve_amount)
-					.ok_or(Error::<T>::ArithmeticOverflow)?;
-			}
 		
 			// Distribute remaining amount to property owners
-			let final_remaining_amount = amount.saturating_sub(governance_amount);
 			let total_token = property_info.token_amount;
 			for owner in owner_list {
 				let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
@@ -556,7 +424,7 @@ pub mod pallet {
 					owner.clone(),
 				);
 				let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
-					.checked_mul(final_remaining_amount)
+					.checked_mul(amount)
 					.ok_or(Error::<T>::MultiplyError)?
 					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
@@ -568,7 +436,7 @@ pub mod pallet {
 		
 			Self::deposit_event(Event::<T>::IncomeDistributed {
 				asset_id,
-				amount: final_remaining_amount,
+				amount,
 			});
 			Ok(())
 		}
@@ -616,29 +484,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			LettingStorage::<T>::take(asset_id);
 			Ok(())
-		}
-
-		/// Decreases the reserve of a property.
-		pub fn decrease_reserves(asset_id: u32, amount: Balance, payment_asset: PaymentAssets) -> DispatchResult {
-			PropertyReserve::<T>::try_mutate(asset_id, |property_reserve| -> Result<(), DispatchError> {
-				ensure!(property_reserve.usdt >= amount, Error::<T>::NotEnoughReserves);
-				property_reserve.total = property_reserve.total.saturating_sub(amount);
-				if payment_asset.id() == 1984 {
-					property_reserve.usdt = property_reserve.usdt.saturating_sub(amount);	
-				} else {
-					property_reserve.usdc = property_reserve.usdc.saturating_sub(amount);	
-				};
-							
-				Ok(())
-			})
-		}
-
-		/// Increases the debts of a property.
-		pub fn increase_debts(asset_id: u32, amount: Balance) -> DispatchResult {
-			PropertyDebts::<T>::try_mutate(asset_id, |property_debts| {
-				*property_debts = property_debts.saturating_add(amount);
-				Ok(())
-			})
 		}
 	}
 }

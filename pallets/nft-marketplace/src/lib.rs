@@ -280,16 +280,6 @@ pub mod pallet {
 	pub type Regions<T: Config> = 
 		StorageMap<_, Blake2_128Concat, RegionId, RegionInfo<T>, OptionQuery>;
 
-	/// Mapping of region to the owner.
-	#[pallet::storage]
-	pub type RegionOwner<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, AccountIdOf<T>, OptionQuery>;
-
-	/// Mapping of region to the tax.
-	#[pallet::storage]
-	pub type RegionTax<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, Balance, OptionQuery>;
-
 	/// Mapping of region to requests for takeover.
 	#[pallet::storage]
 	pub type TakeoverRequests<T: Config> =
@@ -394,8 +384,8 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		AccountIdOf<T>,
-		bool,
-		ValueQuery,
+		RegionId,
+		OptionQuery,
 	>;
 
 	#[pallet::storage]
@@ -490,6 +480,8 @@ pub mod pallet {
 		TakeoverRejected { region: RegionId },
 		/// Listing duration of a region changed.
 		ListingDurationChanged { region: RegionId, listing_duration: BlockNumberFor<T> },
+		/// Tax of a region changed.
+		RegionTaxChanged { region: RegionId, new_tax: Balance },
 	}
 
 	// Errors inform users that something went wrong.
@@ -578,6 +570,10 @@ pub mod pallet {
 		TakeoverAlreadyPending,
 		/// There is no pending takeover request.
 		NoTakeoverRequest,
+		/// The real estate object could not be found.
+		NoObjectFound,
+		/// The lawyer has no permission for this region.
+		WrongRegion,
 	}
 
 	#[pallet::call]
@@ -620,8 +616,6 @@ pub mod pallet {
 				tax,
 			};
 			Regions::<T>::insert(current_region_id, region_info);
-			//RegionOwner::<T>::insert(current_region_id, signer);
-			RegionTax::<T>::insert(current_region_id, tax);
 			NextRegionId::<T>::put(next_region_id);
 			
 			Self::deposit_event(Event::<T>::RegionCreated { region_id: current_region_id, collection_id });
@@ -637,15 +631,16 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 
-			let mut region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-			ensure!(signer == region_info.owner, Error::<T>::NoPermission);
+			Regions::<T>::try_mutate(region, |maybe_region| {
+				let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
+				ensure!(signer == region.owner, Error::<T>::NoPermission);
 
-			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
-			ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
-
-			region_info.listing_duration = listing_duration;
-
-			Regions::<T>::insert(region, region_info);
+				ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
+				ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
+			
+				region.listing_duration = listing_duration;
+				Ok::<(), DispatchError>(())
+			})?;
 
 			Self::deposit_event(Event::<T>::ListingDurationChanged { region, listing_duration });
 			Ok(())
@@ -653,15 +648,36 @@ pub mod pallet {
 
 		#[pallet::call_index(31)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn adjust_region_tax(origin: OriginFor<T>, region: RegionId, new_tax: Balance) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+
+			Regions::<T>::try_mutate(region, |maybe_region| {
+				let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
+				ensure!(region.owner == signer, Error::<T>::NoPermission);
+
+				region.tax = new_tax;
+				Ok::<(), DispatchError>(())
+			})?;
+
+			Self::deposit_event(Event::<T>::RegionTaxChanged { region, new_tax });
+			Ok(())
+		}
+
+		#[pallet::call_index(32)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn propose_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let current_owner = RegionOwner::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 		
-			ensure!(signer != current_owner, Error::<T>::AlreadyRegionOwner);
+			ensure!(signer != region_info.owner, Error::<T>::AlreadyRegionOwner);
 			ensure!(!TakeoverRequests::<T>::contains_key(region), Error::<T>::TakeoverAlreadyPending);
 		
 			T::NativeCurrency::hold(
@@ -675,7 +691,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(32)]
+		#[pallet::call_index(33)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn handle_takeover(
 			origin: OriginFor<T>,
@@ -687,8 +703,8 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let current_owner = RegionOwner::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-			ensure!(signer == current_owner, Error::<T>::NoPermission);
+			let mut region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(signer == region_info.owner, Error::<T>::NoPermission);
 
 			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
 
@@ -696,12 +712,13 @@ pub mod pallet {
 				TakeoverAction::Accept => {	
 					T::NativeCurrency::release(
 						&HoldReason::RegionDepositReserve.into(),
-						&current_owner,
+						&region_info.owner,
 						T::RegionDeposit::get(),
 						Precision::Exact,
 					)?;
 	
-					RegionOwner::<T>::insert(region, requester.clone());
+					region_info.owner = requester.clone();
+					Regions::<T>::insert(region, region_info);
 	
 					Self::deposit_event(Event::<T>::TakeoverAccepted { region, new_owner: requester });
 				},
@@ -968,7 +985,8 @@ pub mod pallet {
 
 				let fee_percent = T::MarketplaceFeePercentage::get();
 				ensure!(fee_percent < 100, Error::<T>::InvalidFeePercentage);
-				let tax_percent = RegionTax::<T>::get(registered_details.region).ok_or(Error::<T>::RegionUnknown)?;
+				let region_info = Regions::<T>::get(registered_details.region).ok_or(Error::<T>::RegionUnknown)?;
+				let tax_percent = region_info.tax;
 				ensure!(tax_percent < 100, Error::<T>::InvalidTaxPercentage);
 
 				let fee = transfer_price
@@ -1709,11 +1727,14 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn register_lawyer(
 			origin: OriginFor<T>,
+			region: RegionId,
 			lawyer: AccountIdOf<T>,
 		) -> DispatchResult {
-			T::LocationOrigin::ensure_origin(origin)?;
-			ensure!(!RealEstateLawyer::<T>::get(lawyer.clone()), Error::<T>::LawyerAlreadyRegistered);
-			RealEstateLawyer::<T>::insert(lawyer.clone(), true);
+			let signer = ensure_signed(origin)?;
+			let region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
+			ensure!(RealEstateLawyer::<T>::get(lawyer.clone()).is_none(), Error::<T>::LawyerAlreadyRegistered);
+			RealEstateLawyer::<T>::insert(lawyer.clone(), region);
 			Self::deposit_event(Event::<T>::LawyerRegistered {lawyer});
 			Ok(())
 		}
@@ -1737,10 +1758,15 @@ pub mod pallet {
 			costs: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			ensure!(RealEstateLawyer::<T>::get(signer.clone()), Error::<T>::NoPermission);
+			let lawyer_region = RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
 			let mut property_lawyer_details = PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			
+			let asset_details = AssetIdDetails::<T>::get(nft_details.asset_id).ok_or(Error::<T>::NoObjectFound)?;
+
+			ensure!(lawyer_region == asset_details.region, Error::<T>::WrongRegion);
+
 			let collected_fee_usdt = nft_details
 				.collected_fees
 				.get(&PaymentAssets::USDT)
@@ -1831,7 +1857,7 @@ pub mod pallet {
 			listing_id: ListingId,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			ensure!(RealEstateLawyer::<T>::get(signer.clone()), Error::<T>::NoPermission);
+			ensure!(RealEstateLawyer::<T>::get(signer.clone()).is_some(), Error::<T>::NoPermission);
 			let mut property_lawyer_details = PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			if property_lawyer_details.real_estate_developer_lawyer == Some(signer.clone()) {
 				ensure!(property_lawyer_details.real_estate_developer_status == DocumentStatus::Pending,
