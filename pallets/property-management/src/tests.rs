@@ -285,7 +285,8 @@ fn set_letting_agent_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::list_object(
@@ -294,7 +295,8 @@ fn set_letting_agent_works() {
 			bvec![10, 10],
 			1_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 1, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::list_object(
@@ -303,7 +305,8 @@ fn set_letting_agent_works() {
 			bvec![10, 10],
 			1_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 2, 100, PaymentAssets::USDT));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -342,7 +345,8 @@ fn set_letting_agent_works() {
 			bvec![10, 10],
 			1_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 3, 100, PaymentAssets::USDT));
 		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([2; 32].into()), 3));
@@ -402,7 +406,8 @@ fn set_letting_agent_fails() {
 			bvec![10, 10],
 			100,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
@@ -417,7 +422,8 @@ fn set_letting_agent_fails() {
 				bvec![10, 10],
 				1_000,
 				100,
-				bvec![22, 22]
+				bvec![22, 22],
+				false
 			));
 			assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [(x + 1); 32].into()));
 			Balances::make_free_balance_be(&[x + 1; 32].into(), 100_000);
@@ -444,7 +450,8 @@ fn set_letting_agent_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 100, 100, PaymentAssets::USDT));
 		assert_noop!(
@@ -469,7 +476,8 @@ fn set_letting_agent_no_letting_agent() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, PaymentAssets::USDT));
 		assert_noop!(
@@ -498,7 +506,8 @@ fn distribute_income_works() {
 			bvec![10, 10],
 			9_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 30, PaymentAssets::USDT));
@@ -563,7 +572,8 @@ fn distribute_income_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_noop!(
@@ -609,7 +619,8 @@ fn withdraw_funds_works() {
 			bvec![10, 10],
 			9_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -689,7 +700,8 @@ fn withdraw_funds_fails() {
 			bvec![10, 10],
 			900,
 			1000,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 1000, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(

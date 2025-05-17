@@ -48,7 +48,8 @@ fn propose_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -89,7 +90,8 @@ fn proposal_with_low_amount_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -137,7 +139,8 @@ fn propose_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_noop!(
@@ -189,7 +192,8 @@ fn challenge_against_letting_agent_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -251,7 +255,8 @@ fn challenge_against_letting_agent_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -317,7 +322,8 @@ fn vote_on_proposal_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, PaymentAssets::USDT));
@@ -411,7 +417,8 @@ fn proposal_pass() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -494,7 +501,8 @@ fn proposal_pass_2() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -572,7 +580,8 @@ fn proposal_not_pass() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -656,7 +665,8 @@ fn proposal_not_pass_2() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 40, PaymentAssets::USDT));
@@ -739,7 +749,8 @@ fn vote_on_proposal_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -830,7 +841,8 @@ fn vote_on_challenge_works() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 30, PaymentAssets::USDT));
@@ -933,7 +945,8 @@ fn challenge_pass() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 70, PaymentAssets::USDT));
@@ -1069,7 +1082,8 @@ fn challenge_does_not_pass() {
 			bvec![10, 10],
 			4_000,
 			250,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 75, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 175, PaymentAssets::USDT));
@@ -1168,7 +1182,8 @@ fn challenge_pass_only_one_agent() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 70, PaymentAssets::USDT));
@@ -1264,7 +1279,8 @@ fn challenge_not_pass() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -1336,7 +1352,8 @@ fn vote_on_challenge_fails() {
 			bvec![10, 10],
 			10_000,
 			100,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::lawyer_claim_property(
@@ -1419,7 +1436,8 @@ fn different_proposals() {
 			bvec![10, 10],
 			5_000,
 			200,
-			bvec![22, 22]
+			bvec![22, 22],
+			false
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, PaymentAssets::USDT));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([2; 32].into()), 0, 60, PaymentAssets::USDT));
