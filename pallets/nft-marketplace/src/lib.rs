@@ -224,6 +224,9 @@ pub mod pallet {
 		type MarketplaceFeePercentage: Get<Balance>;
 		
 		type MaxListingDuration: Get<BlockNumberFor<Self>>;
+
+		#[pallet::constant]
+		type AcceptedAssets: Get<[u32; 2]>;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -852,8 +855,9 @@ pub mod pallet {
 				current_block_number.saturating_add(listing_duration);
 
 			let mut collected_funds = BoundedBTreeMap::default();
-			collected_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-			collected_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
+			for &asset_id in T::AcceptedAssets::get().iter() {
+				collected_funds.try_insert(asset_id, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+			}
 			
 			// Calculate listing deposit
 			let property_price = token_price
@@ -983,7 +987,7 @@ pub mod pallet {
 		/// Emits `TokenBoughtObject` event when succesfful.
 		#[pallet::call_index(3)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
-		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, payment_asset: PaymentAssets) -> DispatchResult {
+		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, asset_id: u32) -> DispatchResult {
 			let signer = ensure_signed(origin.clone())?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -1041,13 +1045,13 @@ pub mod pallet {
 				};
 
 
-				let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &signer);
-				let balance = T::ForeignCurrency::balance(payment_asset.id(), &signer);
+				let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(asset_id, &TestId::Marketplace, &signer);
+				let balance = T::ForeignCurrency::balance(asset_id, &signer);
 				let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
 				ensure!(available_balance >= total_transfer_price, Error::<T>::NotEnoughFunds);
 
 				let new_frozen_balance = frozen_balance.checked_add(total_transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
-				T::ForeignAssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &signer, new_frozen_balance)?;
+				T::ForeignAssetsFreezer::set_freeze(asset_id, &TestId::Marketplace, &signer, new_frozen_balance)?;
 				*listed_token =
 					listed_token.checked_sub(amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
 
@@ -1060,8 +1064,10 @@ pub mod pallet {
 				
 				TokenOwner::<T>::try_mutate_exists(signer.clone(), listing_id, |maybe_token_owner_details| {
 					let mut initial_funds = BoundedBTreeMap::default();
-					initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-					initial_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
+					for &asset_id in T::AcceptedAssets::get().iter() {
+						initial_funds.try_insert(asset_id, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+					}
+
 					let token_owner_details = maybe_token_owner_details.get_or_insert( TokenOwnerDetails {
 						token_amount: 0,
 						paid_funds: initial_funds.clone(),
@@ -1071,25 +1077,25 @@ pub mod pallet {
 						.checked_add(amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
 						
-					match token_owner_details.paid_funds.get_mut(&payment_asset) {
+					match token_owner_details.paid_funds.get_mut(&asset_id) {
 						Some(existing) => {
 							*existing = existing.checked_add(transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
 						}
 						None => {
 							token_owner_details.paid_funds
-								.try_insert(payment_asset.clone(), transfer_price)
+								.try_insert(asset_id.clone(), transfer_price)
 								.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						}
 					}
 
 					if !nft_details.tax_paid_by_developer {
-						match token_owner_details.paid_tax.get_mut(&payment_asset) {
+						match token_owner_details.paid_tax.get_mut(&asset_id) {
 							Some(existing) => {
 								*existing = existing.checked_add(tax).ok_or(Error::<T>::ArithmeticOverflow)?;
 							}
 							None => {
 								token_owner_details.paid_tax
-									.try_insert(payment_asset.clone(), tax)
+									.try_insert(asset_id.clone(), tax)
 									.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 							}
 						}
@@ -1102,16 +1108,17 @@ pub mod pallet {
 					(&mut nft_details.collected_tax, tax),
 					(&mut nft_details.collected_fees, fee),
 				] {
-					match map.get_mut(&payment_asset) {
+					match map.get_mut(&asset_id) {
 						Some(existing) => *existing = existing.checked_add(value).ok_or(Error::<T>::ArithmeticOverflow)?,
-						None => map.try_insert(payment_asset.clone(), value).map(|_| ()).map_err(|_| Error::<T>::ExceedsMaxEntries)?,
+						None => map.try_insert(asset_id.clone(), value).map(|_| ()).map_err(|_| Error::<T>::ExceedsMaxEntries)?,
 					}
 				}	
 				let asset_id = nft_details.asset_id;
 				OngoingObjectListing::<T>::insert(listing_id, &nft_details);
 				let mut initial_funds = BoundedBTreeMap::default();
-				initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-				initial_funds.try_insert(PaymentAssets::USDT, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?; 
+				for &asset_id in T::AcceptedAssets::get().iter() {
+					initial_funds.try_insert(asset_id, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+				}				
 				if *listed_token == 0 {
 					let property_lawyer_details = PropertyLawyerDetails {
 						real_estate_developer_lawyer: None,
@@ -1122,7 +1129,7 @@ pub mod pallet {
 						spv_lawyer_costs: initial_funds,
 						second_attempt: false,
 					};
-					Self::token_distribution(listing_id, nft_details, &[PaymentAssets::USDT, PaymentAssets::USDC])?;
+					Self::token_distribution(listing_id, nft_details)?;
 					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
 					*maybe_listed_token = None;
 				} 
@@ -1222,7 +1229,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			listing_id: ListingId,
 			amount: u32,
-			payment_asset: PaymentAssets,
+			payment_asset: u32,
 		) -> DispatchResult {
 			let buyer = ensure_signed(origin)?;
 			ensure!(
@@ -1318,7 +1325,7 @@ pub mod pallet {
 			listing_id: ListingId,
 			offer_price: Balance,
 			amount: u32,
-			payment_asset: PaymentAssets,
+			payment_asset: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
@@ -1334,13 +1341,13 @@ pub mod pallet {
 			let price = offer_price
 				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
-			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset.id(), &TestId::Marketplace, &signer);
-			let balance = T::ForeignCurrency::balance(payment_asset.id(), &signer);
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset, &TestId::Marketplace, &signer);
+			let balance = T::ForeignCurrency::balance(payment_asset, &signer);
 			let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
 			ensure!(available_balance >= price, Error::<T>::NotEnoughFunds);
 
 			let new_frozen_balance = frozen_balance.checked_add(price).ok_or(Error::<T>::ArithmeticOverflow)?;
-			T::ForeignAssetsFreezer::set_freeze(payment_asset.id(), &TestId::Marketplace, &signer, new_frozen_balance)?;
+			T::ForeignAssetsFreezer::set_freeze(payment_asset, &TestId::Marketplace, &signer, new_frozen_balance)?;
 			let offer_details = OfferDetails { buyer: signer.clone(), token_price: offer_price, amount, payment_assets: payment_asset };
 			OngoingOffers::<T>::insert(listing_id, signer, offer_details);
 			Self::deposit_event(Event::<T>::OfferCreated { listing_id, price: offer_price });
@@ -1378,9 +1385,9 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, offeror).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(listing_details.amount >= offer_details.amount, Error::<T>::NotEnoughTokenAvailable);
 			let price = offer_details.get_total_amount()?;
-			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer);
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets, &TestId::Marketplace, &offer_details.buyer);
 			let new_frozen_balance = frozen_balance.checked_sub(price).ok_or(Error::<T>::ArithmeticOverflow)?;
-			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
+			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets, &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
 			match offer {
 				Offer::Accept => {
 					Self::buying_token_process(
@@ -1430,9 +1437,9 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, signer.clone()).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(offer_details.buyer == signer.clone(), Error::<T>::NoPermission);
 			let price = offer_details.get_total_amount()?;
-			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer);
+			let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(offer_details.payment_assets, &TestId::Marketplace, &offer_details.buyer);
 			let new_frozen_balance = frozen_balance.checked_sub(price).ok_or(Error::<T>::ArithmeticOverflow)?;
-			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets.id(), &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
+			T::ForeignAssetsFreezer::set_freeze(offer_details.payment_assets, &TestId::Marketplace, &offer_details.buyer, new_frozen_balance)?;
 			Self::deposit_event(Event::<T>::OfferCancelled { listing_id, account_id: signer.clone() });
 			Ok(())
 		}
@@ -1460,7 +1467,7 @@ pub mod pallet {
 			let mut refund_infos = RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
 			refund_infos.refund_amount = refund_infos.refund_amount.checked_sub(token_amount).ok_or(Error::<T>::NotEnoughTokenAvailable)?;
 
-			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+			for &asset in T::AcceptedAssets::get().iter() {
 				if let Some(paid_funds) = token_details.paid_funds.get(&asset) {
 					if paid_funds.is_zero() {
 						continue;
@@ -1477,7 +1484,7 @@ pub mod pallet {
 						&property_account,
 						&signer,
 						refund_amount,
-						asset.id(),
+						asset,
 					)?;	
 				}
 			}
@@ -1810,13 +1817,15 @@ pub mod pallet {
 
 			ensure!(lawyer_region == asset_details.region, Error::<T>::WrongRegion);
 
+			let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
+
 			let collected_fee_usdt = nft_details
 				.collected_fees
-				.get(&PaymentAssets::USDT)
+				.get(&asset_id_usdt)
 				.ok_or(Error::<T>::AssetNotSupported)?;
 			let collected_fee_usdc = nft_details
 				.collected_fees
-				.get(&PaymentAssets::USDC)
+				.get(&asset_id_usdc)
 				.ok_or(Error::<T>::AssetNotSupported)?;
 			let collected_fees = collected_fee_usdt
 				.checked_add(collected_fee_usdc)
@@ -1831,23 +1840,23 @@ pub mod pallet {
 					if *collected_fee_usdt >= costs {
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
-							.try_insert(PaymentAssets::USDT, costs)
+							.try_insert(asset_id_usdt, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;					
 					} else if *collected_fee_usdc >= costs {
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
-							.try_insert(PaymentAssets::USDC, costs)
+							.try_insert(asset_id_usdc, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					} else {
 						let remaining_costs = costs.checked_sub(*collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
-							.try_insert(PaymentAssets::USDT, costs)
+							.try_insert(asset_id_usdt, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
-							.try_insert(PaymentAssets::USDC, remaining_costs)
+							.try_insert(asset_id_usdc, remaining_costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
 					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
@@ -1859,23 +1868,23 @@ pub mod pallet {
 					if *collected_fee_usdt >= costs {
 						property_lawyer_details
 							.spv_lawyer_costs
-							.try_insert(PaymentAssets::USDT, costs)
+							.try_insert(asset_id_usdt, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;					
 					} else if *collected_fee_usdc >= costs {
 						property_lawyer_details
 							.spv_lawyer_costs
-							.try_insert(PaymentAssets::USDC, costs)
+							.try_insert(asset_id_usdc, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					} else {
 						let remaining_costs = costs.checked_sub(*collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.spv_lawyer_costs
-							.try_insert(PaymentAssets::USDT, costs)
+							.try_insert(asset_id_usdt, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						property_lawyer_details
 							.spv_lawyer_costs
-							.try_insert(PaymentAssets::USDC, remaining_costs)
+							.try_insert(asset_id_usdc, remaining_costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
 					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
@@ -1967,7 +1976,6 @@ pub mod pallet {
  					Self::execute_deal(
 						listing_id, 
 						property_lawyer_details.clone(),
-						&[PaymentAssets::USDT, PaymentAssets::USDC],
 					)?; 
 				}
 				(DocumentStatus::Rejected, DocumentStatus::Rejected) => {
@@ -2105,7 +2113,7 @@ pub mod pallet {
 
 		/// Sends the token to the new owners and the funds to the real estate developer once all 100 token
 		/// of a collection are sold.
-		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>, payment_assets: &[PaymentAssets]) -> DispatchResult {
+		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>) -> DispatchResult {
 			let nft_details =
 				OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let treasury_id = Self::treasury_account_id();
@@ -2120,27 +2128,27 @@ pub mod pallet {
 				.ok_or(Error::<T>::LawyerNotFound)?;
 
 			// Distribute funds from property account for each asset
-			for asset in payment_assets {
+			for &asset in T::AcceptedAssets::get().iter() {
 				// Get total collected amounts and lawyer costs
 				let total_collected_funds = nft_details
 					.collected_funds
-					.get(asset)
+					.get(&asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 				let real_estate_developer_lawyer_costs = property_lawyer_details
 					.real_estate_developer_lawyer_costs
-					.get(asset)
+					.get(&asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 				let spv_lawyer_costs = property_lawyer_details
 					.spv_lawyer_costs
-					.get(asset)
+					.get(&asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 				let tax = nft_details
 					.collected_tax
-					.get(asset)
+					.get(&asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 				let collected_fees = nft_details
 					.collected_fees
-					.get(asset)
+					.get(&asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 
 				let fee_percentage = T::MarketplaceFeePercentage::get();
@@ -2175,25 +2183,25 @@ pub mod pallet {
 					&property_account,
 					&nft_details.real_estate_developer,
 					developer_amount,
-					asset.id(),
+					asset,
 				)?;
 				Self::transfer_funds(
 					&property_account,
 					&real_estate_developer_lawyer_id,
 					real_estate_developer_amount,
-					asset.id(),
+					asset,
 				)?;
 				Self::transfer_funds(
 					&property_account,
 					&spv_lawyer_id,
 					*spv_lawyer_costs,
-					asset.id(),
+					asset,
 				)?;
 				Self::transfer_funds(
 					&property_account,
 					&treasury_id,
 					treasury_amount,
-					asset.id(),
+					asset,
 				)?;
 			}
 			let list = <TokenBuyer<T>>::take(listing_id);
@@ -2229,7 +2237,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn token_distribution(listing_id: u32, nft_details: NftListingDetailsType<T>, payment_assets: &[PaymentAssets]) -> DispatchResult {
+		fn token_distribution(listing_id: u32, nft_details: NftListingDetailsType<T>) -> DispatchResult {
 			let list = <TokenBuyer<T>>::get(listing_id);		
 			let property_account = Self::property_account_id(nft_details.asset_id);
 			
@@ -2238,8 +2246,8 @@ pub mod pallet {
 				let token_details = TokenOwner::<T>::get(owner.clone(), listing_id);
 
 				// Process each payment asset
-				for asset in payment_assets {
-					if let Some(paid_funds) = token_details.paid_funds.get(asset) {
+				for &asset in T::AcceptedAssets::get().iter() {
+					if let Some(paid_funds) = token_details.paid_funds.get(&asset) {
 						if !paid_funds.is_zero() {
 							let paid_tax = token_details.paid_tax.get(&asset).unwrap_or(&0);
 							let fee_percent = T::MarketplaceFeePercentage::get(); 
@@ -2260,7 +2268,7 @@ pub mod pallet {
 
 							// Unfreeze the investor's funds
 							let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(
-								asset.id(),
+								asset,
 								&TestId::Marketplace,
 								&owner,
 							);
@@ -2268,7 +2276,7 @@ pub mod pallet {
 								.checked_sub(total_investor_amount)
 								.ok_or(Error::<T>::ArithmeticOverflow)?;
 							T::ForeignAssetsFreezer::set_freeze(
-								asset.id(),
+								asset,
 								&TestId::Marketplace,
 								&owner,
 								new_frozen_balance,
@@ -2279,7 +2287,7 @@ pub mod pallet {
 								&owner,
 								&property_account,
 								total_investor_amount,
-								asset.id(),
+								asset,
 							)?;
 						}
 					}
@@ -2348,7 +2356,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::LawyerNotFound)?;
 
 			// Process fees and transfers for each asset
-			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+			for asset in T::AcceptedAssets::get().iter() {
 				// Fetch fees and lawyer costs
 				let fees = nft_details
 					.collected_fees
@@ -2365,8 +2373,8 @@ pub mod pallet {
 					.ok_or(Error::<T>::ArithmeticUnderflow)?;
 
 				// Perform fund transfers
-				Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset.id())?;
-				Self::transfer_funds(&property_account, &spv_lawyer_id, *lawyer_costs, asset.id())?;
+				Self::transfer_funds(&property_account, &treasury_id, treasury_amount, *asset)?;
+				Self::transfer_funds(&property_account, &spv_lawyer_id, *lawyer_costs, *asset)?;
 			}
 			PropertyOwner::<T>::take(nft_details.asset_id);
 			<TokenBuyer<T>>::take(listing_id);
@@ -2380,9 +2388,9 @@ pub mod pallet {
 			mut listing_details: ListingDetailsType<T>,
 			price: Balance,
 			amount: u32,
-			payment_asset: PaymentAssets,
+			payment_asset: u32,
 		) -> DispatchResult {
-			Self::calculate_fees(price, transfer_from, &listing_details.seller, payment_asset.id())?;
+			Self::calculate_fees(price, transfer_from, &listing_details.seller, payment_asset)?;
 			let token_amount = amount.into();
 			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(
 				listing_details.asset_id,
@@ -2462,7 +2470,7 @@ pub mod pallet {
 		}
 
 		fn unfreeze_token(nft_details: &mut NftListingDetailsType<T>, token_details: &TokenOwnerDetails<Balance, T>, signer: &AccountIdOf<T>) -> DispatchResult {
-			for asset in [PaymentAssets::USDT, PaymentAssets::USDC] {
+			for asset in T::AcceptedAssets::get().iter() {
 				if let Some(paid_funds) = token_details.paid_funds.get(&asset) {
 					if paid_funds.is_zero() {
 						continue;
@@ -2483,7 +2491,7 @@ pub mod pallet {
 
 					// Unfreeze funds
 					let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(
-						asset.id(),
+						*asset,
 						&TestId::Marketplace,
 						signer,
 					);
@@ -2491,7 +2499,7 @@ pub mod pallet {
 						.checked_sub(total_investor_amount)
 						.ok_or(Error::<T>::ArithmeticUnderflow)?;
 					T::ForeignAssetsFreezer::set_freeze(
-						asset.id(),
+						*asset,
 						&TestId::Marketplace,
 						signer,
 						new_frozen_balance,

@@ -30,8 +30,6 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
-use pallet_nft_marketplace::types::PaymentAssets;
-
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
@@ -154,7 +152,7 @@ pub mod pallet {
 		(
 			NMapKey<Blake2_128Concat, AccountIdOf<T>>,
 			NMapKey<Blake2_128Concat, u32>,
-			NMapKey<Blake2_128Concat, PaymentAssets>,
+			NMapKey<Blake2_128Concat, u32>,
 		),
 		Balance,
 		ValueQuery
@@ -395,7 +393,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
-			payment_asset: PaymentAssets,
+			payment_asset: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
@@ -406,7 +404,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::MultiplyError)?;
 
 			<T as pallet::Config>::ForeignCurrency::transfer(
-				payment_asset.id(), 
+				payment_asset, 
 				&signer, 
 				&Self::property_account_id(asset_id), 
 				scaled_amount, 
@@ -450,7 +448,7 @@ pub mod pallet {
 		/// Emits `WithdrawFunds` event when succesfful.
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
-		pub fn withdraw_funds(origin: OriginFor<T>, asset_id: u32, payment_asset: PaymentAssets) -> DispatchResult {
+		pub fn withdraw_funds(origin: OriginFor<T>, asset_id: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset.clone()));
 			ensure!(
@@ -458,7 +456,7 @@ pub mod pallet {
 				Error::<T>::UserHasNoFundsStored
 			);
 			<T as pallet::Config>::ForeignCurrency::transfer(
-				payment_asset.id(), 
+				payment_asset, 
 				&Self::property_account_id(asset_id), 
 				&signer, 
 				amount, 

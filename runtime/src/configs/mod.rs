@@ -582,6 +582,7 @@ parameter_types! {
 	pub const PropertyFundingAmount: Balance = 10 * UNIT;
 	pub const MarketplaceFeePercent: Balance = 1;
 	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
+	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -614,6 +615,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = MarketplaceFeePercent;
 	type MaxListingDuration = MaximumListingDuration;
+	type AcceptedAssets = AcceptedPaymentAssets;
 }
 
 parameter_types! {

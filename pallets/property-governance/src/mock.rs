@@ -243,6 +243,7 @@ parameter_types! {
 	pub const RegionDepositAmount: Balance = 100_000;
 	pub const LocationDepositAmount: Balance = 10_000;
 	pub const MaximumListingDuration: BlockNumber = 10_000;
+	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -273,6 +274,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = ConstU128<1>;
 	type MaxListingDuration = MaximumListingDuration;
+	type AcceptedAssets = AcceptedPaymentAssets;
 }
 
 parameter_types! {
