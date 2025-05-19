@@ -542,6 +542,8 @@ pub mod pallet {
 		CostsTooHigh,
 		/// This Asset is not supported for payment.
 		AssetNotSupported,
+		/// This Asset is not supported for payment.
+		PaymentAssetNotSupported,
 		ExceedsMaxEntries,
 		/// The property is not refunded.
 		TokenNotRefunded,
@@ -987,13 +989,15 @@ pub mod pallet {
 		/// Emits `TokenBoughtObject` event when succesfful.
 		#[pallet::call_index(3)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
-		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, asset_id: u32) -> DispatchResult {
+		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin.clone())?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
+			let accepted_payment_assets = T::AcceptedAssets::get();
+			ensure!(accepted_payment_assets.contains(&payment_asset), Error::<T>::PaymentAssetNotSupported);
 
 			ListedToken::<T>::try_mutate_exists(listing_id, |maybe_listed_token| {
 				let listed_token = maybe_listed_token.as_mut().ok_or(Error::<T>::TokenNotForSale)?;
@@ -1045,13 +1049,13 @@ pub mod pallet {
 				};
 
 
-				let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(asset_id, &TestId::Marketplace, &signer);
-				let balance = T::ForeignCurrency::balance(asset_id, &signer);
+				let frozen_balance = T::ForeignAssetsFreezer::balance_frozen(payment_asset, &TestId::Marketplace, &signer);
+				let balance = T::ForeignCurrency::balance(payment_asset, &signer);
 				let available_balance = balance.checked_sub(frozen_balance).ok_or(Error::<T>::ArithmeticUnderflow)?;
 				ensure!(available_balance >= total_transfer_price, Error::<T>::NotEnoughFunds);
 
 				let new_frozen_balance = frozen_balance.checked_add(total_transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
-				T::ForeignAssetsFreezer::set_freeze(asset_id, &TestId::Marketplace, &signer, new_frozen_balance)?;
+				T::ForeignAssetsFreezer::set_freeze(payment_asset, &TestId::Marketplace, &signer, new_frozen_balance)?;
 				*listed_token =
 					listed_token.checked_sub(amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
 
@@ -1064,8 +1068,8 @@ pub mod pallet {
 				
 				TokenOwner::<T>::try_mutate_exists(signer.clone(), listing_id, |maybe_token_owner_details| {
 					let mut initial_funds = BoundedBTreeMap::default();
-					for &asset_id in T::AcceptedAssets::get().iter() {
-						initial_funds.try_insert(asset_id, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+					for &payment_asset in accepted_payment_assets.iter() {
+						initial_funds.try_insert(payment_asset, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
 
 					let token_owner_details = maybe_token_owner_details.get_or_insert( TokenOwnerDetails {
@@ -1077,25 +1081,25 @@ pub mod pallet {
 						.checked_add(amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
 						
-					match token_owner_details.paid_funds.get_mut(&asset_id) {
+					match token_owner_details.paid_funds.get_mut(&payment_asset) {
 						Some(existing) => {
 							*existing = existing.checked_add(transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
 						}
 						None => {
 							token_owner_details.paid_funds
-								.try_insert(asset_id.clone(), transfer_price)
+								.try_insert(payment_asset.clone(), transfer_price)
 								.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						}
 					}
 
 					if !nft_details.tax_paid_by_developer {
-						match token_owner_details.paid_tax.get_mut(&asset_id) {
+						match token_owner_details.paid_tax.get_mut(&payment_asset) {
 							Some(existing) => {
 								*existing = existing.checked_add(tax).ok_or(Error::<T>::ArithmeticOverflow)?;
 							}
 							None => {
 								token_owner_details.paid_tax
-									.try_insert(asset_id.clone(), tax)
+									.try_insert(payment_asset.clone(), tax)
 									.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 							}
 						}
@@ -1108,15 +1112,15 @@ pub mod pallet {
 					(&mut nft_details.collected_tax, tax),
 					(&mut nft_details.collected_fees, fee),
 				] {
-					match map.get_mut(&asset_id) {
+					match map.get_mut(&payment_asset) {
 						Some(existing) => *existing = existing.checked_add(value).ok_or(Error::<T>::ArithmeticOverflow)?,
-						None => map.try_insert(asset_id.clone(), value).map(|_| ()).map_err(|_| Error::<T>::ExceedsMaxEntries)?,
+						None => map.try_insert(payment_asset.clone(), value).map(|_| ()).map_err(|_| Error::<T>::ExceedsMaxEntries)?,
 					}
 				}	
 				let asset_id = nft_details.asset_id;
 				OngoingObjectListing::<T>::insert(listing_id, &nft_details);
 				let mut initial_funds = BoundedBTreeMap::default();
-				for &asset_id in T::AcceptedAssets::get().iter() {
+				for &asset_id in accepted_payment_assets.iter() {
 					initial_funds.try_insert(asset_id, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 				}				
 				if *listed_token == 0 {
@@ -1236,6 +1240,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(&buyer),
 				Error::<T>::UserNotWhitelisted
 			);
+			ensure!(T::AcceptedAssets::get().contains(&payment_asset), Error::<T>::PaymentAssetNotSupported);
 			ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
 			let listing_details =
 				TokenListings::<T>::take(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
@@ -1332,6 +1337,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
+			ensure!(T::AcceptedAssets::get().contains(&payment_asset), Error::<T>::PaymentAssetNotSupported);
 			ensure!(OngoingOffers::<T>::get(listing_id, signer.clone()).is_none(), Error::<T>::OnlyOneOfferPerUser);
 			let listing_details =
 				TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;

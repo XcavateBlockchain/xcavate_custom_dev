@@ -226,6 +226,8 @@ pub mod pallet {
 		AssetNotFound,
 		/// This letting agent has no location.
 		NoLoactions,
+		/// This Asset is not supported for payment.
+		PaymentAssetNotSupported,
 	}
 
 	#[pallet::call]
@@ -398,6 +400,10 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			ensure!(letting_agent == signer, Error::<T>::NoPermission);
+			ensure!(
+				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+				Error::<T>::PaymentAssetNotSupported
+			);
 		
 			let scaled_amount = amount
 				.checked_mul(1)  // Modify the scale factor if needed
@@ -450,6 +456,10 @@ pub mod pallet {
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
 		pub fn withdraw_funds(origin: OriginFor<T>, asset_id: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
+			ensure!(
+				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+				Error::<T>::PaymentAssetNotSupported
+			);
 			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset.clone()));
 			ensure!(
 				!amount.is_zero(),

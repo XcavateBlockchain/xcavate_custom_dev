@@ -595,6 +595,10 @@ fn buy_token_doesnt_work_2() {
 			NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 101, 1984),
 			Error::<Test>::NotEnoughTokenAvailable
 		);
+		assert_noop!(
+			NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1985),
+			Error::<Test>::PaymentAssetNotSupported
+		);
 		run_to_block(32);
 		assert_noop!(
 			NftMarketplace::buy_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984),
@@ -1739,6 +1743,17 @@ fn buy_relisted_token_fails() {
 			NftMarketplace::buy_relisted_token(RuntimeOrigin::signed([3; 32].into()), 1, 1, 1984),
 			Error::<Test>::TokenNotForSale
 		);
+		assert_ok!(NftMarketplace::relist_token(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
+			0,
+			500,
+			1
+		));
+		assert_noop!(
+			NftMarketplace::buy_relisted_token(RuntimeOrigin::signed([3; 32].into()), 1, 1, 1983),
+			Error::<Test>::PaymentAssetNotSupported
+		);
 	})
 }
 
@@ -1860,6 +1875,10 @@ fn make_offer_fails() {
 		assert_noop!(
 			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 2, 1984),
 			Error::<Test>::NotEnoughTokenAvailable
+		);
+		assert_noop!(
+			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 1, 100),
+			Error::<Test>::PaymentAssetNotSupported
 		);
 		assert_noop!(
 			NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 0, 1984),

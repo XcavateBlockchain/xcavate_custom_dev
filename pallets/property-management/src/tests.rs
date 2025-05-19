@@ -599,6 +599,10 @@ fn distribute_income_fails() {
 			PropertyManagement::distribute_income(RuntimeOrigin::signed([4; 32].into()), 0, 20000, 1984),
 			Error::<Test>::NotEnoughFunds
 		);
+		assert_noop!(
+			PropertyManagement::distribute_income(RuntimeOrigin::signed([4; 32].into()), 0, 2000, 1),
+			Error::<Test>::PaymentAssetNotSupported
+		);
 	});
 }
 
@@ -747,6 +751,10 @@ fn withdraw_funds_fails() {
 		assert_noop!(
 			PropertyManagement::withdraw_funds(RuntimeOrigin::signed([2; 32].into()), 0, 1984),
 			Error::<Test>::UserHasNoFundsStored
+		);
+		assert_noop!(
+			PropertyManagement::withdraw_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1),
+			Error::<Test>::PaymentAssetNotSupported
 		);
 	});
 }

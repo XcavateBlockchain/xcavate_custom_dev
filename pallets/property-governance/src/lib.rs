@@ -16,7 +16,7 @@ pub use weights::*;
 use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
-		tokens::{fungible, fungibles},
+		tokens::fungible,
 		fungible::MutateHold,
 		tokens::{Fortitude, Precision, Restriction},
 	},
@@ -135,12 +135,6 @@ pub mod pallet {
 			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
 			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
 			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
-
-		type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
-			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
-			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
-			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
-			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;

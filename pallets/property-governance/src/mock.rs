@@ -312,7 +312,6 @@ impl pallet_property_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type NativeCurrency = Balances;
-	type ForeignCurrency = ForeignAssets;
 	type VotingTime = PropertyVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = ConstU128<100>;
