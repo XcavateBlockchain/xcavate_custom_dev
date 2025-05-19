@@ -10,8 +10,9 @@ use frame_support::traits::VariantCount;
 )]
 pub enum TestId {
     Marketplace,
+    Listing,
 }
 
 impl VariantCount for TestId {
-    const VARIANT_COUNT: u32 = 1; // Update this to match the actual number of variants
+    const VARIANT_COUNT: u32 = 2; // Update this to match the actual number of variants
 }
