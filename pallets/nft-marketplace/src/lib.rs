@@ -35,7 +35,7 @@ use frame_support::sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero, One,
 	},
-	Saturating,
+	Saturating, Permill,
 };
 
 use pallet_nfts::{
@@ -486,7 +486,7 @@ pub mod pallet {
 		/// Listing duration of a region changed.
 		ListingDurationChanged { region: RegionId, listing_duration: BlockNumberFor<T> },
 		/// Tax of a region changed.
-		RegionTaxChanged { region: RegionId, new_tax: Balance },
+		RegionTaxChanged { region: RegionId, new_tax: Permill },
 	}
 
 	// Errors inform users that something went wrong.
@@ -596,7 +596,7 @@ pub mod pallet {
 		/// Emits `RegionCreated` event when succesfful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
-		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>, tax: Balance) -> DispatchResult {
+		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -655,7 +655,7 @@ pub mod pallet {
 
 		#[pallet::call_index(31)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn adjust_region_tax(origin: OriginFor<T>, region: RegionId, new_tax: Balance) -> DispatchResult {
+		pub fn adjust_region_tax(origin: OriginFor<T>, region: RegionId, new_tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -1022,7 +1022,7 @@ pub mod pallet {
 				ensure!(fee_percent < 100, Error::<T>::InvalidFeePercentage);
 				let region_info = Regions::<T>::get(registered_details.region).ok_or(Error::<T>::RegionUnknown)?;
 				let tax_percent = region_info.tax;
-				ensure!(tax_percent < 100, Error::<T>::InvalidTaxPercentage);
+				ensure!(tax_percent < Permill::from_percent(100), Error::<T>::InvalidTaxPercentage);
 
 				let fee = transfer_price
  					.checked_mul(fee_percent)
@@ -1030,11 +1030,7 @@ pub mod pallet {
 					.checked_div(100) 
 					.ok_or(Error::<T>::DivisionError)?;
 				
-				let tax = transfer_price
-					.checked_mul(tax_percent)
-					.ok_or(Error::<T>::MultiplyError)?
-					.checked_div(100) 
-					.ok_or(Error::<T>::DivisionError)?;
+				let tax = tax_percent.mul_floor(transfer_price);
 				
 				let base_price = transfer_price
 					.checked_add(fee)
@@ -1763,9 +1759,9 @@ pub mod pallet {
 			ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
 			let token_amount = listing_details.amount.into();
 
-			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(listing_details.asset_id, &TestId::Marketplace, &signer);
+			let frozen_balance = T::LocalAssetsFreezer::balance_frozen(listing_details.asset_id, &TestId::Listing, &signer);
 			let new_frozen_balance = frozen_balance.checked_sub(token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;
-			T::ForeignAssetsFreezer::set_freeze(listing_details.asset_id, &TestId::Marketplace, &signer, new_frozen_balance)?;
+			T::ForeignAssetsFreezer::set_freeze(listing_details.asset_id, &TestId::Listing, &signer, new_frozen_balance)?;
 
 			Self::deposit_event(Event::<T>::ListingDelisted { listing_index: listing_id });
 			Ok(())
@@ -2473,6 +2469,20 @@ pub mod pallet {
 				&TestId::Listing,
 				&listing_details.seller,
 				new_frozen_balance_listing,
+			)?;
+			let frozen_balance_receiver = T::LocalAssetsFreezer::balance_frozen(
+				listing_details.asset_id,
+				&TestId::Marketplace,
+				&account,
+			);
+			let new_frozen_balance_receiver = frozen_balance_receiver
+				.checked_add(token_amount)
+				.ok_or(Error::<T>::ArithmeticOverflow)?;
+			T::LocalAssetsFreezer::set_freeze(
+				listing_details.asset_id,
+				&TestId::Marketplace,
+				&account,
+				new_frozen_balance_receiver,
 			)?;
 			let mut seller_amount = PropertyOwnerToken::<T>::take(
 				listing_details.asset_id,

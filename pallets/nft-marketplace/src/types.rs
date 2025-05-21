@@ -5,6 +5,7 @@ use frame_system::pallet_prelude::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{DefaultNoBound, sp_runtime::RuntimeDebug};
 use scale_info::TypeInfo;
+use frame_support::sp_runtime::Permill;
 
 /// Infos regarding the listing of a real estate object.
 #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -13,7 +14,7 @@ pub struct RegionInfo<T: Config> {
     pub collection_id: <T as pallet::Config>::NftCollectionId,
     pub listing_duration: BlockNumberFor<T>,
 	pub owner: AccountIdOf<T>,
-	pub tax: Balance,
+	pub tax: Permill,
 }
 
 /// Infos regarding a listed nft of a real estate object on the marketplace.
