@@ -50,9 +50,12 @@ pub mod pallet {
 	/// A reason for the pallet placing a hold on funds.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
-		/// Funds are held to register for free transactions.
+		/// Funds are held to register for letting agent.
 		#[codec(index = 0)]
 		LettingAgent,
+		/// Funds are held to register for sales agent.
+		#[codec(index = 1)]
+		SalesAgent,
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -123,7 +126,7 @@ pub mod pallet {
 		/// Origin who can set a new letting agent.
 		type AgentOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The minimum amount of a letting agent that has to be staked.
+		/// The minimum amount of a letting agent that has to be deposited.
 		type LettingAgentDeposit: Get<Balance>;
 
 		/// The maximum amount of properties that can be assigned to a letting agent.
@@ -204,7 +207,7 @@ pub mod pallet {
 		TooManyLettingAgents,
 		/// The letting agent is already active in too many locations.
 		TooManyLocations,
-		/// The user is not a property owner and has no permission to deposit.
+		/// The caller is not authorized to call this extrinsic.
 		NoPermission,
 		/// The letting agent of this property is already set.
 		LettingAgentAlreadySet,

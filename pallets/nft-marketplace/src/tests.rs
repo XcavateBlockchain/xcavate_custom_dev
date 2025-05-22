@@ -993,8 +993,10 @@ fn distributes_nfts_and_funds() {
 		assert_eq!(PropertyLawyer::<Test>::get(1).is_some(), false);
 		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_594_000);
 		assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_396_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 4_000);
-		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 8_000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 2_000);
+		assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 2_000);
+		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 4_000);
+		assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 4_000);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 876_000);
 		assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 22_000);
 		assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
@@ -1061,7 +1063,8 @@ fn distributes_nfts_and_funds_2() {
 		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
 		assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_990_000);
 		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 0);
-		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 12000);
+		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 6000);
+		assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 6000);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
 		assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 0);
 		assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 0);
@@ -1133,8 +1136,10 @@ fn distributes_nfts_and_funds_3() {
 		assert_eq!(PropertyLawyer::<Test>::get(1).is_some(), false);
 		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_574_500);
 		assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_383_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 4_000);
-		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 8_000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 2_000);
+		assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 2_000);
+		assert_eq!(ForeignAssets::balance(1337, &NftMarketplace::treasury_account_id()), 4_000);
+		assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 4_000);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 894_000);
 		assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 23_500);
 		assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
@@ -1658,7 +1663,8 @@ fn buy_relisted_token_works() {
 			true,
 		));
 		assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 20990000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 12000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 6000);
+		assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 6000);
 		assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 1_468_800);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).unwrap().spv_created, true);
 		assert_ok!(NftMarketplace::relist_token(
@@ -1739,7 +1745,8 @@ fn buy_relisted_token_fails() {
 			true,
 		));
 		assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 20990000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 12_000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 6_000);
+		assert_eq!(ForeignAssets::balance(1984,&([8; 32].into())), 6_000);
 		assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 460_000);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).unwrap().spv_created, true);
 		assert_noop!(
@@ -2388,7 +2395,8 @@ fn upgrade_object_and_distribute_works() {
 			true,
 		));
 		assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 21485000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 22000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::treasury_account_id()), 11000);
+		assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 11000);
 		assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 980_000);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 110_000);
 

@@ -73,7 +73,7 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct SellProposal<T: Config> {
+	pub struct SaleProposal<T: Config> {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
 		pub amount: Balance,
@@ -117,6 +117,18 @@ pub mod pallet {
 		pub no_voting_power: u32,
 	}
 
+	/// Info for the sales agent.
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct SalesAgentInfo<T: Config> {
+		pub account: AccountIdOf<T>,
+		pub region: u32,
+		pub locations: BoundedVec<LocationId<T>, <T as pallet_property_management::Config>::MaxLocations>,
+		pub assigned_properties: BoundedVec<u32, <T as pallet_property_management::Config>::MaxProperties>,
+		pub deposited: bool,
+	}
+
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
@@ -138,6 +150,9 @@ pub mod pallet {
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;
+
+		/// The amount of time give to vote for a sale proposal.
+		type SaleVotingTime: Get<BlockNumberFor<Self>>;
 
 		/// The maximum amount of votes per block.
 		type MaxVotesForBlock: Get<u32>;
@@ -169,7 +184,15 @@ pub mod pallet {
 		/// The property governance's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type MarketplacePalletId: Get<PalletId>;
+
+		/// The minimum amount of a sales agent that has to be deposited.
+		type SalesAgentDeposit: Get<Balance>;
+
+		/// Threshold for selling a property.
+		type SalesThreshold: Get<Percent>;
 	}
+
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
 
 	/// Number of proposals that have been made.
 	#[pallet::storage]
@@ -186,11 +209,11 @@ pub mod pallet {
 
 	/// Sell proposals that have been made.
 	#[pallet::storage]
-	pub(super) type SellProposals<T> = StorageMap<
+	pub(super) type SaleProposals<T> = StorageMap<
 		_,
 		Blake2_128Concat,
 		ProposalIndex,
-		SellProposal<T>,
+		SaleProposal<T>,
 		OptionQuery,
 	>;
 
@@ -202,6 +225,11 @@ pub mod pallet {
 	/// Mapping of ongoing votes.
 	#[pallet::storage]
 	pub(super) type OngoingVotes<T> =
+		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
+
+	/// Mapping of ongoing sales votes.
+	#[pallet::storage]
+	pub(super) type OngoingSalesVotes<T> =
 		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
 
 	/// Mapping from proposal to vector of users who voted.
@@ -263,6 +291,16 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Stores the project keys and round types ending on a give block for sale proposal votings.
+	#[pallet::storage]
+	pub type SaleProposalRoundExpiring<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		BlockNumberFor<T>,
+		BoundedVec<ProposalIndex, T::MaxVotesForBlock>,
+		ValueQuery,
+	>;
+
 	/// Stores the project keys and round types ending on a given block for challenge votings.
 	#[pallet::storage]
 	pub type ChallengeRoundsExpiring<T: Config> = StorageMap<
@@ -281,6 +319,16 @@ pub mod pallet {
 		BlockNumberFor<T>,
 		BoundedVec<ChallengeIndex, T::MaxVotesForBlock>,
 		ValueQuery,
+	>;
+
+	/// Mapping from sales agent to the region he is active in.
+	#[pallet::storage]
+	pub type SalesAgentStorage<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		AccountIdOf<T>,
+		SalesAgentInfo<T>,
+		OptionQuery,
 	>;
 
 	#[pallet::event]
@@ -308,12 +356,20 @@ pub mod pallet {
 		ProposalThresHoldNotReached { proposal_id: ProposalIndex, required_threshold: Percent },
 		/// The threshold could not be reached for a challenge.
 		ChallengeThresHoldNotReached { challenge_id: ProposalIndex, required_threshold: Percent, challenge_state: ChallengeState },
+		/// A Sales agent has been added to a location.
+		SalesAgentAdded { region: u32, who: AccountIdOf<T> },
+		/// A sales agent deposited the necessary funds.
+		Deposited { who: AccountIdOf<T> },
+		/// New sale proposal has been created.
+		SaleProposed { sale_proposal_id: ProposalIndex, asset_id: u32, proposer: AccountIdOf<T> },
+		/// A sale proposal got rejected.
+		SaleProposalRejected { proposal_id: ProposalIndex },
+		/// The threshold could not be reached for a sale proposal.
+		SaleProposalThresHoldNotReached { proposal_id: ProposalIndex, required_threshold: Percent },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The user is not a property owner and has no permission to propose.
-		NoPermission,
 		/// There are already too many proposals in the ending block.
 		TooManyProposals,
 		/// The proposal is not ongoing.
@@ -328,6 +384,18 @@ pub mod pallet {
 		NotEnoughFunds,
 		/// Error during converting types.
 		ConversionError,
+		/// The region is not registered.
+		RegionUnknown,
+		/// The caller is not authorized to call this extrinsic.
+		NoPermission,
+		/// The sales agent is already registered.
+		SalesAgentExists,
+		/// The sales agent is already active in too many locations.
+		TooManyLocations,
+		/// The sales already deposited the necessary amount.
+		AlreadyDeposited,
+		/// This sales agent has no location.
+		NoLoactions,
 	}
 
 	#[pallet::hooks]
@@ -340,6 +408,13 @@ pub mod pallet {
 			ended_votings.iter().for_each(|item| {
 				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));	
 				let _ = Self::finish_proposal(*item);					
+			});
+
+			let ended_votings = SaleProposalRoundExpiring::<T>::take(n);
+			// Checks if there is a voting for a sale porposal in this block;
+			ended_votings.iter().for_each(|item| {
+				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = Self::finish_sale_proposal(*item);
 			});
 
 			let ended_challenge_votings = ChallengeRoundsExpiring::<T>::take(n);
@@ -547,6 +622,89 @@ pub mod pallet {
 			Self::deposit_event(Event::VotedOnChallenge { challenge_id, voter: signer, vote });
 			Ok(())
 		}
+
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn add_sales_agent(
+			origin: OriginFor<T>,
+			region: u32,
+			location: LocationId<T>,
+			sales_agent: AccountIdOf<T>,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let region_info = pallet_nft_marketplace::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
+			ensure!(SalesAgentStorage::<T>::get(sales_agent.clone()).is_none(), Error::<T>::SalesAgentExists);
+			let mut sales_info = SalesAgentInfo {
+				account: sales_agent.clone(),
+				region,
+				locations: Default::default(),
+				assigned_properties: Default::default(),
+				deposited: Default::default(),
+			};
+			sales_info
+				.locations
+				.try_push(location)
+				.map_err(|_| Error::<T>::TooManyLocations)?;
+			SalesAgentStorage::<T>::insert(sales_agent.clone(), sales_info);
+			Self::deposit_event(Event::<T>::SalesAgentAdded { region, who: sales_agent });
+			Ok(())
+		}
+
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn sales_agent_deposit(origin: OriginFor<T>) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			SalesAgentStorage::<T>::try_mutate(signer.clone(), |maybe_sales_info|{
+				let sales_info = maybe_sales_info.as_mut().ok_or(Error::<T>::NoPermission)?;
+				ensure!(!sales_info.deposited, Error::<T>::AlreadyDeposited);
+				ensure!(!sales_info.locations.is_empty(), Error::<T>::NoLoactions);
+
+				<T as pallet::Config>::NativeCurrency::hold(
+					&<T as pallet_property_management::Config>::RuntimeHoldReason::from(pallet_property_management::HoldReason::SalesAgent),
+					&signer, 
+					<T as Config>::SalesAgentDeposit::get(),
+				)?;
+
+				sales_info.deposited = true;
+				Ok::<(), DispatchError>(())
+			})?;
+			Self::deposit_event(Event::<T>::Deposited { who: signer });
+			Ok(())
+		}
+
+		#[pallet::call_index(6)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn propose_property_sale(
+			origin: OriginFor<T>,
+			asset_id: u32,
+			amount: Balance,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
+			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let sale_proposal = SaleProposal {
+				proposer: signer.clone(),
+				asset_id,
+				amount,
+				created_at: current_block_number,
+			};
+			let sale_proposal_id = ProposalCount::<T>::get().saturating_add(1);
+			let expiry_block = current_block_number
+				.saturating_add(<T as Config>::SaleVotingTime::get());
+			SaleProposalRoundExpiring::<T>::try_mutate(expiry_block, |keys| {
+				keys.try_push(sale_proposal_id).map_err(|_| Error::<T>::TooManyProposals)?;
+				Ok::<(), DispatchError>(())
+			})?;
+			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
+
+			SaleProposals::<T>::insert(sale_proposal_id, sale_proposal);
+			OngoingSalesVotes::<T>::insert(sale_proposal_id, vote_stats);
+			ProposalCount::<T>::set(sale_proposal_id);
+			Self::deposit_event(Event::SaleProposed { sale_proposal_id, asset_id, proposer: signer });
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -597,34 +755,61 @@ pub mod pallet {
 
 		fn finish_proposal(proposal_id: ProposalIndex) -> DispatchResult {
 			let voting_results = <OngoingVotes<T>>::take(proposal_id);
-				let proposals = <Proposals<T>>::take(proposal_id);
-				if let Some(proposal) = proposals {
-					if let Some(voting_result) = voting_results {
-						let required_threshold =
-							if proposal.amount >= <T as Config>::HighProposal::get() {
-								<T as Config>::HighThreshold::get()
-							}  else {
-								<T as Config>::Threshold::get()
-							}; 
-						let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(proposal.asset_id);
-						if let Some(asset_details) = asset_details {
-							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
-							let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
-	
-							if yes_votes_percentage > no_votes_percentage
-								&& required_threshold
-									< yes_votes_percentage.saturating_add(no_votes_percentage)
-							{
-								let _ = Self::execute_proposal(proposal);
-							}
-							else if yes_votes_percentage <= no_votes_percentage {
-								Self::deposit_event(Event::ProposalRejected { proposal_id });
-							} else {
-								Self::deposit_event(Event::ProposalThresHoldNotReached { proposal_id, required_threshold });
-							}								
+			let proposals = <Proposals<T>>::take(proposal_id);
+			if let Some(proposal) = proposals {
+				if let Some(voting_result) = voting_results {
+					let required_threshold =
+						if proposal.amount >= <T as Config>::HighProposal::get() {
+							<T as Config>::HighThreshold::get()
+						}  else {
+							<T as Config>::Threshold::get()
+						}; 
+					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(proposal.asset_id);
+					if let Some(asset_details) = asset_details {
+						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
+						let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
+
+						if yes_votes_percentage > no_votes_percentage
+							&& required_threshold
+								< yes_votes_percentage.saturating_add(no_votes_percentage)
+						{
+							let _ = Self::execute_proposal(proposal);
 						}
+						else if yes_votes_percentage <= no_votes_percentage {
+							Self::deposit_event(Event::ProposalRejected { proposal_id });
+						} else {
+							Self::deposit_event(Event::ProposalThresHoldNotReached { proposal_id, required_threshold });
+						}								
 					}
 				}
+			}
+			Ok(())
+		}
+
+		fn finish_sale_proposal(proposal_id: ProposalIndex) -> DispatchResult {
+			let voting_results = <OngoingSalesVotes<T>>::take(proposal_id);
+			let sale_proposals = <SaleProposals<T>>::take(proposal_id);
+			if let Some(sale_proposal) = sale_proposals {
+				if let Some(voting_result) = voting_results {
+					let required_threshold = T::SalesThreshold::get();
+					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(sale_proposal.asset_id);
+					if let Some(asset_details) = asset_details {
+						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
+						let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
+
+						if yes_votes_percentage > no_votes_percentage 
+							&& required_threshold < yes_votes_percentage.saturating_add(no_votes_percentage)
+						{
+							let _ = Self::execute_sale_proposal(sale_proposal);
+						}
+						else if yes_votes_percentage <= no_votes_percentage {
+							Self::deposit_event(Event::SaleProposalRejected { proposal_id });
+						} else {
+							Self::deposit_event(Event::SaleProposalThresHoldNotReached { proposal_id, required_threshold });
+						}	
+					}
+				}
+			}
 			Ok(())
 		}
 
@@ -698,6 +883,11 @@ pub mod pallet {
 				amount: proposal_amount,
 			});
 		
+			Ok(())
+		}
+
+		/// Executes a sale proposal once it passes.
+		fn execute_sale_proposal(_sale_proposal: SaleProposal<T>) -> DispatchResult {
 			Ok(())
 		}
 	}

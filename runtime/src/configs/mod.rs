@@ -656,6 +656,7 @@ impl pallet_property_management::Config for Runtime {
 
 parameter_types! {
 	pub const PropertyVotingTime: BlockNumber = 20;
+	pub const PropertySaleVotingTime: BlockNumber = 30;
 	pub const MaxVoteForBlock: u32 = 100;
 	pub const MinimumSlashingAmount: Balance = 10 * UNIT;
 	pub const MaximumVoter: u32 = 100;
@@ -663,6 +664,8 @@ parameter_types! {
 	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
 	pub const LowProposal: Balance = 500 * UNIT;
 	pub const HighProposal: Balance = 10_000 * UNIT;
+	pub const SalesAgentDepositAmount: Balance = 100 * UNIT;
+	pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -671,6 +674,7 @@ impl pallet_property_governance::Config for Runtime {
 	type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
 	type NativeCurrency = Balances;
 	type VotingTime = PropertyVotingTime;
+	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = MinimumSlashingAmount;
 	type MaxVoter = MaximumVoter;
@@ -681,5 +685,7 @@ impl pallet_property_governance::Config for Runtime {
 	type LowProposal = LowProposal;
 	type HighProposal = HighProposal;
 	type MarketplacePalletId = NftMarketplacePalletId;
+	type SalesAgentDeposit = SalesAgentDepositAmount;
+	type SalesThreshold = SalesProposalThreshold;
 }
 

@@ -300,16 +300,16 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Mapping from the nft to the ongoing nft listing details.
+	/// Mapping of the listing id to the ongoing nft listing details.
 	#[pallet::storage]
 	pub(super) type OngoingObjectListing<T: Config> =
 		StorageMap<_, Blake2_128Concat, ListingId, NftListingDetailsType<T>, OptionQuery>;
 
-	/// Mapping of the nft to the amount of listed token.
+	/// Mapping of the listing id to the amount of listed token.
 	#[pallet::storage]
 	pub(super) type ListedToken<T: Config> = StorageMap<_, Blake2_128Concat, ListingId, u32, OptionQuery>;
 
-	/// Mapping of the listing to the buyer of the sold token.
+	/// Mapping of the listing to a vec of buyer of the sold token.
 	#[pallet::storage]
 	pub(super) type TokenBuyer<T: Config> = StorageMap<
 		_,
@@ -369,7 +369,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Mapping from listing to offer details.
+	/// Mapping from listing and offerer account id to the offer details.
 	#[pallet::storage]
 	pub(super) type OngoingOffers<T: Config> = StorageDoubleMap<
 		_,
@@ -381,7 +381,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores the lawyer info.
+	/// Stores in which region a lawyer is active.
 	#[pallet::storage]
 	pub(super) type RealEstateLawyer<T: Config> = StorageMap<
 		_,
@@ -391,6 +391,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the lawyer related infos of a listing.
 	#[pallet::storage]
 	pub type PropertyLawyer<T: Config> = StorageMap<
 		_, 
@@ -400,6 +401,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores required infos in case of a refund.
 	#[pallet::storage]
 	pub type RefundToken<T: Config> = StorageMap<
 		_,
@@ -409,6 +411,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the deposit information of a listing.
 	#[pallet::storage]
 	pub type ListingDeposits<T: Config> = StorageMap<
 		_,
@@ -588,10 +591,11 @@ pub mod pallet {
  		/// Creates a new region for the marketplace.
 		/// This function calls the nfts-pallet to create a new collection.
 		///
-		/// The origin must be the LocationOrigin.
+		/// The origin must be Signed and the sender must have sufficient funds free.
 		///
 		/// Parameters:
 		/// - `listing_duration`: Duration of a listing in this region.
+		/// - `tax`: Tax percentage for selling a property in this region.
 		///
 		/// Emits `RegionCreated` event when succesfful.
 		#[pallet::call_index(0)]
@@ -629,7 +633,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(30)]
+		/// Region owner can adjust the listing duration.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `region`: Region in where the listing duration should be changed.
+		/// - `listing_duration`: New duration of a listing in this region.
+		///
+		/// Emits `ListingDurationChanged` event when succesfful.
+		#[pallet::call_index(1)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn adjust_listing_duration(origin: OriginFor<T>, region: RegionId, listing_duration: BlockNumberFor<T>) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -653,7 +666,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(31)]
+		/// Region owner can adjust the tax in a region.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `region`: Region in where the tax should be changed.
+		/// - `tax`: New tax for a property sell in this region.
+		///
+		/// Emits `RegionTaxChanged` event when succesfful.
+		#[pallet::call_index(2)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn adjust_region_tax(origin: OriginFor<T>, region: RegionId, new_tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -674,7 +696,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(32)]
+		/// Caller proposes to become new owner of a region.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `region`: Region which the caller wants to own.
+		///
+		/// Emits `TakeoverProposed` event when succesfful.
+		#[pallet::call_index(3)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn propose_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -698,7 +728,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(33)]
+		/// The region owner can handle the takeover request.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `region`: Region which the caller wants to own.
+		/// - `action`: Enum for takeover which is either Accept or Reject.
+		///
+		/// Emits `TakeoverRejected` event when succesfful.
+		#[pallet::call_index(4)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn handle_takeover(
 			origin: OriginFor<T>,
@@ -743,7 +782,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(34)]
+		/// The proposer of a takeover can cancel the request.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `region`: Region in which the caller wants to cancel the request.
+		///
+		/// Emits `TakeoverCancelled` event when succesfful.
+		#[pallet::call_index(5)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn cancel_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -775,7 +822,7 @@ pub mod pallet {
 		/// - `location`: The postcode of the new location.
 		///
 		/// Emits `LocationCreated` event when succesfful.
-		#[pallet::call_index(1)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_location())]
 		pub fn create_new_location(
 			origin: OriginFor<T>,
@@ -814,7 +861,7 @@ pub mod pallet {
 		/// - `data`: The Metadata of the nft.
 		///
 		/// Emits `ObjectListed` event when succesfful
-		#[pallet::call_index(2)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::list_object())]
 		pub fn list_object(
 			origin: OriginFor<T>,
@@ -987,7 +1034,7 @@ pub mod pallet {
 		/// - `payment_asset`: Asset in which the investor wants to pay.
 		///
 		/// Emits `TokenBoughtObject` event when succesfful.
-		#[pallet::call_index(3)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
 		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin.clone())?;
@@ -1156,7 +1203,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token of the real estate object that should be listed.
 		///
 		/// Emits `TokenListed` event when succesfful
-		#[pallet::call_index(4)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
 		pub fn relist_token(
 			origin: OriginFor<T>,
@@ -1223,7 +1270,7 @@ pub mod pallet {
 		/// - `payment_asset`: Asset in which the investor wants to pay.
 		///
 		/// Emits `TokenBought` event when succesfful.
-		#[pallet::call_index(5)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
 		pub fn buy_relisted_token(
 			origin: OriginFor<T>,
@@ -1265,7 +1312,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `BuyCancelled` event when succesfful.
-		#[pallet::call_index(6)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn cancel_buy(
 			origin: OriginFor<T>,
@@ -1319,7 +1366,7 @@ pub mod pallet {
 		/// - `payment_asset`: Asset in which the investor wants to pay.
 		///
 		/// Emits `OfferCreated` event when succesfful.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
 		pub fn make_offer(
 			origin: OriginFor<T>,
@@ -1367,7 +1414,7 @@ pub mod pallet {
 		///
 		/// Emits `OfferAccepted` event when offer gets accepted succesffully.
 		/// Emits `OfferRejected` event when offer gets rejected succesffully.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
 		pub fn handle_offer(
 			origin: OriginFor<T>,
@@ -1428,7 +1475,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `OfferCancelled` event when succesfful.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
 		pub fn cancel_offer(
 			origin: OriginFor<T>,
@@ -1454,7 +1501,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `FundsWithdrawn` event when succesfful.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn withdraw_funds(
 			origin: OriginFor<T>,
@@ -1535,7 +1582,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
 		/// Emits `FundsRefunded` event when succesfful.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn refund_expired(
 			origin: OriginFor<T>,
@@ -1610,7 +1657,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(12)]
+		/// Lets the real estate developer withdraw his deposit in case no token have been sold.
+		///
+		/// The origin must be Signed and the sender must have sufficient funds free.
+		///
+		/// Parameters:
+		/// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
+		///
+		/// Emits `ListingDepositReleased` event when succesfful.
+		#[pallet::call_index(17)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn reclaim_unsold(
 			origin: OriginFor<T>,
@@ -1674,7 +1729,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the nft.
 		///
 		/// Emits `ListingUpdated` event when succesfful.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(18)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
 		pub fn upgrade_listing(
 			origin: OriginFor<T>,
@@ -1708,7 +1763,7 @@ pub mod pallet {
 		/// - `new_price`: The new price of the object.
 		///
 		/// Emits `ObjectUpdated` event when succesfful.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(19)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
 		pub fn upgrade_object(
 			origin: OriginFor<T>,
@@ -1746,7 +1801,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing that the seller wants to delist.
 		///
 		/// Emits `ListingDelisted` event when succesfful.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(20)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
 		pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -1775,7 +1830,7 @@ pub mod pallet {
 		/// - `lawyer`: The lawyer that should be registered.
 		///
 		/// Emits `LawyerRegistered` event when succesfful.
-		#[pallet::call_index(16)]
+		#[pallet::call_index(21)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn register_lawyer(
 			origin: OriginFor<T>,
@@ -1801,7 +1856,7 @@ pub mod pallet {
 		/// - `costs`: The costs thats the lawyer demands for his work.
 		///
 		/// Emits `LawyerClaimedProperty` event when succesfful.
-		#[pallet::call_index(17)]
+		#[pallet::call_index(22)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_property(
 			origin: OriginFor<T>,
@@ -1904,7 +1959,7 @@ pub mod pallet {
 		/// - `listing_id`: The listing from the property.
 		///
 		/// Emits `LawyerRemovedFromCase` event when succesfful.
-		#[pallet::call_index(18)]
+		#[pallet::call_index(23)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn remove_from_case(
 			origin: OriginFor<T>,
@@ -1938,7 +1993,7 @@ pub mod pallet {
 		/// - `approve`: Approves or Rejects the case.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(19)]
+		#[pallet::call_index(24)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_confirm_documents(
 			origin: OriginFor<T>,
@@ -2032,7 +2087,7 @@ pub mod pallet {
 		/// - `token_amount`: The amount of token the sender wants to send.
 		///
 		/// Emits `DocumentsConfirmed` event when succesfful.
-		#[pallet::call_index(20)]
+		#[pallet::call_index(25)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn send_property_token(
 			origin: OriginFor<T>,
@@ -2152,8 +2207,12 @@ pub mod pallet {
 		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>) -> DispatchResult {
 			let nft_details =
 				OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+			let mut registered_nft_details =
+				RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
+					.ok_or(Error::<T>::InvalidIndex)?;
 			let treasury_id = Self::treasury_account_id();
 			let property_account = Self::property_account_id(nft_details.asset_id);
+			let region = Regions::<T>::get(registered_nft_details.region).ok_or(Error::<T>::RegionUnknown)?;
 
 			// Get lawyer accounts
 			let real_estate_developer_lawyer_id = property_lawyer_details
@@ -2206,13 +2265,21 @@ pub mod pallet {
 				let real_estate_developer_amount = tax
 					.checked_add(real_estate_developer_lawyer_costs)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
-				let treasury_amount = total_collected_funds
+				let protocol_fees = total_collected_funds
 					.checked_div(&100u128)
 					.ok_or(Error::<T>::DivisionError)?
 					.checked_add(*collected_fees)
 					.ok_or(Error::<T>::ArithmeticOverflow)?
 					.saturating_sub(*real_estate_developer_lawyer_costs)
 					.saturating_sub(*spv_lawyer_costs);
+
+				let region_owner_amount = protocol_fees
+					.checked_div(2u128)
+					.ok_or(Error::<T>::DivisionError)?;
+				
+				let treasury_amount = protocol_fees
+					.saturating_sub(region_owner_amount);
+
 
 				// Transfer funds from property account
 				Self::transfer_funds(
@@ -2239,6 +2306,12 @@ pub mod pallet {
 					treasury_amount,
 					asset,
 				)?;
+				Self::transfer_funds(
+					&property_account,
+					&region.owner,
+					region_owner_amount,
+					asset,
+				)?;
 			}
 			let list = <TokenBuyer<T>>::take(listing_id);
 			for owner in list {
@@ -2246,9 +2319,6 @@ pub mod pallet {
 			}
 
 			// Update registered NFT details to mark SPV as created
-			let mut registered_nft_details =
-					RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
-						.ok_or(Error::<T>::InvalidIndex)?;
 			registered_nft_details.spv_created = true;
 			RegisteredNftDetails::<T>::insert(
 				nft_details.collection_id,
