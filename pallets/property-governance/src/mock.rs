@@ -300,11 +300,13 @@ impl pallet_property_management::Config for Test {
 
 parameter_types! {
 	pub const PropertyVotingTime: BlockNumber = 30;
+	pub const PropertySaleVotingTime: BlockNumber = 30;
 	pub const MaxVoteForBlock: u32 = 100;
 	pub const MaximumVoter: u32 = 100;
 	pub const VotingThreshold: Percent = Percent::from_percent(51);
 	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
 	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
+	pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -313,6 +315,7 @@ impl pallet_property_governance::Config for Test {
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type NativeCurrency = Balances;
 	type VotingTime = PropertyVotingTime;
+	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = ConstU128<100>;
 	type MaxVoter = MaximumVoter;
@@ -323,6 +326,8 @@ impl pallet_property_governance::Config for Test {
 	type LowProposal = ConstU128<500>;
 	type HighProposal = ConstU128<2000>;
 	type MarketplacePalletId = NftMarketplacePalletId;
+	type SalesAgentDeposit = ConstU128<100>;
+	type SalesThreshold = SalesProposalThreshold;
 }
 
 // Build genesis storage according to the mock runtime.

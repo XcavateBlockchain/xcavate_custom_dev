@@ -369,7 +369,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Mapping from listing and offerer account id to the offer details.
+	/// Mapping from listing and offeror account id to the offer details.
 	#[pallet::storage]
 	pub(super) type OngoingOffers<T: Config> = StorageDoubleMap<
 		_,
@@ -425,17 +425,22 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A new object has been listed on the marketplace.
 		ObjectListed {
+			listing_index: ListingId,
 			collection_index: <T as pallet::Config>::NftCollectionId,
 			item_index: <T as pallet::Config>::NftId,
-			price: Balance,
+			asset_id: u32,
+			token_price: Balance,
+			token_amount: u32,
 			seller: AccountIdOf<T>,
+			tax_paid_by_developer: bool,
+			listing_expiry: BlockNumberFor<T>,
 		},
 		/// A token has been bought.
-		TokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: Balance },
+		RelistedTokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: Balance, amount: u32, payment_asset: u32 },
 		/// Token from listed object have been bought.
-		TokenBoughtObject { asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: Balance },
+		PropertyTokenBought { asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: Balance, payment_asset: u32 },
 		/// Token have been listed.
-		TokenListed { asset_id: u32, price: Balance, seller: AccountIdOf<T> },
+		TokenRelisted { listing_index: ListingId, asset_id: u32, price: Balance, token_amount: u32, seller: AccountIdOf<T> },
 		/// The price of the token listing has been updated.
 		ListingUpdated { listing_index: ListingId, new_price: Balance },
 		/// The nft has been delisted.
@@ -443,11 +448,11 @@ pub mod pallet {
 		/// The price of the listed object has been updated.
 		ObjectUpdated { listing_index: ListingId, new_price: Balance },
 		/// New region has been created.
-		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId },
+		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: AccountIdOf<T>, listing_duration: BlockNumberFor<T>, tax: Permill },
 		/// New location has been created.
 		LocationCreated { region_id: u32, location_id: LocationId<T> },
 		/// A new offer has been made.
-		OfferCreated { listing_id: ListingId, price: Balance },
+		OfferCreated { listing_id: ListingId, offeror: AccountIdOf<T>, price: Balance, amount: u32, payment_asset: u32 },
 		/// An offer has been cancelled.
 		OfferCancelled { listing_id: ListingId, account_id: AccountIdOf<T> },
 		/// A lawyer has been registered.
@@ -457,7 +462,7 @@ pub mod pallet {
 		/// A lawyer stepped back from a legal case.
 		LawyerRemovedFromCase { lawyer: AccountIdOf<T>, listing_id: ListingId },
 		/// Documents have been approved or rejected.
-		DocumentsConfirmed { signer: AccountIdOf<T>, listing_id: ListingId, approve: bool },
+		DocumentsConfirmed { signer: AccountIdOf<T>, listing_id: ListingId, legal_side: LegalProperty, approve: bool },
 		/// The property nft got burned.
 		PropertyNftBurned { collection_id: <T as pallet::Config>::NftCollectionId, item_id: <T as pallet::Config>::NftId, asset_id: u32 },
 		/// Property token have been send to the investors.
@@ -465,9 +470,9 @@ pub mod pallet {
 		/// The property deal has been successfully sold.
 		PropertySuccessfullySold { listing_id: ListingId, item_index: <T as pallet::Config>::NftId, asset_id: u32 },
 		/// Funds has been withdrawn.
-		FundsWithdrawn { signer: AccountIdOf<T>, listing_id: ListingId },
+		RejectedFundsWithdrawn { signer: AccountIdOf<T>, listing_id: ListingId },
 		/// Funds have been refunded after expired listing.
-		FundsRefunded { signer: AccountIdOf<T>, listing_id: ListingId },
+		ExpiredFundsWithdrawn { signer: AccountIdOf<T>, listing_id: ListingId },
 		/// An offer has been accepted.
 		OfferAccepted { listing_id: ListingId, offeror: AccountIdOf<T>, amount: u32, price: Balance },
 		/// An offer has been Rejected.
@@ -477,11 +482,11 @@ pub mod pallet {
 		/// Property token have been sent to another account.
 		PropertyTokenSend { asset_id: u32, sender: AccountIdOf<T>, receiver: AccountIdOf<T>, amount: u32 },
 		/// The deposit of the real estate developer has been released.
-		ListingDepositReleased { signer: AccountIdOf<T>, listing_id: ListingId },
+		DepositWithdrawnUnsold { signer: AccountIdOf<T>, listing_id: ListingId },
 		/// Someone proposed to take over a region.
-		TakeoverProposed { region: RegionId, signer:AccountIdOf<T> },
+		TakeoverProposed { region: RegionId, proposer: AccountIdOf<T> },
 		/// A takeover has been accepted from the region owner.
-		TakeoverAccepted { region: RegionId, new_owner:AccountIdOf<T> },
+		TakeoverAccepted { region: RegionId, new_owner: AccountIdOf<T> },
 		/// A takeover has been rejected from the region owner.
 		TakeoverRejected { region: RegionId },
 		/// A Takeover has been cancelled.
@@ -511,6 +516,8 @@ pub mod pallet {
 		NoPermission,
 		/// The SPV has already been created.
 		SpvAlreadyCreated,
+		/// The SPV has not been created.
+		SpvNotCreated,
 		/// User did not pass the kyc.
 		UserNotWhitelisted,
 		ArithmeticUnderflow,
@@ -623,13 +630,19 @@ pub mod pallet {
 			let region_info = RegionInfo {
 				collection_id,
 				listing_duration,
-				owner: signer,
+				owner: signer.clone(),
 				tax,
 			};
 			Regions::<T>::insert(current_region_id, region_info);
 			NextRegionId::<T>::put(next_region_id);
 			
-			Self::deposit_event(Event::<T>::RegionCreated { region_id: current_region_id, collection_id });
+			Self::deposit_event(Event::<T>::RegionCreated { 
+				region_id: current_region_id, 
+				collection_id,
+				owner: signer,
+				listing_duration,
+				tax, 
+			});
 			Ok(())
 		}
 
@@ -724,7 +737,7 @@ pub mod pallet {
 			)?;
 		
 			TakeoverRequests::<T>::insert(region, signer.clone());
-			Self::deposit_event(Event::<T>::TakeoverProposed { region, signer });
+			Self::deposit_event(Event::<T>::TakeoverProposed { region, proposer: signer });
 			Ok(())
 		}
 
@@ -1016,10 +1029,15 @@ pub mod pallet {
 			NextListingId::<T>::put(next_listing_id);
 
 			Self::deposit_event(Event::<T>::ObjectListed {
+				listing_index: listing_id,
 				collection_index: region_info.collection_id,
 				item_index: item_id,
-				price: token_price,
+				asset_id: asset_number,
+				token_price,
+				token_amount,
 				seller: signer,
+				tax_paid_by_developer,
+				listing_expiry,
 			});
 			Ok(())
 		}
@@ -1033,10 +1051,10 @@ pub mod pallet {
 		/// - `amount`: The amount of token that the investor wants to buy.
 		/// - `payment_asset`: Asset in which the investor wants to pay.
 		///
-		/// Emits `TokenBoughtObject` event when succesfful.
+		/// Emits `PropertyTokenBought` event when succesfful.
 		#[pallet::call_index(8)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
-		pub fn buy_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, payment_asset: u32) -> DispatchResult {
+		pub fn buy_property_token(origin: OriginFor<T>, listing_id: ListingId, amount: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin.clone())?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -1180,11 +1198,12 @@ pub mod pallet {
 					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
 					*maybe_listed_token = None;
 				} 
-				Self::deposit_event(Event::<T>::TokenBoughtObject {
+				Self::deposit_event(Event::<T>::PropertyTokenBought {
 					asset_id,
 					buyer: signer.clone(),
 					amount,
 					price: transfer_price,
+					payment_asset,
 				});
 				Ok::<(), DispatchError>(())
 			})?;
@@ -1202,7 +1221,7 @@ pub mod pallet {
 		/// - `token_price`: The price of a single token.
 		/// - `amount`: The amount of token of the real estate object that should be listed.
 		///
-		/// Emits `TokenListed` event when succesfful
+		/// Emits `TokenRelisted` event when succesfful
 		#[pallet::call_index(9)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
 		pub fn relist_token(
@@ -1226,6 +1245,7 @@ pub mod pallet {
 
 			let nft_details = RegisteredNftDetails::<T>::get(collection_id, item_id)
 				.ok_or(Error::<T>::NftNotFound)?;
+			ensure!(nft_details.spv_created, Error::<T>::SpvNotCreated);
 			ensure!(
 				LocationRegistration::<T>::get(region, nft_details.location),
 				Error::<T>::LocationUnknown
@@ -1252,9 +1272,11 @@ pub mod pallet {
 			let next_listing_id = Self::next_listing_id(listing_id)?;
 			NextListingId::<T>::put(next_listing_id);
 
-			Self::deposit_event(Event::<T>::TokenListed {
+			Self::deposit_event(Event::<T>::TokenRelisted {
+				listing_index: listing_id,
 				asset_id: nft_details.asset_id,
 				price: token_price,
+				token_amount: amount,
 				seller: signer,
 			});
 			Ok(())
@@ -1269,7 +1291,7 @@ pub mod pallet {
 		/// - `amount`: The amount of token the investor wants to buy.
 		/// - `payment_asset`: Asset in which the investor wants to pay.
 		///
-		/// Emits `TokenBought` event when succesfful.
+		/// Emits `RelistedTokenBought` event when succesfful.
 		#[pallet::call_index(10)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
 		pub fn buy_relisted_token(
@@ -1314,7 +1336,7 @@ pub mod pallet {
 		/// Emits `BuyCancelled` event when succesfful.
 		#[pallet::call_index(11)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cancel_buy(
+		pub fn cancel_property_purchase(
 			origin: OriginFor<T>,
 			listing_id: ListingId,
 		) -> DispatchResult {
@@ -1398,8 +1420,8 @@ pub mod pallet {
 			let new_frozen_balance = frozen_balance.checked_add(price).ok_or(Error::<T>::ArithmeticOverflow)?;
 			T::ForeignAssetsFreezer::set_freeze(payment_asset, &TestId::Marketplace, &signer, new_frozen_balance)?;
 			let offer_details = OfferDetails { buyer: signer.clone(), token_price: offer_price, amount, payment_assets: payment_asset };
-			OngoingOffers::<T>::insert(listing_id, signer, offer_details);
-			Self::deposit_event(Event::<T>::OfferCreated { listing_id, price: offer_price });
+			OngoingOffers::<T>::insert(listing_id, signer.clone(), offer_details);
+			Self::deposit_event(Event::<T>::OfferCreated { listing_id, offeror: signer, price: offer_price, amount, payment_asset });
 			Ok(())
 		}
 
@@ -1500,10 +1522,10 @@ pub mod pallet {
 		/// Parameters:
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
-		/// Emits `FundsWithdrawn` event when succesfful.
+		/// Emits `RejectedFundsWithdrawn` event when succesfful.
 		#[pallet::call_index(15)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn withdraw_funds(
+		pub fn withdraw_rejected(
 			origin: OriginFor<T>,
 			listing_id: ListingId
 		) -> DispatchResult {
@@ -1570,7 +1592,7 @@ pub mod pallet {
 				RefundToken::<T>::insert(listing_id, refund_infos);
 			}
 			PropertyOwnerToken::<T>::take(nft_details.asset_id, signer.clone());
-			Self::deposit_event(Event::<T>::FundsWithdrawn{signer, listing_id});
+			Self::deposit_event(Event::<T>::RejectedFundsWithdrawn{signer, listing_id});
 			Ok(())
 		}
 
@@ -1581,10 +1603,10 @@ pub mod pallet {
 		/// Parameters:
 		/// - `listing_id`: The listing that the investor wants to buy from.
 		///
-		/// Emits `FundsRefunded` event when succesfful.
+		/// Emits `ExpiredFundsWithdrawn` event when succesfful.
 		#[pallet::call_index(16)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn refund_expired(
+		pub fn withdraw_expired(
 			origin: OriginFor<T>,
 			listing_id: ListingId
 		) -> DispatchResult {
@@ -1653,7 +1675,7 @@ pub mod pallet {
 				
 				Ok::<(), DispatchError>(())
 			})?;
-			Self::deposit_event(Event::<T>::FundsRefunded{signer, listing_id});
+			Self::deposit_event(Event::<T>::ExpiredFundsWithdrawn{signer, listing_id});
 			Ok(())
 		}
 
@@ -1664,10 +1686,10 @@ pub mod pallet {
 		/// Parameters:
 		/// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
 		///
-		/// Emits `ListingDepositReleased` event when succesfful.
+		/// Emits `DepositWithdrawnUnsold` event when succesfful.
 		#[pallet::call_index(17)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn reclaim_unsold(
+		pub fn withdraw_deposit_unsold(
 			origin: OriginFor<T>,
 			listing_id: ListingId,
 		) -> DispatchResult {
@@ -1713,7 +1735,7 @@ pub mod pallet {
 				*maybe_listed_token = None;
 				Ok::<(), DispatchError>(())
 			})?;
-			Self::deposit_event(Event::<T>::ListingDepositReleased {
+			Self::deposit_event(Event::<T>::DepositWithdrawnUnsold {
 				signer,
 				listing_id,
 			});
@@ -1776,8 +1798,10 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(ListedToken::<T>::contains_key(listing_id), Error::<T>::TokenNotForSale);
+			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
 			OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_nft_details| {
 				let nft_details = maybe_nft_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+				ensure!(nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(), Error::<T>::ListingExpired);
 				ensure!(nft_details.real_estate_developer == signer.clone(), Error::<T>::NoPermission);
 				ensure!(
 					!RegisteredNftDetails::<T>::get(nft_details.collection_id, nft_details.item_id)
@@ -1980,7 +2004,10 @@ pub mod pallet {
 				return Err(Error::<T>::NoPermission.into());
 			}
 			PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);	
-			Self::deposit_event(Event::<T>::LawyerRemovedFromCase {lawyer: signer, listing_id});	
+			Self::deposit_event(Event::<T>::LawyerRemovedFromCase {
+				lawyer: signer, 
+				listing_id,
+			});	
 			Ok(())
 		}
 
@@ -2011,7 +2038,12 @@ pub mod pallet {
 				} else {
 					DocumentStatus::Rejected
 				};
-				Self::deposit_event(Event::<T>::DocumentsConfirmed { signer, listing_id, approve });
+				Self::deposit_event(Event::<T>::DocumentsConfirmed { 
+					signer, 
+					listing_id, 
+					legal_side: LegalProperty::RealEstateDeveloperSide, 
+					approve, 
+				});
 			} else if property_lawyer_details.spv_lawyer == Some(signer.clone()) {
 				ensure!(property_lawyer_details.spv_status == DocumentStatus::Pending,
 					Error::<T>::AlreadyConfirmed);
@@ -2020,7 +2052,12 @@ pub mod pallet {
 				} else {
 					DocumentStatus::Rejected
 				};
-				Self::deposit_event(Event::<T>::DocumentsConfirmed {signer, listing_id, approve});
+				Self::deposit_event(Event::<T>::DocumentsConfirmed {
+					signer, 
+					listing_id, 
+					legal_side: LegalProperty::SpvSide,
+					approve,
+				});
 			} else {
 				return Err(Error::<T>::NoPermission.into());
 			}
@@ -2601,10 +2638,12 @@ pub mod pallet {
 			if listing_details.amount > 0 {
 				TokenListings::<T>::insert(listing_id, listing_details.clone());
 			}
-			Self::deposit_event(Event::<T>::TokenBought {
+			Self::deposit_event(Event::<T>::RelistedTokenBought {
 				asset_id: listing_details.asset_id,
 				buyer: account.clone(),
 				price: listing_details.token_price,
+				amount,
+				payment_asset,
 			});
 			Ok(())
 		}
