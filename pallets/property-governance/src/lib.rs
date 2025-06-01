@@ -16,9 +16,12 @@ pub use weights::*;
 use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
-		tokens::fungible,
+		tokens::{fungible, fungibles, nonfungibles_v2, WithdrawConsequence},
 		fungible::MutateHold,
-		tokens::{Fortitude, Precision, Restriction},
+		fungibles::Mutate as FungiblesMutate,
+		fungibles::Inspect as FungiblesInspect,
+		fungibles::{InspectFreeze, MutateFreeze},
+		tokens::{Fortitude, Precision, Restriction, Preservation},
 	},
 	PalletId,
 };
@@ -129,6 +132,16 @@ pub mod pallet {
 		pub deposited: bool,
 	}
 
+	/// Voting stats.
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct PropertySaleInfo<T: Config> {
+		pub sales_agent: Option<AccountIdOf<T>>,
+		pub lawyer: Option<AccountIdOf<T>>,
+		pub lawyer_approval: bool,
+	}
+
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
@@ -147,6 +160,18 @@ pub mod pallet {
 			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
 			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
 			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+
+		type LocalCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+
+		type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;
@@ -331,6 +356,16 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Mapping from asset id to the property sale details.
+	#[pallet::storage]
+	pub type PropertySale<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		PropertySaleInfo<T>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -366,6 +401,14 @@ pub mod pallet {
 		SaleProposalRejected { proposal_id: ProposalIndex },
 		/// The threshold could not be reached for a sale proposal.
 		SaleProposalThresHoldNotReached { proposal_id: ProposalIndex, required_threshold: Percent },
+		/// Sales agent has been set for a property.
+		SalesAgentSet {asset_id: u32, sales_agent: AccountIdOf<T> },
+		/// Lawyer for a sale has been set.
+		SalesLawyerSet {asset_id: u32, lawyer: AccountIdOf<T> },
+		/// The sale got approved by the lawyer.
+		LawyerApprovesSale { asset_id: u32, lawyer: AccountIdOf<T> },
+		/// The sale got rejected by the lawyer.
+		LawyerRejectsSale { asset_id: u32, lawyer: AccountIdOf<T> },
 	}
 
 	#[pallet::error]
@@ -396,6 +439,22 @@ pub mod pallet {
 		AlreadyDeposited,
 		/// This sales agent has no location.
 		NoLoactions,
+		/// Real estate asset does not exist.
+		AssetNotFound,
+		/// This Agent has no authorization in the region.
+		NoPermissionInRegion,
+		/// This Agent has no authorization in the location.
+		NoPermissionInLocation,
+		/// The property is not for sale.
+		NotForSale,
+		/// The sale has not been approved yet by a lawyer.
+		SaleHasNotBeenApproved,		
+		/// The real estate object could not be found.
+		NoObjectFound,
+		/// Error by dividing a number.
+		DivisionError,
+		/// Error by multiplying a number.
+		MultiplyError,
 	}
 
 	#[pallet::hooks]
@@ -705,6 +764,113 @@ pub mod pallet {
 			Self::deposit_event(Event::SaleProposed { sale_proposal_id, asset_id, proposer: signer });
 			Ok(())
 		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn agent_claim_sale(
+			origin: OriginFor<T>,
+			asset_id: u32,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let agent_info = SalesAgentStorage::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
+			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
+			ensure!(agent_info.region == asset_info.region, Error::<T>::NoPermissionInRegion);
+			ensure!(agent_info.locations.contains(&asset_info.location), Error::<T>::NoPermissionInLocation);
+			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
+			property_sale_info.sales_agent = Some(signer.clone());
+			PropertySale::<T>::insert(asset_id, property_sale_info);
+			Self::deposit_event(Event::SalesAgentSet {asset_id, sales_agent: signer });
+			Ok(())
+		}
+
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn lawyer_claim_sale(
+			origin: OriginFor<T>,
+			asset_id: u32,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let lawyer_region = pallet_nft_marketplace::RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
+			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
+			ensure!(lawyer_region == asset_info.region, Error::<T>::NoPermissionInRegion);
+			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
+			property_sale_info.lawyer = Some(signer.clone());
+			PropertySale::<T>::insert(asset_id, property_sale_info);
+			Self::deposit_event(Event::SalesLawyerSet {asset_id, lawyer: signer });
+			Ok(())
+		}
+
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn lawyer_confirm_sale(
+			origin: OriginFor<T>,
+			asset_id: u32,
+			approve: bool,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			PropertySale::<T>::try_mutate(asset_id, |maybe_sale| -> DispatchResult {
+				let property_sale_info = maybe_sale.as_mut().ok_or(Error::<T>::NotForSale)?;
+				ensure!(property_sale_info.lawyer == Some(signer.clone()), Error::<T>::NoPermission);
+				if approve == true {
+					property_sale_info.lawyer_approval = true;
+					Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer });
+				} else {
+					*maybe_sale = None;
+					Self::deposit_event(Event::LawyerRejectsSale{ asset_id, lawyer: signer });
+				}
+				Ok::<(), DispatchError>(())
+			})?;
+			Ok(())
+		}
+
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(2, 2))]
+		pub fn finalize_sale(
+			origin: OriginFor<T>,
+			asset_id: u32,
+			amount: Balance,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			PropertySale::<T>::try_mutate_exists(asset_id, |maybe_sale| -> DispatchResult {
+				let property_sale_info = maybe_sale.take().ok_or(Error::<T>::NotForSale)?;
+				ensure!(property_sale_info.sales_agent == Some(signer.clone()), Error::<T>::NoPermission);
+				ensure!(property_sale_info.lawyer_approval, Error::<T>::SaleHasNotBeenApproved);
+
+				let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
+				let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
+					.ok_or(Error::<T>::NoObjectFound)?;
+				
+				let total_token = property_info.token_amount;
+				let property_account = pallet_nft_marketplace::Pallet::<T>::property_account_id(asset_id);
+				for owner in owner_list {
+					let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+						asset_id,
+						owner.clone(),
+					);
+					let amount_for_owner = (token_amount as u128)
+						.checked_mul(amount)
+						.ok_or(Error::<T>::MultiplyError)?
+						.checked_div(total_token as u128)
+						.ok_or(Error::<T>::DivisionError)?;
+					<T as pallet::Config>::LocalCurrency::transfer(
+						asset_id,
+						&owner,
+						&property_account,
+						token_amount.into(),
+						Preservation::Expendable,
+					)?;	
+					<T as pallet::Config>::ForeignCurrency::transfer(
+						asset_id,
+						&signer,
+						&owner,
+						amount_for_owner.into(),
+						Preservation::Expendable,
+					)?;	
+				}
+				Ok::<(), DispatchError>(())
+			})?;
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -887,7 +1053,16 @@ pub mod pallet {
 		}
 
 		/// Executes a sale proposal once it passes.
-		fn execute_sale_proposal(_sale_proposal: SaleProposal<T>) -> DispatchResult {
+		fn execute_sale_proposal(sale_proposal: SaleProposal<T>) -> DispatchResult {
+			let asset_id = sale_proposal.asset_id;
+
+			let property_sale_info = PropertySaleInfo{
+				sales_agent: None,
+				lawyer: None,
+				lawyer_approval: false,
+			};
+
+			PropertySale::<T>::insert(asset_id, property_sale_info);
 			Ok(())
 		}
 	}

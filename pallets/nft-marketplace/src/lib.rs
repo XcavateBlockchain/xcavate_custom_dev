@@ -383,7 +383,7 @@ pub mod pallet {
 
 	/// Stores in which region a lawyer is active.
 	#[pallet::storage]
-	pub(super) type RealEstateLawyer<T: Config> = StorageMap<
+	pub type RealEstateLawyer<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		AccountIdOf<T>,
@@ -2454,7 +2454,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn burn_tokens_and_nfts(listing_id: ListingId) -> DispatchResult {
+		pub fn burn_tokens_and_nfts(listing_id: ListingId) -> DispatchResult {
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let pallet_account = Self::property_account_id(nft_details.asset_id);

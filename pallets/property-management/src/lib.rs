@@ -425,7 +425,6 @@ pub mod pallet {
 			let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 				.ok_or(Error::<T>::NoObjectFound)?;
 		
-			// Distribute remaining amount to property owners
 			let total_token = property_info.token_amount;
 			for owner in owner_list {
 				let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(

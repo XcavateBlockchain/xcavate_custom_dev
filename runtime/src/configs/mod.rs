@@ -673,6 +673,8 @@ impl pallet_property_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
 	type NativeCurrency = Balances;
+	type LocalCurrency = RealEstateAssets;
+	type ForeignCurrency = Assets;
 	type VotingTime = PropertyVotingTime;
 	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
