@@ -16,7 +16,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use smallvec::smallvec;
 use sp_runtime::{
-	create_runtime_str, generic, impl_opaque_keys,
+	generic, impl_opaque_keys,
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
 };
@@ -81,7 +81,6 @@ pub type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
-	cumulus_primitives_storage_weight_reclaim::StorageWeightReclaim<Runtime>,
 	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
 	pallet_asset_tx_payment::ChargeAssetTxPayment<Runtime>,
 );
@@ -156,14 +155,14 @@ impl_opaque_keys! {
 
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("parachain-template-runtime"),
-	impl_name: create_runtime_str!("parachain-template-runtime"),
+	spec_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
+	impl_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
 	apis: apis::RUNTIME_API_VERSIONS,
 	transaction_version: 1,
-	state_version: 1,
+	system_version: 1,
 };
 
 #[docify::export]

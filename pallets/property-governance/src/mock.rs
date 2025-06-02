@@ -103,6 +103,7 @@ impl pallet_balances::Config for Test {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = ();
 	type MaxFreezes = ConstU32<0>;
+	type DoneSlashHandler = ();
 }
 
 parameter_types! {
@@ -139,6 +140,7 @@ impl pallet_nfts::Config for Test {
 	type Features = Features;
 	type OffchainSignature = Signature;
 	type OffchainPublic = AccountPublic;
+	type BlockNumberProvider = System;
 }
 
 parameter_types! {
@@ -161,6 +163,7 @@ impl pallet_assets::Config<Instance1> for Test {
 	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
+	type Holder = ();
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
@@ -182,6 +185,7 @@ impl pallet_assets::Config<Instance2> for Test {
 	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
+	type Holder = ();
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
@@ -345,6 +349,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			((NftMarketplace::account_id()), 20_000_000),
 			((PropertyManagement::property_account_id(0)), 1),
 		],
+		dev_accounts: None,
 	}
 	.assimilate_storage(&mut test)
 	.unwrap();

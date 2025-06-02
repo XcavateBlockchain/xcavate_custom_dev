@@ -5,7 +5,7 @@ use crate::{
 };
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, Contains, Everything, Nothing, ProcessMessageError, ContainsPair},
+	traits::{ConstU32, Contains, Everything, Nothing, ProcessMessageError, ContainsPair, Disabled},
 	weights::Weight, ensure,
 };
 use frame_system::EnsureRoot;
@@ -270,6 +270,7 @@ impl xcm_executor::Config for XcmConfig {
     type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
     type XcmSender = XcmRouter;
 	type XcmRecorder = PolkadotXcm;
+	type XcmEventEmitter = PolkadotXcm;
 }
 
 /// No local origins on this chain are allowed to dispatch XCM sends/executions.
@@ -319,6 +320,8 @@ impl pallet_xcm::Config for Runtime {
 	type XcmTeleportFilter = Nothing;
 
 	const VERSION_DISCOVERY_QUEUE_SIZE: u32 = 100;
+	// Aliasing is disabled: xcm_executor::Config::Aliasers is set to `Nothing`.
+	type AuthorizedAliasConsideration = Disabled;
 }
 
 impl cumulus_pallet_xcm::Config for Runtime {

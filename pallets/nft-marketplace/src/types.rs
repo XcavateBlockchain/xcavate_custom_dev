@@ -2,7 +2,7 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen, DecodeWithMemTracking};
 use frame_support::{DefaultNoBound, sp_runtime::RuntimeDebug};
 use scale_info::TypeInfo;
 use frame_support::sp_runtime::Permill;
@@ -126,7 +126,7 @@ where
 
 /// Offer enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum TakeoverAction {
     Accept,
     Reject,
@@ -134,14 +134,14 @@ pub enum TakeoverAction {
 
 /// Offer enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum Offer {
     Accept,
     Reject,
 }
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum LegalProperty {
     RealEstateDeveloperSide,
     SpvSide,

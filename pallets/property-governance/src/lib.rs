@@ -16,17 +16,15 @@ pub use weights::*;
 use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
-		tokens::{fungible, fungibles, nonfungibles_v2, WithdrawConsequence},
+		tokens::{fungible, fungibles},
 		fungible::MutateHold,
 		fungibles::Mutate as FungiblesMutate,
-		fungibles::Inspect as FungiblesInspect,
-		fungibles::{InspectFreeze, MutateFreeze},
 		tokens::{Fortitude, Precision, Restriction, Preservation},
 	},
 	PalletId,
 };
 
-use codec::Codec;
+use codec::{Codec, DecodeWithMemTracking};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -96,7 +94,7 @@ pub mod pallet {
 
 	/// Vote enum.
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	pub enum Vote {
 		Yes,
 		No,
@@ -104,7 +102,7 @@ pub mod pallet {
 
 	/// Challenge state of the challenge voting.
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	pub enum ChallengeState {
 		First,
 		Second,

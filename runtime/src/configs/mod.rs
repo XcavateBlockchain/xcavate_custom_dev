@@ -68,7 +68,7 @@ use super::{
 	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsFreezer, RealEstateAssetsFreezer, Assets,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, DecodeWithMemTracking, MaxEncodedLen};
 use scale_info::TypeInfo;
 use pallet_nfts::PalletFeatures;
 use primitives::TestId;
@@ -171,6 +171,7 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = RuntimeFreezeReason;
 	type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	type DoneSlashHandler = ();
 }
 
 parameter_types! {
@@ -185,6 +186,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 	type FeeMultiplierUpdate = SlowAdjustingFeeUpdate<Self>;
 	type OperationalFeeMultiplier = ConstU8<5>;
+	type WeightInfo = ();
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -211,6 +213,7 @@ impl cumulus_pallet_parachain_system::Config for Runtime {
 	type ReservedXcmpWeight = ReservedXcmpWeight;
 	type CheckAssociatedRelayNumber = RelayNumberMonotonicallyIncreases;
 	type ConsensusHook = ConsensusHook;
+	type SelectCore = cumulus_pallet_parachain_system::DefaultCoreSelector<Runtime>;
 }
 
 impl parachain_info::Config for Runtime {}
@@ -275,6 +278,7 @@ impl pallet_session::Config for Runtime {
 	// Essentially just Aura, but let's be pedantic.
 	type SessionHandler = <SessionKeys as sp_runtime::traits::OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
+	type DisablingStrategy = ();
 	type WeightInfo = ();
 }
 
@@ -331,6 +335,7 @@ parameter_types! {
     Copy,
     Clone,
     Decode,
+	DecodeWithMemTracking,
     Default,
     Encode,
     Eq,
@@ -384,6 +389,7 @@ impl pallet_proxy::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     /// Rerun benchmarks if you are making changes to runtime configuration.
     type WeightInfo = ();
+	type BlockNumberProvider = frame_system::Pallet<Runtime>;
 }
 
 parameter_types! {
@@ -403,6 +409,7 @@ impl pallet_multisig::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     /// Rerun benchmarks if you are making changes to runtime configuration.
     type WeightInfo = ();
+	type BlockNumberProvider = frame_system::Pallet<Runtime>;
 }
 
 impl pallet_utility::Config for Runtime {
@@ -440,6 +447,7 @@ impl pallet_assets::Config<pallet_assets::Instance1> for Runtime {
     type Extra = ();
     type ForceOrigin = EnsureRoot<AccountId>;
     type Freezer = RealEstateAssetsFreezer;
+	type Holder = ();
     type MetadataDepositBase = ZeroDeposit;
     type MetadataDepositPerByte = ZeroDeposit;
     type RemoveItemsLimit = RemoveItemsLimit;
@@ -464,6 +472,7 @@ impl pallet_assets::Config<pallet_assets::Instance2> for Runtime {
     type Extra = ();
     type ForceOrigin = EnsureRoot<AccountId>;
     type Freezer = AssetsFreezer;
+	type Holder = ();
     type MetadataDepositBase = MetadataDepositBase;
     type MetadataDepositPerByte = MetadataDepositPerByte;
     type RemoveItemsLimit = RemoveItemsLimit;
@@ -527,6 +536,7 @@ impl pallet_nfts::Config for Runtime {
 	//type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<CollectionCreationOrigin, AccountId>>;
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
 	type Locker = ();
+	type BlockNumberProvider = frame_system::Pallet<Runtime>;
 }
 
 parameter_types! {
@@ -568,6 +578,7 @@ impl pallet_asset_tx_payment::Config for Runtime {
 		>,
 		AssetsToBlockAuthor<Runtime, pallet_assets::Instance2>,
 	>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
