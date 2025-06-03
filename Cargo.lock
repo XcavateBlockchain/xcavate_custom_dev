@@ -4500,7 +4500,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -6838,16 +6838,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-assets-freezer"
-version = "0.7.0"
+name = "pallet-assets-holder"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0703b1fd91f89c717527ed4c87388645742939cb9c31f24da5499ca02c7194ab"
+checksum = "70ad24794452b0c6e7da56b6d87810c8996e089953395f776e332257f6c0ad7e"
 dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
  "log",
  "pallet-assets",
  "parity-scale-codec",
- "polkadot-sdk-frame",
  "scale-info",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -7410,7 +7413,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-assets",
- "pallet-assets-freezer",
+ "pallet-assets-holder",
  "pallet-balances",
  "pallet-nft-fractionalization",
  "pallet-nfts",
@@ -7589,7 +7592,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-assets",
- "pallet-assets-freezer",
+ "pallet-assets-holder",
  "pallet-balances",
  "pallet-nft-fractionalization",
  "pallet-nft-marketplace",
@@ -7614,7 +7617,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-assets",
- "pallet-assets-freezer",
+ "pallet-assets-holder",
  "pallet-balances",
  "pallet-nft-fractionalization",
  "pallet-nft-marketplace",
@@ -8167,7 +8170,7 @@ dependencies = [
  "log",
  "pallet-asset-tx-payment",
  "pallet-assets",
- "pallet-assets-freezer",
+ "pallet-assets-holder",
  "pallet-aura",
  "pallet-authorship",
  "pallet-balances",
@@ -10074,7 +10077,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "log",
  "multimap",
  "once_cell",
@@ -10107,7 +10110,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.101",

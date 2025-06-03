@@ -103,7 +103,7 @@ pallet-multisig = { version = "40.1.0", default-features = false }
 pallet-proxy = { version = "40.1.0", default-features = false }
 pallet-utility = { version = "40.0.0", default-features = false }
 pallet-assets = { version = "42.0.0", default-features = false }
-pallet-assets-freezer = { version = "0.7.0", default-features = false }
+pallet-assets-holder = { version = "0.2.1", default-features = false }
 pallet-nfts = { version = "34.1.0", default-features = false }
 pallet-nft-fractionalization = { version = "23.0.0", default-features = false }
 pallet-asset-tx-payment = { version = "40.0.0", default-features = false }

@@ -8,11 +8,12 @@ use frame_support::traits::VariantCount;
 #[derive(
     Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, MaxEncodedLen, TypeInfo, RuntimeDebug,
 )]
-pub enum TestId {
+pub enum MarketplaceHoldReason {
     Marketplace,
     Listing,
 }
 
-impl VariantCount for TestId {
-    const VARIANT_COUNT: u32 = 2; // Update this to match the actual number of variants
+impl VariantCount for MarketplaceHoldReason {
+	// Intentionally set below the actual count of variants, to allow testing for `can_freeze`
+	const VARIANT_COUNT: u32 = 2;
 }

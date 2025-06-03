@@ -49,7 +49,7 @@ pallet-multisig.workspace = true
 pallet-proxy.workspace = true
 pallet-utility.workspace = true
 pallet-assets.workspace = true
-pallet-assets-freezer.workspace = true
+pallet-assets-holder.workspace = true
 pallet-nfts.workspace = true
 pallet-nft-fractionalization.workspace = true
 pallet-asset-tx-payment.workspace = true
@@ -127,7 +127,7 @@ std = [
 	"pallet-proxy/std",
 	"pallet-utility/std",
 	"pallet-assets/std",
-	"pallet-assets-freezer/std",
+	"pallet-assets-holder/std",
 	"pallet-nfts/std",
 	"pallet-nft-fractionalization/std",
 	"pallet-asset-tx-payment/std",
@@ -216,7 +216,7 @@ try-runtime = [
 	"pallet-proxy/try-runtime",
 	"pallet-utility/try-runtime",
 	"pallet-assets/try-runtime",
-	"pallet-assets-freezer/try-runtime",
+	"pallet-assets-holder/try-runtime",
 	"pallet-nfts/try-runtime",
 	"pallet-nft-fractionalization/try-runtime",
 	"pallet-asset-tx-payment/try-runtime",

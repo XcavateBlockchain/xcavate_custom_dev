@@ -16,7 +16,7 @@ use pallet_nfts::PalletFeatures;
 
 use pallet_assets::{Instance1, Instance2};
 
-use primitives::TestId;
+use primitives::MarketplaceHoldReason;
 
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -52,8 +52,7 @@ frame_support::construct_runtime!(
 		LocalAssets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
-		LocalAssetsFreezer: pallet_assets_freezer::<Instance1>,
-		ForeignAssetsFreezer: pallet_assets_freezer::<Instance2>,
+		AssetsHolder: pallet_assets_holder::<Instance2>,
 	}
 );
 
@@ -185,20 +184,15 @@ impl pallet_assets::Config<Instance2> for Test {
 	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
-	type Holder = ();
+	type Holder = AssetsHolder;
 	type Extra = ();
 	type CallbackHandle = ();
 	type WeightInfo = ();
 	type RemoveItemsLimit = ConstU32<1000>;
 }
 
-impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
-	type RuntimeFreezeReason = TestId;
-	type RuntimeEvent = RuntimeEvent;
-} 
-
-impl pallet_assets_freezer::Config<pallet_assets::Instance2> for Test {
-	type RuntimeFreezeReason = TestId;
+impl pallet_assets_holder::Config<pallet_assets::Instance2> for Test {
+	type RuntimeHoldReason = MarketplaceHoldReason;
 	type RuntimeEvent = RuntimeEvent;
 } 
 
@@ -258,8 +252,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
-	type LocalAssetsFreezer = LocalAssetsFreezer;
-	type ForeignAssetsFreezer = ForeignAssetsFreezer;
+	type ForeignAssetsHolder = AssetsHolder;
 	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MinNftToken = MinNftTokens;
@@ -318,6 +311,8 @@ impl pallet_property_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type NativeCurrency = Balances;
+	type LocalCurrency = LocalAssets;
+	type ForeignCurrency = ForeignAssets;
 	type VotingTime = PropertyVotingTime;
 	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;

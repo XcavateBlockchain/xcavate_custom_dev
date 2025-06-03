@@ -36,7 +36,7 @@ sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 primitives = { path = "../../primitives", default-features = false }
-pallet-assets-freezer = { workspace = true }
+pallet-assets-holder = { workspace = true }
 
 [features]
 default = ["std"]
@@ -56,7 +56,7 @@ std = [
 	"pallet-property-management/std",
 	"sp-api/std",
 	"primitives/std",
-	"pallet-assets-freezer/std",
+	"pallet-assets-holder/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
