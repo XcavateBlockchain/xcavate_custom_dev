@@ -77,7 +77,6 @@ pub mod pallet {
 	pub struct SaleProposal<T: Config> {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
-		pub amount: Balance,
 		pub created_at: BlockNumberFor<T>,
 	}
 
@@ -138,6 +137,8 @@ pub mod pallet {
 		pub sales_agent: Option<AccountIdOf<T>>,
 		pub lawyer: Option<AccountIdOf<T>>,
 		pub lawyer_approval: bool,
+		pub finalized: bool,
+		pub token_amount: u32,
 	}
 
 	#[pallet::config]
@@ -364,6 +365,18 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	pub type SalesFunds<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, AccountIdOf<T>>,
+			NMapKey<Blake2_128Concat, u32>,
+			NMapKey<Blake2_128Concat, u32>,
+		),
+		Balance,
+		ValueQuery
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -453,6 +466,16 @@ pub mod pallet {
 		DivisionError,
 		/// Error by multiplying a number.
 		MultiplyError,
+		/// This Asset is not supported for payment.
+		PaymentAssetNotSupported,
+		/// The property sale has already been finalized.
+		AlreadyFinalized,
+		/// Sale has not been finalized.
+		SaleNotFinalized,
+		ArithmeticOverflow,
+		ArithmeticUnderflow,
+		/// Spv has not yet been created.
+		SpvNotCreated,
 	}
 
 	#[pallet::hooks]
@@ -735,16 +758,16 @@ pub mod pallet {
 		pub fn propose_property_sale(
 			origin: OriginFor<T>,
 			asset_id: u32,
-			amount: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
+			let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
+			ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			let sale_proposal = SaleProposal {
 				proposer: signer.clone(),
 				asset_id,
-				amount,
 				created_at: current_block_number,
 			};
 			let sale_proposal_id = ProposalCount::<T>::get().saturating_add(1);
@@ -809,7 +832,7 @@ pub mod pallet {
 			PropertySale::<T>::try_mutate(asset_id, |maybe_sale| -> DispatchResult {
 				let property_sale_info = maybe_sale.as_mut().ok_or(Error::<T>::NotForSale)?;
 				ensure!(property_sale_info.lawyer == Some(signer.clone()), Error::<T>::NoPermission);
-				if approve == true {
+				if approve {
 					property_sale_info.lawyer_approval = true;
 					Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer });
 				} else {
@@ -827,19 +850,24 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
+			payment_asset: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			PropertySale::<T>::try_mutate_exists(asset_id, |maybe_sale| -> DispatchResult {
-				let property_sale_info = maybe_sale.take().ok_or(Error::<T>::NotForSale)?;
+				let property_sale_info = maybe_sale.as_mut().ok_or(Error::<T>::NotForSale)?;
 				ensure!(property_sale_info.sales_agent == Some(signer.clone()), Error::<T>::NoPermission);
 				ensure!(property_sale_info.lawyer_approval, Error::<T>::SaleHasNotBeenApproved);
+				ensure!(!property_sale_info.finalized, Error::<T>::AlreadyFinalized);
+				ensure!(
+					<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+					Error::<T>::PaymentAssetNotSupported
+				);
 
 				let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 				let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 					.ok_or(Error::<T>::NoObjectFound)?;
 				
 				let total_token = property_info.token_amount;
-				let property_account = pallet_nft_marketplace::Pallet::<T>::property_account_id(asset_id);
 				for owner in owner_list {
 					let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
 						asset_id,
@@ -850,23 +878,55 @@ pub mod pallet {
 						.ok_or(Error::<T>::MultiplyError)?
 						.checked_div(total_token as u128)
 						.ok_or(Error::<T>::DivisionError)?;
-					<T as pallet::Config>::LocalCurrency::transfer(
-						asset_id,
-						&owner,
-						&property_account,
-						token_amount.into(),
-						Preservation::Expendable,
-					)?;	
-					<T as pallet::Config>::ForeignCurrency::transfer(
-						asset_id,
-						&signer,
-						&owner,
-						amount_for_owner.into(),
-						Preservation::Expendable,
-					)?;	
+					SalesFunds::<T>::try_mutate((owner, asset_id, payment_asset), |stored| {
+						*stored = stored.checked_add(amount_for_owner).ok_or(Error::<T>::ArithmeticOverflow)?;
+						Ok::<(), DispatchError>(())
+					})?;
 				}
+				property_sale_info.finalized = true; 
 				Ok::<(), DispatchError>(())
 			})?;
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn claim_sale_funds(
+			origin: OriginFor<T>,
+			asset_id: u32,
+			payment_asset: u32,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let mut property_sale_info = PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
+			ensure!(property_sale_info.finalized, Error::<T>::SaleNotFinalized);
+			let amount = SalesFunds::<T>::take((signer.clone(), asset_id, payment_asset));
+			let property_account = Self::property_account_id(asset_id);
+			<T as pallet::Config>::ForeignCurrency::transfer(
+				payment_asset, 
+				&property_account, 
+				&signer, 
+				amount, 
+				Preservation::Expendable,
+			)
+			.map_err(|_| Error::<T>::NotEnoughFunds)?;
+			let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::take(
+				asset_id,
+				signer.clone(),
+			);
+			<T as pallet::Config>::LocalCurrency::transfer(
+				asset_id,
+				&signer,
+				&property_account,
+				token_amount.into(),
+				Preservation::Expendable,
+			)?;	
+			property_sale_info.token_amount = property_sale_info.token_amount.checked_sub(token_amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
+			if property_sale_info.token_amount == 0 {
+				pallet_nft_marketplace::Pallet::<T>::burn_tokens_and_nfts(asset_id)?;
+				pallet_nft_marketplace::PropertyOwner::<T>::take(asset_id);
+			} else {
+				PropertySale::<T>::insert(asset_id, property_sale_info);
+			}
 			Ok(())
 		}
 	}
@@ -964,7 +1024,7 @@ pub mod pallet {
 						if yes_votes_percentage > no_votes_percentage 
 							&& required_threshold < yes_votes_percentage.saturating_add(no_votes_percentage)
 						{
-							let _ = Self::execute_sale_proposal(sale_proposal);
+							let _ = Self::execute_sale_proposal(sale_proposal, asset_details.token_amount);
 						}
 						else if yes_votes_percentage <= no_votes_percentage {
 							Self::deposit_event(Event::SaleProposalRejected { proposal_id });
@@ -1051,13 +1111,15 @@ pub mod pallet {
 		}
 
 		/// Executes a sale proposal once it passes.
-		fn execute_sale_proposal(sale_proposal: SaleProposal<T>) -> DispatchResult {
+		fn execute_sale_proposal(sale_proposal: SaleProposal<T>, token_amount: u32) -> DispatchResult {
 			let asset_id = sale_proposal.asset_id;
 
 			let property_sale_info = PropertySaleInfo{
 				sales_agent: None,
 				lawyer: None,
 				lawyer_approval: false,
+				finalized: false,
+				token_amount: token_amount,
 			};
 
 			PropertySale::<T>::insert(asset_id, property_sale_info);

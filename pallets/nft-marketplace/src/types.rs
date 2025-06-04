@@ -69,6 +69,7 @@ pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
     pub location: LocationId<T>,
     pub price: Balance,
     pub token_amount: u32,
+    pub spv_created: bool,
 }
 
 /// Infos regarding an offer.

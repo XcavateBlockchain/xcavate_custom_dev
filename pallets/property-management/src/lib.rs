@@ -436,7 +436,7 @@ pub mod pallet {
 					.ok_or(Error::<T>::MultiplyError)?
 					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
-				InvestorFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset.clone()), |stored| {
+				InvestorFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
 					*stored = stored.checked_add(amount_for_owner).ok_or(Error::<T>::ArithmeticOverflow)?;
 					Ok::<(), DispatchError>(())
 				})?;
@@ -462,7 +462,7 @@ pub mod pallet {
 				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 				Error::<T>::PaymentAssetNotSupported
 			);
-			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset.clone()));
+			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset));
 			ensure!(
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored
