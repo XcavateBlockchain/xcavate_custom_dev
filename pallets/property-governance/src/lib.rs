@@ -213,7 +213,7 @@ pub mod pallet {
 		type SalesAgentDeposit: Get<Balance>;
 
 		/// Threshold for selling a property.
-		type SalesThreshold: Get<Percent>;
+		type SaleApprovalYesThreshold: Get<Percent>;
 	}
 
 	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
@@ -401,8 +401,6 @@ pub mod pallet {
 		SaleProposed { sale_proposal_id: ProposalIndex, asset_id: u32, proposer: AccountIdOf<T> },
 		/// A sale proposal got rejected.
 		SaleProposalRejected { proposal_id: ProposalIndex },
-		/// The threshold could not be reached for a sale proposal.
-		SaleProposalThresHoldNotReached { proposal_id: ProposalIndex, required_threshold: Percent },
 		/// Sales agent has been set for a property.
 		SalesAgentSet {asset_id: u32, sales_agent: AccountIdOf<T> },
 		/// Lawyer for a sale has been set.
@@ -1055,22 +1053,17 @@ pub mod pallet {
 			let sale_proposals = <SaleProposals<T>>::take(proposal_id);
 			if let Some(sale_proposal) = sale_proposals {
 				if let Some(voting_result) = voting_results {
-					let required_threshold = T::SalesThreshold::get();
 					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(sale_proposal.asset_id);
 					if let Some(asset_details) = asset_details {
 						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
-						let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
-
-						if yes_votes_percentage > no_votes_percentage 
-							&& required_threshold < yes_votes_percentage.saturating_add(no_votes_percentage)
+						let required_threshold = T::SaleApprovalYesThreshold::get();
+						if yes_votes_percentage >= required_threshold
 						{
 							let _ = Self::execute_sale_proposal(sale_proposal, asset_details.token_amount);
 						}
-						else if yes_votes_percentage <= no_votes_percentage {
+						else {
 							Self::deposit_event(Event::SaleProposalRejected { proposal_id });
-						} else {
-							Self::deposit_event(Event::SaleProposalThresHoldNotReached { proposal_id, required_threshold });
-						}	
+						}
 					}
 				}
 			}

@@ -326,7 +326,7 @@ impl pallet_property_governance::Config for Test {
 	type HighProposal = ConstU128<2000>;
 	type MarketplacePalletId = NftMarketplacePalletId;
 	type SalesAgentDeposit = ConstU128<100>;
-	type SalesThreshold = SalesProposalThreshold;
+	type SaleApprovalYesThreshold = SalesProposalThreshold;
 }
 
 // Build genesis storage according to the mock runtime.
