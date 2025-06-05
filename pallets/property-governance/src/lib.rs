@@ -251,23 +251,24 @@ pub mod pallet {
 	pub(super) type OngoingVotes<T> =
 		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
 
+	#[pallet::storage]
+	pub(super) type UserProposalVote<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		ProposalIndex,
+		Blake2_128Concat,
+		AccountIdOf<T>,
+		Vote,
+		OptionQuery,	
+	>;
+
 	/// Mapping of ongoing sales votes.
 	#[pallet::storage]
 	pub(super) type OngoingSalesVotes<T> =
 		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
-
-	/// Mapping from proposal to vector of users who voted.
+	
 	#[pallet::storage]
-	pub(super) type ProposalVoter<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		ProposalIndex,
-		BoundedVec<AccountIdOf<T>, T::MaxVoter>,
-		ValueQuery,
-	>;
-
-	#[pallet::storage]
-	pub(super) type UserProposalVote<T: Config> = StorageDoubleMap<
+	pub(super) type UserSalesVote<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		ProposalIndex,
@@ -281,18 +282,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type OngoingChallengeVotes<T> =
 		StorageDoubleMap<_, Blake2_128Concat, ChallengeIndex, Blake2_128Concat, ChallengeState, VoteStats, OptionQuery>;
-
-	/// Mapping from challenge to vector of users who voted.
-	#[pallet::storage]
-	pub(super) type ChallengeVoter<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		ChallengeIndex,
-		Blake2_128Concat,
-		ChallengeState,
-		BoundedVec<AccountIdOf<T>, T::MaxVoter>,
-		ValueQuery,
-	>;
 
 	#[pallet::storage]
 	pub(super) type UserChallengeVote<T: Config> = StorageDoubleMap<
@@ -386,6 +375,8 @@ pub mod pallet {
 		Challenge { challenge_id: ChallengeIndex, asset_id: u32, proposer: AccountIdOf<T> },
 		/// Voted on proposal.
 		VotedOnProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
+		/// Voted on sale proposal.
+		VotedOnSaleProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on challenge.
 		VotedOnChallenge { challenge_id: ChallengeIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// The proposal has been executed.
@@ -420,6 +411,10 @@ pub mod pallet {
 		LawyerApprovesSale { asset_id: u32, lawyer: AccountIdOf<T> },
 		/// The sale got rejected by the lawyer.
 		LawyerRejectsSale { asset_id: u32, lawyer: AccountIdOf<T> },
+		/// A sale has been finalized.
+		SaleFinalized{ asset_id: u32, amount: Balance, payment_asset: u32 },
+		/// A token owner claimed his sale funds.
+		SaleFundsClaimed{ claimer: AccountIdOf<T>, asset_id: u32, amount: Balance, payment_asset: u32 },
 	}
 
 	#[pallet::error]
@@ -476,6 +471,10 @@ pub mod pallet {
 		ArithmeticUnderflow,
 		/// Spv has not yet been created.
 		SpvNotCreated,
+		/// The location is not registered.
+		LocationUnknown,
+		/// Sales agent did not make a deposit.
+		NotDeposited,
 	}
 
 	#[pallet::hooks]
@@ -486,7 +485,8 @@ pub mod pallet {
 			let ended_votings = ProposalRoundsExpiring::<T>::take(n);
 			// checks if there is a voting for a proposal ending in this block.
 			ended_votings.iter().for_each(|item| {
-				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));	
+				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = UserProposalVote::<T>::clear_prefix(item, u32::MAX, None);	
 				let _ = Self::finish_proposal(*item);					
 			});
 
@@ -494,6 +494,7 @@ pub mod pallet {
 			// Checks if there is a voting for a sale porposal in this block;
 			ended_votings.iter().for_each(|item| {
 				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = UserSalesVote::<T>::clear_prefix(item, u32::MAX, None);	
 				let _ = Self::finish_sale_proposal(*item);
 			});
 
@@ -501,6 +502,7 @@ pub mod pallet {
 			// checks if there is a voting for an challenge ending in this block.
 			ended_challenge_votings.iter().for_each(|item| {
 				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = UserChallengeVote::<T>::clear_prefix(item, u32::MAX, None);
 				let _ = Self::finish_challenge(*item);
 			});
 			weight
@@ -645,10 +647,6 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			ProposalVoter::<T>::try_mutate(proposal_id, |keys| {
-				keys.try_push(signer.clone()).map_err(|_| Error::<T>::TooManyVotes)?;
-				Ok::<(), DispatchError>(())
-			})?;
 			UserProposalVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
 			Self::deposit_event(Event::VotedOnProposal { proposal_id, voter: signer, vote });
 			Ok(())
@@ -694,10 +692,6 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			ChallengeVoter::<T>::try_mutate(challenge_id, challenge.state, |keys| {
-				keys.try_push(signer.clone()).map_err(|_| Error::<T>::TooManyVotes)?;
-				Ok::<(), DispatchError>(())
-			})?;
 			UserChallengeVote::<T>::insert(challenge_id, signer.clone(), vote.clone());
 			Self::deposit_event(Event::VotedOnChallenge { challenge_id, voter: signer, vote });
 			Ok(())
@@ -714,6 +708,13 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			let region_info = pallet_nft_marketplace::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
+			ensure!(
+				pallet_nft_marketplace::LocationRegistration::<T>::get(
+					region,
+					location.clone()
+				),
+				Error::<T>::LocationUnknown
+			);
 			ensure!(SalesAgentStorage::<T>::get(sales_agent.clone()).is_none(), Error::<T>::SalesAgentExists);
 			let mut sales_info = SalesAgentInfo {
 				account: sales_agent.clone(),
@@ -786,6 +787,42 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn vote_on_property_sale(
+			origin: OriginFor<T>,
+			proposal_id: ProposalIndex,
+			vote: Vote,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			let sale_proposal = SaleProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(sale_proposal.asset_id);
+			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+			let voting_power = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+				sale_proposal.asset_id,
+				signer.clone(),
+			);
+			OngoingSalesVotes::<T>::try_mutate(proposal_id, |maybe_current_vote|{
+				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
+				let previous_vote_opt = UserSalesVote::<T>::get(proposal_id, signer.clone());
+				if let Some(previous_vote) = previous_vote_opt {
+					match previous_vote {
+						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
+						Vote::No => current_vote.no_voting_power = current_vote.no_voting_power.saturating_sub(voting_power),
+					}
+				}
+				
+				match vote {
+					Vote::Yes => current_vote.yes_voting_power.saturating_accrue(voting_power),
+					Vote::No => current_vote.no_voting_power.saturating_accrue(voting_power),
+				}
+				Ok::<(), DispatchError>(())
+			})?;
+			UserSalesVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
+			Self::deposit_event(Event::VotedOnSaleProposal { proposal_id, voter: signer, vote });
+			Ok(())
+		}
+
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn agent_claim_sale(
@@ -794,6 +831,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let agent_info = SalesAgentStorage::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
+			ensure!(agent_info.deposited, Error::<T>::NotDeposited);
 			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(agent_info.region == asset_info.region, Error::<T>::NoPermissionInRegion);
 			ensure!(agent_info.locations.contains(&asset_info.location), Error::<T>::NoPermissionInLocation);
@@ -886,6 +924,7 @@ pub mod pallet {
 				property_sale_info.finalized = true; 
 				Ok::<(), DispatchError>(())
 			})?;
+			Self::deposit_event(Event::SaleFinalized{ asset_id, amount, payment_asset });
 			Ok(())
 		}
 
@@ -927,6 +966,7 @@ pub mod pallet {
 			} else {
 				PropertySale::<T>::insert(asset_id, property_sale_info);
 			}
+			Self::deposit_event(Event::SaleFundsClaimed{ claimer: signer, asset_id, amount, payment_asset });
 			Ok(())
 		}
 	}
