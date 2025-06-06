@@ -694,6 +694,6 @@ impl pallet_property_governance::Config for Runtime {
 	type HighProposal = HighProposal;
 	type MarketplacePalletId = NftMarketplacePalletId;
 	type SalesAgentDeposit = SalesAgentDepositAmount;
-	type SalesThreshold = SalesProposalThreshold;
+	type SaleApprovalYesThreshold = SalesProposalThreshold;
 }
 

@@ -340,7 +340,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([2; 32].into(), 1_150_000),
 			([3; 32].into(), 1_005_000),
 			([4; 32].into(), 5_000),
-			([6; 32].into(), 200_000),
+			([5; 32].into(), 5_000),
+			([6; 32].into(), 300_000),
 			((NftMarketplace::account_id()), 20_000_000),
 			((PropertyManagement::property_account_id(0)), 1),
 		],
@@ -358,7 +359,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1984, [2; 32].into(), 1_150_000),
 			(1984, [3; 32].into(), 1_150_000),
 			(1984, [4; 32].into(), 5_000),
-			(1984, [5; 32].into(), 500),
+			(1984, [5; 32].into(), 500_000),
 		], // Genesis accounts: id, account_id, balance
 		next_asset_id: None,
 	}

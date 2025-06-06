@@ -473,6 +473,12 @@ pub mod pallet {
 		LocationUnknown,
 		/// Sales agent did not make a deposit.
 		NotDeposited,
+		/// Lawyer for a property sale is already set.
+		LawyerAlreadySet,
+		/// The lawyer already confirmed the sale.
+		SaleAlreadyConfirmed,
+		/// There are no funds to claim for the caller.
+		NoFundsToClaim,
 	}
 
 	#[pallet::hooks]
@@ -851,6 +857,7 @@ pub mod pallet {
 			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(lawyer_region == asset_info.region, Error::<T>::NoPermissionInRegion);
 			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
+			ensure!(property_sale_info.lawyer.is_none(), Error::<T>::LawyerAlreadySet);
 			property_sale_info.lawyer = Some(signer.clone());
 			PropertySale::<T>::insert(asset_id, property_sale_info);
 			Self::deposit_event(Event::SalesLawyerSet {asset_id, lawyer: signer });
@@ -868,6 +875,7 @@ pub mod pallet {
 			PropertySale::<T>::try_mutate(asset_id, |maybe_sale| -> DispatchResult {
 				let property_sale_info = maybe_sale.as_mut().ok_or(Error::<T>::NotForSale)?;
 				ensure!(property_sale_info.lawyer == Some(signer.clone()), Error::<T>::NoPermission);
+				ensure!(!property_sale_info.lawyer_approval, Error::<T>::SaleAlreadyConfirmed);
 				if approve {
 					property_sale_info.lawyer_approval = true;
 					Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer });
@@ -919,6 +927,15 @@ pub mod pallet {
 						Ok::<(), DispatchError>(())
 					})?;
 				}
+				let property_account = Self::property_account_id(asset_id);
+				<T as pallet::Config>::ForeignCurrency::transfer(
+					payment_asset, 	
+					&signer, 
+					&property_account, 
+					amount, 
+					Preservation::Expendable,
+				)
+				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 				property_sale_info.finalized = true; 
 				Ok::<(), DispatchError>(())
 			})?;
@@ -937,6 +954,7 @@ pub mod pallet {
 			let mut property_sale_info = PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
 			ensure!(property_sale_info.finalized, Error::<T>::SaleNotFinalized);
 			let amount = SalesFunds::<T>::take((signer.clone(), asset_id, payment_asset));
+			ensure!(amount > 0, Error::<T>::NoFundsToClaim);
 			let property_account = Self::property_account_id(asset_id);
 			<T as pallet::Config>::ForeignCurrency::transfer(
 				payment_asset, 
