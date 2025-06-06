@@ -186,7 +186,7 @@ fn challenge_against_letting_agent_works() {
 			0
 		));
 		assert_eq!(Challenges::<Test>::get(1).is_some(), true);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::First);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::MistrustVoting);
 	});
 }
 
@@ -510,8 +510,8 @@ fn vote_on_challenge_works() {
 			1,
 			crate::Vote::No
 		));
-		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::First).unwrap().yes_voting_power, 60);
-		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::First).unwrap().no_voting_power, 40);
+		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting).unwrap().yes_voting_power, 60);
+		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting).unwrap().no_voting_power, 40);
 	});
 }
 
@@ -567,10 +567,10 @@ fn challenge_pass() {
 		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
 		run_to_block(31);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Second);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
 		run_to_block(61);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Third);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -582,7 +582,7 @@ fn challenge_pass() {
 			crate::Vote::Yes
 		));
 		run_to_block(91);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Fourth);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -676,17 +676,17 @@ fn challenge_does_not_pass() {
 		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
 		run_to_block(31);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Second);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
 		run_to_block(61);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Third);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
 			crate::Vote::Yes
 		));
 		run_to_block(91);
-		System::assert_last_event(Event::ChallengeThresHoldNotReached{ challenge_id: 1, required_threshold: Percent::from_percent(51), challenge_state: crate::ChallengeState::Third}.into());
+		System::assert_last_event(Event::ChallengeThresHoldNotReached{ challenge_id: 1, required_threshold: Percent::from_percent(51), challenge_state: crate::ChallengeState::SlashVoting}.into());
 		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
 	});
 }
@@ -740,10 +740,10 @@ fn challenge_pass_only_one_agent() {
 		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
 		run_to_block(31);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Second);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
 		run_to_block(61);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Third);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -755,7 +755,7 @@ fn challenge_pass_only_one_agent() {
 			crate::Vote::Yes
 		));
 		run_to_block(91);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::Fourth);
+		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -796,7 +796,7 @@ fn challenge_not_pass() {
 		));
 		assert_eq!(Challenges::<Test>::get(1).is_some(), true);
 		run_to_block(31);
-		System::assert_last_event(Event::ChallengeRejected{ challenge_id: 1, challenge_state: crate::ChallengeState::First}.into());
+		System::assert_last_event(Event::ChallengeRejected{ challenge_id: 1, challenge_state: crate::ChallengeState::MistrustVoting}.into());
 		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
 	});
 }

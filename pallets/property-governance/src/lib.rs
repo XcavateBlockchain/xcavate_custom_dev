@@ -67,7 +67,7 @@ pub mod pallet {
 		pub asset_id: u32,
 		pub amount: Balance,
 		pub created_at: BlockNumberFor<T>,
-		pub proposal_info: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
+		pub metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 	}
 
 	/// Sell proposal with the proposal Details.
@@ -103,10 +103,29 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	pub enum ChallengeState {
-		First,
-		Second,
-		Third,
-		Fourth,
+		/// Stage 1: Vote to express mistrust.
+    	MistrustVoting,
+		/// Stage 2: Letting agent defends (no voting).
+    	DefensePeriod,
+    	/// Stage 3: Vote to slash the letting agent.
+    	SlashVoting,
+		/// Stage 4: Vote to change the letting agent.
+    	ReplacementVoting,
+	}
+
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	pub enum DocumentStatus {
+		Pending,
+		Approved,
+		Rejected,
+	}
+
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	pub enum LegalSale {
+		SpvSide,
+		BuyerSide,
 	}
 
 	/// Voting stats.
@@ -134,10 +153,14 @@ pub mod pallet {
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
 	pub struct PropertySaleInfo<T: Config> {
-		pub sales_agent: Option<AccountIdOf<T>>,
-		pub lawyer: Option<AccountIdOf<T>>,
-		pub lawyer_approval: bool,
-		pub finalized: bool,
+		pub spv_lawyer: Option<AccountIdOf<T>>,
+		pub buyer_lawyer: Option<AccountIdOf<T>>,
+		pub spv_status: DocumentStatus,
+		pub buyer_status: DocumentStatus,
+		pub spv_lawyer_costs: Balance,
+		pub buyer_lawyer_costs: Balance,
+		pub price: Balance,
+		pub second_attempt: bool,
 		pub token_amount: u32,
 	}
 
@@ -334,16 +357,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Mapping from sales agent to the region he is active in.
-	#[pallet::storage]
-	pub type SalesAgentStorage<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		AccountIdOf<T>,
-		SalesAgentInfo<T>,
-		OptionQuery,
-	>;
-
 	/// Mapping from asset id to the property sale details.
 	#[pallet::storage]
 	pub type PropertySale<T: Config> = StorageMap<
@@ -479,6 +492,10 @@ pub mod pallet {
 		SaleAlreadyConfirmed,
 		/// There are no funds to claim for the caller.
 		NoFundsToClaim,
+		/// Costs for the lawyer are too high.
+		CostsTooHigh,
+		/// The lawyer job has already been taken.
+		LawyerJobTaken,
 	}
 
 	#[pallet::hooks]
@@ -547,7 +564,7 @@ pub mod pallet {
 				asset_id,
 				amount,
 				created_at: current_block_number,
-				proposal_info: data,
+				metadata: data,
 			};
 
 			// Check if the amount is less than LowProposal
@@ -597,7 +614,7 @@ pub mod pallet {
 			let expiry_block =
 				current_block_number.saturating_add(<T as Config>::VotingTime::get());
 			let challenge =
-				Challenge { proposer: signer.clone(), asset_id, created_at: current_block_number, state: ChallengeState::First };
+				Challenge { proposer: signer.clone(), asset_id, created_at: current_block_number, state: ChallengeState::MistrustVoting };
 			ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
 				keys.try_push(challenge_id).map_err(|_| Error::<T>::TooManyProposals)?;
 				Ok::<(), DispatchError>(())
@@ -701,63 +718,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(4)]
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn add_sales_agent(
-			origin: OriginFor<T>,
-			region: u32,
-			location: LocationId<T>,
-			sales_agent: AccountIdOf<T>,
-		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			let region_info = pallet_nft_marketplace::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
-			ensure!(
-				pallet_nft_marketplace::LocationRegistration::<T>::get(
-					region,
-					location.clone()
-				),
-				Error::<T>::LocationUnknown
-			);
-			ensure!(SalesAgentStorage::<T>::get(sales_agent.clone()).is_none(), Error::<T>::SalesAgentExists);
-			let mut sales_info = SalesAgentInfo {
-				account: sales_agent.clone(),
-				region,
-				locations: Default::default(),
-				assigned_properties: Default::default(),
-				deposited: Default::default(),
-			};
-			sales_info
-				.locations
-				.try_push(location)
-				.map_err(|_| Error::<T>::TooManyLocations)?;
-			SalesAgentStorage::<T>::insert(sales_agent.clone(), sales_info);
-			Self::deposit_event(Event::<T>::SalesAgentAdded { region, who: sales_agent });
-			Ok(())
-		}
-
-		#[pallet::call_index(5)]
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn sales_agent_deposit(origin: OriginFor<T>) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			SalesAgentStorage::<T>::try_mutate(signer.clone(), |maybe_sales_info|{
-				let sales_info = maybe_sales_info.as_mut().ok_or(Error::<T>::NoPermission)?;
-				ensure!(!sales_info.deposited, Error::<T>::AlreadyDeposited);
-				ensure!(!sales_info.locations.is_empty(), Error::<T>::NoLoactions);
-
-				<T as pallet::Config>::NativeCurrency::hold(
-					&<T as pallet_property_management::Config>::RuntimeHoldReason::from(pallet_property_management::HoldReason::SalesAgent),
-					&signer, 
-					<T as Config>::SalesAgentDeposit::get(),
-				)?;
-
-				sales_info.deposited = true;
-				Ok::<(), DispatchError>(())
-			})?;
-			Self::deposit_event(Event::<T>::Deposited { who: signer });
-			Ok(())
-		}
-
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn propose_property_sale(
@@ -827,39 +787,35 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn agent_claim_sale(
-			origin: OriginFor<T>,
-			asset_id: u32,
-		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			let agent_info = SalesAgentStorage::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
-			ensure!(agent_info.deposited, Error::<T>::NotDeposited);
-			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
-			ensure!(agent_info.region == asset_info.region, Error::<T>::NoPermissionInRegion);
-			ensure!(agent_info.locations.contains(&asset_info.location), Error::<T>::NoPermissionInLocation);
-			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
-			property_sale_info.sales_agent = Some(signer.clone());
-			PropertySale::<T>::insert(asset_id, property_sale_info);
-			Self::deposit_event(Event::SalesAgentSet {asset_id, sales_agent: signer });
-			Ok(())
-		}
-
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_sale(
 			origin: OriginFor<T>,
 			asset_id: u32,
+			legal_side: LegalSale,
+			costs: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let lawyer_region = pallet_nft_marketplace::RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
 			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(lawyer_region == asset_info.region, Error::<T>::NoPermissionInRegion);
 			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
-			ensure!(property_sale_info.lawyer.is_none(), Error::<T>::LawyerAlreadySet);
-			property_sale_info.lawyer = Some(signer.clone());
-			PropertySale::<T>::insert(asset_id, property_sale_info);
+			let max_costs = property_sale_info.price.checked_div(100).ok_or(Error::<T>::DivisionError)?;
+			ensure!(max_costs >= costs, Error::<T>::CostsTooHigh);
+			match legal_side {
+				LegalSale::SpvSide => {
+					ensure!(property_sale_info.spv_lawyer.is_none(), Error::<T>::LawyerJobTaken);
+					ensure!(property_sale_info.buyer_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
+					property_sale_info.spv_lawyer = Some(signer.clone());
+					PropertySale::<T>::insert(asset_id, property_sale_info);
+				}
+				LegalSale::BuyerSide => {
+					ensure!(property_sale_info.buyer_lawyer.is_none(), Error::<T>::LawyerJobTaken);
+					ensure!(property_sale_info.spv_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
+					property_sale_info.buyer_lawyer = Some(signer.clone());
+					PropertySale::<T>::insert(asset_id, property_sale_info);
+				}
+			}
 			Self::deposit_event(Event::SalesLawyerSet {asset_id, lawyer: signer });
 			Ok(())
 		}
@@ -1008,7 +964,7 @@ pub mod pallet {
 				Fortitude::Force,
 			)?;
 			
-			challenge.state = ChallengeState::Fourth;
+			challenge.state = ChallengeState::ReplacementVoting;
 			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
 			OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
 			Challenges::<T>::insert(challenge_id, challenge.clone()); 
@@ -1091,8 +1047,8 @@ pub mod pallet {
 		fn finish_challenge(challenge_id: ChallengeIndex) -> DispatchResult {
 			let challenge = Challenges::<T>::get(challenge_id);
 			if let Some(mut challenge) = challenge {
-				if challenge.state == ChallengeState::Second {
-					challenge.state = ChallengeState::Third;
+				if challenge.state == ChallengeState::DefensePeriod {
+					challenge.state = ChallengeState::SlashVoting;
 					let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
 					OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
 					Challenges::<T>::insert(challenge_id, challenge.clone());
@@ -1116,8 +1072,8 @@ pub mod pallet {
 								&& required_threshold
 									< yes_votes_percentage.saturating_add(no_votes_percentage)
 							{
-								if challenge.state == ChallengeState::First {
-									challenge.state = ChallengeState::Second;
+								if challenge.state == ChallengeState::MistrustVoting {
+									challenge.state = ChallengeState::DefensePeriod;
 									Challenges::<T>::insert(challenge_id, challenge.clone());
 									let current_block_number = <frame_system::Pallet<T>>::block_number();
 									let expiry_block =
@@ -1127,10 +1083,10 @@ pub mod pallet {
 										Ok::<(), DispatchError>(())
 									});
 								} 
-								if challenge.state == ChallengeState::Third {
+								if challenge.state == ChallengeState::SlashVoting {
 									let _ = Self::slash_letting_agent(challenge_id);
 								} 
-								if challenge.state == ChallengeState::Fourth {
+								if challenge.state == ChallengeState::ReplacementVoting {
 									let _ = Self::change_letting_agent(challenge_id);
 								} 
 							} else {
@@ -1166,11 +1122,15 @@ pub mod pallet {
 			let asset_id = sale_proposal.asset_id;
 
 			let property_sale_info = PropertySaleInfo{
-				sales_agent: None,
-				lawyer: None,
-				lawyer_approval: false,
-				finalized: false,
-				token_amount: token_amount,
+				spv_lawyer: None,
+				buyer_lawyer: None,
+				spv_status: DocumentStatus::Pending,
+				buyer_status: DocumentStatus::Pending,
+				spv_lawyer_costs: Default::default(),
+				buyer_lawyer_costs: Default::default(),
+				price: Default::default(),
+				second_attempt: false,
+				token_amount,
 			};
 
 			PropertySale::<T>::insert(asset_id, property_sale_info);
