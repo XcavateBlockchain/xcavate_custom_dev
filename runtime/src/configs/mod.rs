@@ -672,6 +672,7 @@ parameter_types! {
 	pub const HighProposal: Balance = 10_000 * UNIT;
 	pub const SalesAgentDepositAmount: Balance = 100 * UNIT;
 	pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
+	pub const AuctionDuration: BlockNumber = 28;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -695,5 +696,6 @@ impl pallet_property_governance::Config for Runtime {
 	type MarketplacePalletId = NftMarketplacePalletId;
 	type SalesAgentDeposit = SalesAgentDepositAmount;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
+	type AuctionTime = AuctionDuration;
 }
 

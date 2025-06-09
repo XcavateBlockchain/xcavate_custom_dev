@@ -1076,6 +1076,7 @@ fn propose_property_sale_works() {
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(SaleProposals::<Test>::get(1).unwrap().asset_id, 0);
 		assert_eq!(OngoingSalesVotes::<Test>::get(1).is_some(), true);
+		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 	});
 }
 
