@@ -304,6 +304,7 @@ parameter_types! {
 	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
 	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
 	pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
+	pub const AuctionDuration: BlockNumber = 30;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -313,6 +314,7 @@ impl pallet_property_governance::Config for Test {
 	type NativeCurrency = Balances;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
+	type ForeignAssetsHolder = AssetsHolder;
 	type VotingTime = PropertyVotingTime;
 	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
@@ -327,6 +329,7 @@ impl pallet_property_governance::Config for Test {
 	type MarketplacePalletId = NftMarketplacePalletId;
 	type SalesAgentDeposit = ConstU128<100>;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
+	type AuctionTime = AuctionDuration;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -360,6 +363,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1984, [3; 32].into(), 1_150_000),
 			(1984, [4; 32].into(), 5_000),
 			(1984, [5; 32].into(), 500_000),
+			(1984, [7; 32].into(), 1_000_000),
 		], // Genesis accounts: id, account_id, balance
 		next_asset_id: None,
 	}
@@ -371,6 +375,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		metadata: vec![(1337, "USDC".into(), "USDC".into(), 0)], // Genesis metadata: id, name, symbol, decimals
 		accounts: vec![
 			(1337, [4; 32].into(), 5000),
+			(1337, [10; 32].into(), 1_000_000),
 		], // Genesis accounts: id, account_id, balance
 		next_asset_id: None,
 	}

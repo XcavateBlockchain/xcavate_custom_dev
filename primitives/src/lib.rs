@@ -11,6 +11,7 @@ use frame_support::traits::VariantCount;
 pub enum MarketplaceHoldReason {
     Marketplace,
     Listing,
+    Auction,
 }
 
 impl VariantCount for MarketplaceHoldReason {

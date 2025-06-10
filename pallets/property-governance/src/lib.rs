@@ -18,13 +18,15 @@ use frame_support::{
 	traits::{
 		tokens::{fungible, fungibles},
 		fungible::MutateHold,
-		fungibles::Mutate as FungiblesMutate,
+		fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
 		tokens::{Fortitude, Precision, Restriction, Preservation},
 	},
 	PalletId,
 };
 
 use codec::{Codec, DecodeWithMemTracking};
+
+use primitives::MarketplaceHoldReason;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -76,7 +78,6 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct SaleProposal<T: Config> {
 		pub proposer: AccountIdOf<T>,
-		pub asset_id: u32,
 		pub created_at: BlockNumberFor<T>,
 	}
 
@@ -155,6 +156,7 @@ pub mod pallet {
 	pub struct PropertySaleInfo<T: Config> {
 		pub spv_lawyer: Option<AccountIdOf<T>>,
 		pub buyer_lawyer: Option<AccountIdOf<T>>,
+		pub buyer: Option<AccountIdOf<T>>,
 		pub spv_status: DocumentStatus,
 		pub buyer_status: DocumentStatus,
 		pub spv_lawyer_costs: Balance,
@@ -164,6 +166,7 @@ pub mod pallet {
 		pub lawyer_approved: bool,
 		pub finalized: bool,
 		pub token_amount: u32,
+		pub reserve: Option<(u32, Balance)>,
 	}
 
 	/// Info for sale auctions.
@@ -173,6 +176,7 @@ pub mod pallet {
 	pub struct SaleAuction<T: Config> {
 		pub highest_bidder: Option<AccountIdOf<T>>,
 		pub price: Balance,
+		pub reserve: Option<(u32, Balance)>,
 	}
 
 	#[pallet::config]
@@ -180,6 +184,7 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_nft_marketplace::Config
 		+ pallet_property_management::Config
+		+ pallet_xcavate_whitelist::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -205,6 +210,9 @@ pub mod pallet {
 			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
 			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
 			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+		
+		type ForeignAssetsHolder: fungibles::MutateHold<AccountIdOf<Self>, AssetId = u32, Balance = Balance, Reason = MarketplaceHoldReason>
+			+ fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;
@@ -273,7 +281,7 @@ pub mod pallet {
 	pub(super) type SaleProposals<T> = StorageMap<
 		_,
 		Blake2_128Concat,
-		ProposalIndex,
+		u32,
 		SaleProposal<T>,
 		OptionQuery,
 	>;
@@ -302,13 +310,13 @@ pub mod pallet {
 	/// Mapping of ongoing sales votes.
 	#[pallet::storage]
 	pub(super) type OngoingSalesVotes<T> =
-		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, u32, VoteStats, OptionQuery>;
 	
 	#[pallet::storage]
 	pub(super) type UserSalesVote<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		ProposalIndex,
+		u32,
 		Blake2_128Concat,
 		AccountIdOf<T>,
 		Vote,
@@ -347,7 +355,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		BlockNumberFor<T>,
-		BoundedVec<ProposalIndex, T::MaxVotesForBlock>,
+		BoundedVec<u32, T::MaxVotesForBlock>,
 		ValueQuery,
 	>;
 
@@ -402,6 +410,16 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Stores the project keys and round types ending on a given block for auctions.
+	#[pallet::storage]
+	pub type AuctionRoundsExpiring<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		BlockNumberFor<T>,
+		BoundedVec<u32, T::MaxVotesForBlock>,
+		ValueQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -412,7 +430,7 @@ pub mod pallet {
 		/// Voted on proposal.
 		VotedOnProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on sale proposal.
-		VotedOnSaleProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
+		VotedOnSaleProposal { asset_id: u32, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on sale proposal.
 		VotedOnSalePriceProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on challenge.
@@ -436,9 +454,9 @@ pub mod pallet {
 		/// A sales agent deposited the necessary funds.
 		Deposited { who: AccountIdOf<T> },
 		/// New sale proposal has been created.
-		SaleProposed { sale_proposal_id: ProposalIndex, asset_id: u32, proposer: AccountIdOf<T> },
+		SaleProposed { asset_id: u32, proposer: AccountIdOf<T> },
 		/// A sale proposal got rejected.
-		SaleProposalRejected { proposal_id: ProposalIndex },
+		SaleProposalRejected { asset_id: u32 },
 		/// A sale price proposal got rejected.
 		SalePriceProposalRejected { asset_id: u32, proposed_price: Balance },
 		/// Sales agent has been set for a property.
@@ -453,6 +471,10 @@ pub mod pallet {
 		SaleFinalized{ asset_id: u32, amount: Balance, payment_asset: u32 },
 		/// A token owner claimed his sale funds.
 		SaleFundsClaimed{ claimer: AccountIdOf<T>, asset_id: u32, amount: Balance, payment_asset: u32 },
+		/// A bid has ben placed.
+		BidSuccessfullyPlaced { asset_id: u32, bidder: AccountIdOf<T>, new_leading_bid: Balance },
+		/// An auction has been won.
+		AuctionWon { asset_id: u32, winner: AccountIdOf<T>, highest_bid: Balance },
 	}
 
 	#[pallet::error]
@@ -513,8 +535,6 @@ pub mod pallet {
 		LocationUnknown,
 		/// Sales agent did not make a deposit.
 		NotDeposited,
-		/// Lawyer for a property sale is already set.
-		LawyerAlreadySet,
 		/// The lawyer already confirmed the sale.
 		SaleAlreadyConfirmed,
 		/// There are no funds to claim for the caller.
@@ -533,6 +553,18 @@ pub mod pallet {
 		SpvLawyerNotSet,
 		/// No price has been set.
 		NoPriceSet,
+		/// There is no auction to bid on.
+		NoOngoingAuction,
+		/// User did not pass the kyc.
+		UserNotWhitelisted,
+		/// The bid is lower than the current highest bid.
+		BidTooLow,
+		/// There is already a sale ongoing.
+		SaleOngoing,
+		/// There is already a sale proposal ongoing.
+		SaleProposalOngoing,
+		/// No buyer has been set.
+		BuyerNotSet,
 	}
 
 	#[pallet::hooks]
@@ -554,6 +586,14 @@ pub mod pallet {
 				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 				let _ = UserSalesVote::<T>::clear_prefix(item, u32::MAX, None);	
 				let _ = Self::finish_sale_proposal(*item);
+			});
+
+			let ended_votings = AuctionRoundsExpiring::<T>::take(n);
+			// Checks if there is a voting for a sale porposal in this block;
+			ended_votings.iter().for_each(|item| {
+				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = UserSalesVote::<T>::clear_prefix(item, u32::MAX, None);	
+				let _ = Self::finish_auction(*item);
 			});
 
 			let ended_challenge_votings = ChallengeRoundsExpiring::<T>::take(n);
@@ -764,27 +804,27 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
+
+			ensure!(PropertySale::<T>::get(asset_id).is_none(), Error::<T>::SaleOngoing);
+			ensure!(SaleProposals::<T>::get(asset_id).is_none(), Error::<T>::SaleProposalOngoing);
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			let sale_proposal = SaleProposal {
 				proposer: signer.clone(),
-				asset_id,
 				created_at: current_block_number,
 			};
-			let sale_proposal_id = ProposalCount::<T>::get().saturating_add(1);
 			let expiry_block = current_block_number
 				.saturating_add(<T as Config>::SaleVotingTime::get());
 			SaleProposalRoundExpiring::<T>::try_mutate(expiry_block, |keys| {
-				keys.try_push(sale_proposal_id).map_err(|_| Error::<T>::TooManyProposals)?;
+				keys.try_push(asset_id).map_err(|_| Error::<T>::TooManyProposals)?;
 				Ok::<(), DispatchError>(())
 			})?;
 			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
 
-			SaleProposals::<T>::insert(sale_proposal_id, sale_proposal);
-			OngoingSalesVotes::<T>::insert(sale_proposal_id, vote_stats);
-			ProposalCount::<T>::set(sale_proposal_id);
-			Self::deposit_event(Event::SaleProposed { sale_proposal_id, asset_id, proposer: signer });
+			SaleProposals::<T>::insert(asset_id, sale_proposal);
+			OngoingSalesVotes::<T>::insert(asset_id, vote_stats);
+			Self::deposit_event(Event::SaleProposed { asset_id, proposer: signer });
 			Ok(())
 		}
 
@@ -792,20 +832,20 @@ pub mod pallet {
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn vote_on_property_sale(
 			origin: OriginFor<T>,
-			proposal_id: ProposalIndex,
+			asset_id: u32,
 			vote: Vote,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let sale_proposal = SaleProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(sale_proposal.asset_id);
+			ensure!(SaleProposals::<T>::get(asset_id).is_some(), Error::<T>::NotOngoing);
+			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let voting_power = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
-				sale_proposal.asset_id,
+				asset_id,
 				signer.clone(),
 			);
-			OngoingSalesVotes::<T>::try_mutate(proposal_id, |maybe_current_vote|{
+			OngoingSalesVotes::<T>::try_mutate(asset_id, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-				let previous_vote_opt = UserSalesVote::<T>::get(proposal_id, signer.clone());
+				let previous_vote_opt = UserSalesVote::<T>::get(asset_id, signer.clone());
 				if let Some(previous_vote) = previous_vote_opt {
 					match previous_vote {
 						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
@@ -819,8 +859,8 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			UserSalesVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
-			Self::deposit_event(Event::VotedOnSaleProposal { proposal_id, voter: signer, vote });
+			UserSalesVote::<T>::insert(asset_id, signer.clone(), vote.clone());
+			Self::deposit_event(Event::VotedOnSaleProposal { asset_id, voter: signer, vote });
 			Ok(())
 		}
 
@@ -830,8 +870,36 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			price: Balance,
+			payment_asset: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let reserve_amount = price.checked_div(10).ok_or(Error::<T>::DivisionError)?;
+			<T as pallet::Config>::ForeignAssetsHolder::hold(payment_asset, &MarketplaceHoldReason::Auction, &signer, reserve_amount)?;
+
+			SaleAuctions::<T>::try_mutate(asset_id, |maybe_auction| -> DispatchResult {
+				let auction = maybe_auction.as_mut().ok_or(Error::<T>::NoOngoingAuction)?;
+				if let Some((old_payment_asset, old_reserve_amount)) = auction.reserve {
+					if let Some(ref old_bidder) = auction.highest_bidder {
+						<T as pallet::Config>::ForeignAssetsHolder::release(
+							old_payment_asset,
+							&MarketplaceHoldReason::Auction,
+							old_bidder,
+							old_reserve_amount,
+							Precision::Exact,
+						)?;
+					}
+				};
+				ensure!(price > auction.price, Error::<T>::BidTooLow);
+				auction.highest_bidder = Some(signer.clone());
+				auction.price = price;
+				auction.reserve = Some((payment_asset, reserve_amount));
+				Ok::<(), DispatchError>(())
+			})?;
+			Self::deposit_event(Event::BidSuccessfullyPlaced { asset_id, bidder: signer, new_leading_bid: price });
 			Ok(())
 		}
 
@@ -987,27 +1055,75 @@ pub mod pallet {
 					.checked_sub(total_fees)
 					.ok_or(Error::<T>::ArithmeticUnderflow)?;
 
+				let mut reserve_released = 0u128;
+				let mut reserve_asset = 1984;
+				if let Some((reserved_asset, reserve_amount)) = sale_info.reserve.take() {
+					let buyer = sale_info.buyer.clone().ok_or(Error::<T>::BuyerNotSet)?;
+					<T as pallet::Config>::ForeignAssetsHolder::release(
+						reserve_asset,
+						&MarketplaceHoldReason::Auction,
+						&buyer,
+						reserve_amount,
+						Precision::Exact,
+					)?;
+					reserve_released = reserve_amount;
+					reserve_asset = reserved_asset;
+					Self::transfer_funds(&buyer, &property_account, reserve_amount, reserve_asset)?;
+				}	
+
+				let expected_buyer_amount = net_amount
+					.checked_sub(reserve_released)
+					.ok_or(Error::<T>::ArithmeticUnderflow)?;
+
+				Self::transfer_funds(&signer, &property_account, expected_buyer_amount, payment_asset)?;
+				Self::transfer_funds(&signer, &spv_lawyer_account, spv_lawyer_fees, payment_asset)?;
+				Self::transfer_funds(&signer, &treasury_account, treasury_share, payment_asset)?;
+				Self::transfer_funds(&signer, &region_info.owner, region_owner_share, payment_asset)?;
+
+				let mut remaining_payment = expected_buyer_amount;
+				let mut remaining_reserve = reserve_released;
+
 				for owner in owner_list {
 					let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
 						asset_id,
 						owner.clone(),
 					);
+					
 					let owner_share = (token_amount as u128)
 						.checked_mul(net_amount)
 						.ok_or(Error::<T>::MultiplyError)?
 						.checked_div(total_token as u128)
 						.ok_or(Error::<T>::DivisionError)?;
-					SalesFunds::<T>::try_mutate((owner, asset_id, payment_asset), |stored| {
-						*stored = stored.checked_add(owner_share).ok_or(Error::<T>::ArithmeticOverflow)?;
-						Ok::<(), DispatchError>(())
-					})?;
+					if remaining_payment >= owner_share {
+						// Enough funds in payment_asset to cover full owner_share
+						SalesFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
+							*stored = stored.checked_add(owner_share).ok_or(Error::<T>::ArithmeticOverflow)?;
+							Ok::<(), DispatchError>(())
+						})?;
+						remaining_payment = remaining_payment.checked_sub(owner_share).ok_or(Error::<T>::ArithmeticUnderflow)?;
+					} else {
+						// Not enough payment_asset funds, split owner_share
+						if remaining_payment > 0 {
+							// Pay what is left from payment_asset
+							SalesFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
+								*stored = stored.checked_add(remaining_payment).ok_or(Error::<T>::ArithmeticOverflow)?;
+								Ok::<(), DispatchError>(())
+							})?;
+						}
+
+						let leftover = owner_share.checked_sub(remaining_payment).ok_or(Error::<T>::ArithmeticUnderflow)?;
+						remaining_payment = 0;
+
+						// Pay the leftover from reserve_asset
+						SalesFunds::<T>::try_mutate((owner.clone(), asset_id, reserve_asset), |stored| {
+							*stored = stored.checked_add(leftover).ok_or(Error::<T>::ArithmeticOverflow)?;
+							Ok::<(), DispatchError>(())
+						})?;
+
+						remaining_reserve = remaining_reserve.checked_sub(leftover).ok_or(Error::<T>::ArithmeticUnderflow)?;
+					}
 				}
-				
-				Self::transfer_funds(&signer, &property_account, net_amount, payment_asset)?;
-				Self::transfer_funds(&signer, &spv_lawyer_account, spv_lawyer_fees, payment_asset)?;
-				Self::transfer_funds(&signer, &treasury_account, treasury_share, payment_asset)?;
-				Self::transfer_funds(&signer, &region_info.owner, region_owner_share, payment_asset)?;
-				
+								
 				sale_info.finalized = true; 
 				Self::deposit_event(Event::SaleFinalized{ asset_id, amount: sales_price, payment_asset });
 				Ok::<(), DispatchError>(())
@@ -1131,21 +1247,41 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn finish_sale_proposal(proposal_id: ProposalIndex) -> DispatchResult {
-			let voting_results = <OngoingSalesVotes<T>>::take(proposal_id);
-			let sale_proposals = <SaleProposals<T>>::take(proposal_id);
-			if let Some(sale_proposal) = sale_proposals {
-				if let Some(voting_result) = voting_results {
-					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(sale_proposal.asset_id);
-					if let Some(asset_details) = asset_details {
-						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
-						let required_threshold = T::SaleApprovalYesThreshold::get();
-						if yes_votes_percentage >= required_threshold
-						{
-							let _ = Self::execute_sale_proposal(sale_proposal, asset_details.token_amount);
-						}
-						else {
-							Self::deposit_event(Event::SaleProposalRejected { proposal_id });
+		fn finish_sale_proposal(asset_id: u32) -> DispatchResult {
+			let voting_results = <OngoingSalesVotes<T>>::take(asset_id);
+			let _ = <SaleProposals<T>>::take(asset_id);
+			if let Some(voting_result) = voting_results {
+				let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id);
+				if let Some(asset_details) = asset_details {
+					let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
+					let required_threshold = T::SaleApprovalYesThreshold::get();
+					if yes_votes_percentage >= required_threshold
+					{
+						let _ = Self::execute_sale_proposal(asset_id, asset_details.token_amount);
+					}
+					else {
+						Self::deposit_event(Event::SaleProposalRejected { asset_id });
+					}
+				}
+			}
+			Ok(())
+		}
+
+		fn finish_auction(asset_id: u32) -> DispatchResult {
+			if let Some(auction) = <SaleAuctions<T>>::take(asset_id) {
+				if auction.price > 0 {
+					if let Some(buyer) = auction.highest_bidder {
+						if let Some(mut sale) = PropertySale::<T>::get(asset_id) {
+							sale.price = Some(auction.price);
+							sale.buyer = Some(buyer.clone());
+							sale.reserve = auction.reserve;
+							PropertySale::<T>::insert(asset_id, sale);
+
+							Self::deposit_event(Event::AuctionWon {
+								asset_id,
+								winner: buyer,
+								highest_bid: auction.price,
+							});
 						}
 					}
 				}
@@ -1227,12 +1363,11 @@ pub mod pallet {
 		}
 
 		/// Executes a sale proposal once it passes.
-		fn execute_sale_proposal(sale_proposal: SaleProposal<T>, token_amount: u32) -> DispatchResult {
-			let asset_id = sale_proposal.asset_id;
-
+		fn execute_sale_proposal(asset_id: u32, token_amount: u32) -> DispatchResult {
 			let property_sale_info = PropertySaleInfo{
 				spv_lawyer: None,
 				buyer_lawyer: None,
+				buyer: None,
 				spv_status: DocumentStatus::Pending,
 				buyer_status: DocumentStatus::Pending,
 				spv_lawyer_costs: Default::default(),
@@ -1242,9 +1377,24 @@ pub mod pallet {
 				lawyer_approved: false,
 				finalized: false,
 				token_amount,
+				reserve: None,
 			};
 
+			let auction = SaleAuction {
+				highest_bidder: None,
+				price: Default::default(),
+				reserve: None,
+			};
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let expiry_block =
+				current_block_number.saturating_add(<T as Config>::AuctionTime::get());
+			AuctionRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
+				keys.try_push(asset_id).map_err(|_| Error::<T>::TooManyProposals)?;
+				Ok::<(), DispatchError>(())
+			})?;
+
 			PropertySale::<T>::insert(asset_id, property_sale_info);
+			SaleAuctions::<T>::insert(asset_id, auction);
 			Ok(())
 		}
 
