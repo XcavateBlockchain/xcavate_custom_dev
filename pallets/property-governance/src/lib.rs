@@ -85,10 +85,10 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct Challenge<BlockNumber, T: Config> {
+	pub struct Challenge<T: Config> {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
-		pub created_at: BlockNumber,
+		pub created_at: BlockNumberFor<T>,
 		pub state: ChallengeState,
 	}
 
@@ -289,7 +289,7 @@ pub mod pallet {
 	/// Mapping of challenge index to the challenge info.
 	#[pallet::storage]
 	pub(super) type Challenges<T> =
-		StorageMap<_, Blake2_128Concat, ChallengeIndex, Challenge<BlockNumberFor<T>, T>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, ChallengeIndex, Challenge<T>, OptionQuery>;
 
 	/// Mapping of ongoing votes.
 	#[pallet::storage]
@@ -431,8 +431,6 @@ pub mod pallet {
 		VotedOnProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on sale proposal.
 		VotedOnSaleProposal { asset_id: u32, voter: AccountIdOf<T>, vote: Vote },
-		/// Voted on sale proposal.
-		VotedOnSalePriceProposal { proposal_id: ProposalIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// Voted on challenge.
 		VotedOnChallenge { challenge_id: ChallengeIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// The proposal has been executed.
@@ -449,24 +447,16 @@ pub mod pallet {
 		ProposalThresHoldNotReached { proposal_id: ProposalIndex, required_threshold: Percent },
 		/// The threshold could not be reached for a challenge.
 		ChallengeThresHoldNotReached { challenge_id: ProposalIndex, required_threshold: Percent, challenge_state: ChallengeState },
-		/// A Sales agent has been added to a location.
-		SalesAgentAdded { region: u32, who: AccountIdOf<T> },
-		/// A sales agent deposited the necessary funds.
-		Deposited { who: AccountIdOf<T> },
 		/// New sale proposal has been created.
 		SaleProposed { asset_id: u32, proposer: AccountIdOf<T> },
 		/// A sale proposal got rejected.
 		SaleProposalRejected { asset_id: u32 },
-		/// A sale price proposal got rejected.
-		SalePriceProposalRejected { asset_id: u32, proposed_price: Balance },
-		/// Sales agent has been set for a property.
-		SalesAgentSet {asset_id: u32, sales_agent: AccountIdOf<T> },
 		/// Lawyer for a sale has been set.
-		SalesLawyerSet {asset_id: u32, lawyer: AccountIdOf<T> },
+		SalesLawyerSet {asset_id: u32, lawyer: AccountIdOf<T>, legal_side: LegalSale },
 		/// The sale got approved by the lawyer.
-		LawyerApprovesSale { asset_id: u32, lawyer: AccountIdOf<T> },
+		LawyerApprovesSale { asset_id: u32, lawyer: AccountIdOf<T>, legal_side: LegalSale },
 		/// The sale got rejected by the lawyer.
-		LawyerRejectsSale { asset_id: u32, lawyer: AccountIdOf<T> },
+		LawyerRejectsSale { asset_id: u32, lawyer: AccountIdOf<T>, legal_side: LegalSale },
 		/// A sale has been finalized.
 		SaleFinalized{ asset_id: u32, amount: Balance, payment_asset: u32 },
 		/// A token owner claimed his sale funds.
@@ -483,34 +473,18 @@ pub mod pallet {
 		TooManyProposals,
 		/// The proposal is not ongoing.
 		NotOngoing,
-		/// Too many user voted already.
-		TooManyVotes,
-		/// The assets details could not be found.
-		NoAssetFound,
 		/// There is no letting agent for this property.
 		NoLettingAgentFound,
 		/// The pallet has not enough funds.
 		NotEnoughFunds,
-		/// Error during converting types.
-		ConversionError,
 		/// The region is not registered.
 		RegionUnknown,
 		/// The caller is not authorized to call this extrinsic.
 		NoPermission,
-		/// The sales agent is already registered.
-		SalesAgentExists,
-		/// The sales agent is already active in too many locations.
-		TooManyLocations,
-		/// The sales already deposited the necessary amount.
-		AlreadyDeposited,
-		/// This sales agent has no location.
-		NoLoactions,
 		/// Real estate asset does not exist.
 		AssetNotFound,
 		/// This Agent has no authorization in the region.
 		NoPermissionInRegion,
-		/// This Agent has no authorization in the location.
-		NoPermissionInLocation,
 		/// The property is not for sale.
 		NotForSale,
 		/// The sale has not been approved yet by a lawyer.
@@ -531,10 +505,6 @@ pub mod pallet {
 		ArithmeticUnderflow,
 		/// Spv has not yet been created.
 		SpvNotCreated,
-		/// The location is not registered.
-		LocationUnknown,
-		/// Sales agent did not make a deposit.
-		NotDeposited,
 		/// The lawyer already confirmed the sale.
 		SaleAlreadyConfirmed,
 		/// There are no funds to claim for the caller.
@@ -543,10 +513,6 @@ pub mod pallet {
 		CostsTooHigh,
 		/// The lawyer job has already been taken.
 		LawyerJobTaken,
-		/// Sale price of an property already set.
-		SalePriceAlreadySet,
-		/// A price has already been proposed.
-		PriceProposalAlreadyOngoing,
 		/// Price for a property sale has not been set yet.
 		PriceNotSet,
 		/// The Spv lawyer is not set.
@@ -795,7 +761,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(6)]
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn propose_property_sale(
 			origin: OriginFor<T>,
@@ -828,7 +794,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(20)]
+		#[pallet::call_index(5)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn vote_on_property_sale(
 			origin: OriginFor<T>,
@@ -864,7 +830,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(32)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn bid_on_sale(
 			origin: OriginFor<T>,
@@ -903,7 +869,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_claim_sale(
 			origin: OriginFor<T>,
@@ -933,11 +899,11 @@ pub mod pallet {
 					PropertySale::<T>::insert(asset_id, property_sale_info);
 				}
 			}
-			Self::deposit_event(Event::SalesLawyerSet {asset_id, lawyer: signer });
+			Self::deposit_event(Event::SalesLawyerSet {asset_id, lawyer: signer, legal_side });
 			Ok(())
 		}
 
-		#[pallet::call_index(9)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn lawyer_confirm_sale(
 			origin: OriginFor<T>,
@@ -950,20 +916,22 @@ pub mod pallet {
 				ensure!(property_sale_info.spv_status == DocumentStatus::Pending,
 					Error::<T>::SaleAlreadyConfirmed);
 				property_sale_info.spv_status = if approve {
+					Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer, legal_side: LegalSale::SpvSide });
 					DocumentStatus::Approved
 				} else {
+					Self::deposit_event(Event::LawyerRejectsSale{ asset_id, lawyer: signer, legal_side: LegalSale::SpvSide });
 					DocumentStatus::Rejected
 				};
-				Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer });
 			} else if property_sale_info.buyer_lawyer == Some(signer.clone()) {
 				ensure!(property_sale_info.buyer_status == DocumentStatus::Pending,
 					Error::<T>::SaleAlreadyConfirmed);
 				property_sale_info.buyer_status = if approve {
+					Self::deposit_event(Event::LawyerApprovesSale{ asset_id, lawyer: signer, legal_side: LegalSale::BuyerSide });
 					DocumentStatus::Approved
 				} else {
+					Self::deposit_event(Event::LawyerRejectsSale{ asset_id, lawyer: signer, legal_side: LegalSale::BuyerSide });
 					DocumentStatus::Rejected
-				};
-				Self::deposit_event(Event::LawyerRejectsSale{ asset_id, lawyer: signer });
+				};	
 			} else {
 				return Err(Error::<T>::NoPermission.into());
 			}
@@ -1002,7 +970,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(10)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(2, 2))]
 		pub fn finalize_sale(
 			origin: OriginFor<T>,
@@ -1131,7 +1099,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn claim_sale_funds(
 			origin: OriginFor<T>,

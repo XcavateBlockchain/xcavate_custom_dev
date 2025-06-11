@@ -186,6 +186,11 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
+// Time is measured by number of blocks.
+pub const TIMESTAMP_MINUTES: u64 = 60_000;
+pub const TIMESTAMP_HOURS: u64 = TIMESTAMP_MINUTES * 60;
+pub const TIMESTAMP_DAYS: u64 = TIMESTAMP_HOURS * 24;
+
 // Unit = the base number of indivisible units for balances
 pub const UNIT: Balance = 1_000_000_000_000;
 pub const MILLIUNIT: Balance = 1_000_000_000;

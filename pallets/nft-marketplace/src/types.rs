@@ -1,6 +1,5 @@
 use crate::*;
 use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen, DecodeWithMemTracking};
 use frame_support::{DefaultNoBound, sp_runtime::RuntimeDebug};
@@ -12,7 +11,7 @@ use frame_support::sp_runtime::Permill;
 #[scale_info(skip_type_params(T))]
 pub struct RegionInfo<T: Config> {
     pub collection_id: <T as pallet::Config>::NftCollectionId,
-    pub listing_duration: BlockNumberFor<T>,
+    pub listing_duration: u64,
 	pub owner: AccountIdOf<T>,
 	pub tax: Permill,
 }
@@ -42,7 +41,7 @@ pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
     pub collection_id: NftCollectionId,
     pub token_amount: u32,
     pub tax_paid_by_developer: bool,
-    pub listing_expiry: BlockNumberFor<T>,
+    pub listing_expiry: u64,
 }
 
 /// Infos regarding the listing of a token.

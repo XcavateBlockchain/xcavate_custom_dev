@@ -25,7 +25,7 @@ use frame_support::{
 		fungibles::MutateHold as FungiblesHold,
 		nonfungibles_v2::Mutate as NonfungiblesMutate,
 		nonfungibles_v2::{Create, Transfer},
-		tokens::Preservation,
+		tokens::Preservation, UnixTime,
 	},
 	PalletId,
 	storage::bounded_btree_map::BoundedBTreeMap,
@@ -35,7 +35,7 @@ use frame_support::sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero, One,
 	},
-	Saturating, Permill,
+	Permill,
 };
 
 use pallet_nfts::{
@@ -220,10 +220,13 @@ pub mod pallet {
 		/// The fee percentage charged by the marketplace (e.g., 1 for 1%).
 		type MarketplaceFeePercentage: Get<Balance>;
 		
-		type MaxListingDuration: Get<BlockNumberFor<Self>>;
+		type MaxListingDuration: Get<u64>;
 
 		#[pallet::constant]
 		type AcceptedAssets: Get<[u32; 2]>;
+
+		/// lose coupling of pallet timestamp.
+		type TimeProvider: UnixTime;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -418,7 +421,7 @@ pub mod pallet {
 			token_amount: u32,
 			seller: AccountIdOf<T>,
 			tax_paid_by_developer: bool,
-			listing_expiry: BlockNumberFor<T>,
+			listing_expiry: u64,
 		},
 		/// A token has been bought.
 		RelistedTokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: Balance, amount: u32, payment_asset: u32 },
@@ -433,7 +436,7 @@ pub mod pallet {
 		/// The price of the listed object has been updated.
 		ObjectUpdated { listing_index: ListingId, new_price: Balance },
 		/// New region has been created.
-		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: AccountIdOf<T>, listing_duration: BlockNumberFor<T>, tax: Permill },
+		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: AccountIdOf<T>, listing_duration: u64, tax: Permill },
 		/// New location has been created.
 		LocationCreated { region_id: u32, location_id: LocationId<T> },
 		/// A new offer has been made.
@@ -477,7 +480,7 @@ pub mod pallet {
 		/// A Takeover has been cancelled.
 		TakeoverCancelled { region: RegionId, signer:AccountIdOf<T> },
 		/// Listing duration of a region changed.
-		ListingDurationChanged { region: RegionId, listing_duration: BlockNumberFor<T> },
+		ListingDurationChanged { region: RegionId, listing_duration: u64 },
 		/// Tax of a region changed.
 		RegionTaxChanged { region: RegionId, new_tax: Permill },
 	}
@@ -592,7 +595,7 @@ pub mod pallet {
 		/// Emits `RegionCreated` event when succesfful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
-		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
+		pub fn create_new_region(origin: OriginFor<T>, listing_duration: u64, tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -642,7 +645,7 @@ pub mod pallet {
 		/// Emits `ListingDurationChanged` event when succesfful.
 		#[pallet::call_index(1)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn adjust_listing_duration(origin: OriginFor<T>, region: RegionId, listing_duration: BlockNumberFor<T>) -> DispatchResult {
+		pub fn adjust_listing_duration(origin: OriginFor<T>, region: RegionId, listing_duration: u64) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
@@ -896,10 +899,10 @@ pub mod pallet {
 			}
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
 			let listing_id = NextListingId::<T>::get();
-			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			let current_timestamp = T::TimeProvider::now().as_secs();
 			let listing_duration = region_info.listing_duration;
 			let listing_expiry =
-				current_block_number.saturating_add(listing_duration);
+				current_timestamp.saturating_add(listing_duration);
 
 			let mut collected_funds = BoundedBTreeMap::default();
 			for &asset_id in T::AcceptedAssets::get().iter() {
@@ -1049,8 +1052,8 @@ pub mod pallet {
 		
 				ensure!(!asset_details.spv_created, Error::<T>::SpvAlreadyCreated);
 
-				let current_block_number = <frame_system::Pallet<T>>::block_number();
-				ensure!(nft_details.listing_expiry > current_block_number, Error::<T>::ListingExpired);
+				let current_timestamp = T::TimeProvider::now().as_secs();
+				ensure!(nft_details.listing_expiry > current_timestamp, Error::<T>::ListingExpired);
 
 				let transfer_price = nft_details
 					.token_price
@@ -1303,7 +1306,7 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			let mut nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			ensure!(nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(), Error::<T>::ListingExpired);
+			ensure!(nft_details.listing_expiry > T::TimeProvider::now().as_secs(), Error::<T>::ListingExpired);
 			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
 
 			let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(signer.clone(), listing_id);
@@ -1562,7 +1565,7 @@ pub mod pallet {
 			let mut nft_details =
             	OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(
-				nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+				nft_details.listing_expiry < T::TimeProvider::now().as_secs(),
 				Error::<T>::ListingNotExpired
 			);
 
@@ -1646,7 +1649,7 @@ pub mod pallet {
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(nft_details.real_estate_developer == signer, Error::<T>::NoPermission);
 			ensure!(
-				nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+				nft_details.listing_expiry < T::TimeProvider::now().as_secs(),
 				Error::<T>::ListingNotExpired
 			);
 
@@ -1749,7 +1752,7 @@ pub mod pallet {
 			ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::PropertyAlreadySold);
 			OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_nft_details| {
 				let nft_details = maybe_nft_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-				ensure!(nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(), Error::<T>::ListingExpired);
+				ensure!(nft_details.listing_expiry > T::TimeProvider::now().as_secs(), Error::<T>::ListingExpired);
 				ensure!(nft_details.real_estate_developer == signer.clone(), Error::<T>::NoPermission);
 				ensure!(
 					!AssetIdDetails::<T>::get(nft_details.asset_id)

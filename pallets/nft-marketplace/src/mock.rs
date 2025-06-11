@@ -2,7 +2,7 @@ use super::*;
 
 use crate as pallet_nft_marketplace;
 use frame_support::{parameter_types, traits::AsEnsureOriginWithArg, BoundedVec, derive_impl};
-use sp_core::{ConstU32, ConstU128};
+use sp_core::{ConstU32, ConstU128, ConstU64};
 use sp_runtime::{
 	traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
@@ -42,6 +42,7 @@ frame_support::construct_runtime!(
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
 		AssetsHolder: pallet_assets_holder::<Instance2>,
+		Timestamp: pallet_timestamp,
 	}
 );
 
@@ -92,6 +93,13 @@ impl pallet_balances::Config for Test {
 	type FreezeIdentifier = ();
 	type MaxFreezes = ConstU32<0>;
 	type DoneSlashHandler = ();
+}
+
+impl pallet_timestamp::Config for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ConstU64<5>;
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -229,7 +237,7 @@ parameter_types! {
 	pub const Postcode: u32 = 10;
 	pub const RegionDepositAmount: Balance = 100_000;
 	pub const LocationDepositAmount: Balance = 10_000;
-	pub const MaximumListingDuration: BlockNumber = 10_000;
+	pub const MaximumListingDuration: u64 = 10_000;
 	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
@@ -263,6 +271,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type MarketplaceFeePercentage = ConstU128<1>;
 	type MaxListingDuration = MaximumListingDuration;
 	type AcceptedAssets = AcceptedPaymentAssets;
+	type TimeProvider = Timestamp;
 }
 
 // Build genesis storage according to the mock runtime.

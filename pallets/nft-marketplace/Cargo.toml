@@ -37,6 +37,7 @@ sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 pallet-assets-holder = { workspace = true }
+pallet-timestamp = { workspace = true }
 
 [features]
 default = ["std"]
@@ -55,6 +56,7 @@ std = [
 	"sp-api/std",
 	"primitives/std",
 	"pallet-assets-holder/std",
+	"pallet-timestamp/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
