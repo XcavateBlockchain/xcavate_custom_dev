@@ -890,12 +890,14 @@ pub mod pallet {
 					ensure!(property_sale_info.spv_lawyer.is_none(), Error::<T>::LawyerJobTaken);
 					ensure!(property_sale_info.buyer_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
 					property_sale_info.spv_lawyer = Some(signer.clone());
+					property_sale_info.spv_lawyer_costs = costs;
 					PropertySale::<T>::insert(asset_id, property_sale_info);
 				}
 				LegalSale::BuyerSide => {
 					ensure!(property_sale_info.buyer_lawyer.is_none(), Error::<T>::LawyerJobTaken);
 					ensure!(property_sale_info.spv_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
 					property_sale_info.buyer_lawyer = Some(signer.clone());
+					property_sale_info.buyer_lawyer_costs = costs;
 					PropertySale::<T>::insert(asset_id, property_sale_info);
 				}
 			}
@@ -1051,6 +1053,7 @@ pub mod pallet {
 				let mut remaining_payment = expected_buyer_amount;
 				let mut remaining_reserve = reserve_released;
 
+				// Store the shares of the token holder
 				for owner in owner_list {
 					let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
 						asset_id,

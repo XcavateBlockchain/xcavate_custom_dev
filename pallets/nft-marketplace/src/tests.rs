@@ -5,7 +5,7 @@ use crate::{Regions, LocationRegistration, ListedToken, NextNftId,
 	OngoingObjectListing, NextAssetId, TokenOwner, TokenBuyer,
 	TokenListings, OngoingOffers, PropertyOwnerToken, PropertyOwner, PropertyLawyer,
 	RealEstateLawyer, RefundToken, AssetIdDetails};
-use sp_runtime::{TokenError, Permill, SaturatedConversion};
+use sp_runtime::{TokenError, Permill};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -21,8 +21,6 @@ fn run_to_block(n: u64) {
 		}
 		System::reset_events();
 		System::set_block_number(System::block_number() + 1);
-		let new_time = Timestamp::now().as_millis().saturated_into::<u64>() + 1000u64;
-		Timestamp::set_timestamp(new_time);
 		System::on_initialize(System::block_number());
 		NftMarketplace::on_initialize(System::block_number());
 	}
@@ -33,7 +31,6 @@ fn run_to_block(n: u64) {
 fn create_new_region_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -50,7 +47,6 @@ fn create_new_region_works() {
 fn create_new_region_does_not_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_noop!(
 			NftMarketplace::create_new_region(RuntimeOrigin::signed([7; 32].into()), 30, Permill::from_percent(3)),
 			Error::<Test>::UserNotWhitelisted
@@ -76,7 +72,6 @@ fn create_new_region_does_not_works() {
 fn adjust_listing_duration_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_eq!(Regions::<Test>::get(0).unwrap().listing_duration, 30);
@@ -106,8 +101,8 @@ fn adjust_listing_duration_works() {
 			bvec![22, 22],
 			false
 		));
-		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listing_expiry, 30);
-		assert_eq!(OngoingObjectListing::<Test>::get(1).unwrap().listing_expiry, 50);
+		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listing_expiry, 31);
+		assert_eq!(OngoingObjectListing::<Test>::get(1).unwrap().listing_expiry, 51);
 		run_to_block(32);
 		assert_noop!(
 			NftMarketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984),
@@ -121,7 +116,6 @@ fn adjust_listing_duration_works() {
 fn adjust_listing_duration_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_noop!(
 			NftMarketplace::adjust_listing_duration(
 				RuntimeOrigin::signed([8; 32].into()),
@@ -172,7 +166,6 @@ fn adjust_listing_duration_fails() {
 fn propose_region_takeover_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -190,7 +183,6 @@ fn propose_region_takeover_works() {
 fn propose_region_takeover_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_noop!(
@@ -219,7 +211,6 @@ fn propose_region_takeover_fails() {
 fn handle_takeover_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
@@ -255,7 +246,6 @@ fn handle_takeover_works() {
 fn handle_takeover_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -279,7 +269,6 @@ fn handle_takeover_fails() {
 fn cancel_takeover_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
@@ -304,7 +293,6 @@ fn cancel_takeover_works() {
 fn cancel_takeover_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
@@ -333,7 +321,6 @@ fn cancel_takeover_fails() {
 fn create_new_location_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -376,7 +363,6 @@ fn create_new_location_works() {
 fn create_new_location_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_noop!(
 			NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![10, 10]),
 			Error::<Test>::UserNotWhitelisted
@@ -394,7 +380,6 @@ fn create_new_location_fails() {
 fn register_lawyer_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_eq!(RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(), true);
@@ -407,7 +392,6 @@ fn register_lawyer_works() {
 fn register_lawyer_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_noop!(NftMarketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()), Error::<Test>::RegionUnknown);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -423,7 +407,6 @@ fn register_lawyer_fails() {
 fn list_object_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -452,7 +435,6 @@ fn list_object_works() {
 fn list_object_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_noop!(
@@ -525,7 +507,6 @@ fn list_object_fails() {
 fn buy_property_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -555,7 +536,6 @@ fn buy_property_token_works() {
 fn buy_property_token_works_developer_covers_fees() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -586,7 +566,6 @@ fn buy_property_token_works_developer_covers_fees() {
 fn buy_property_token_doesnt_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_noop!(
 			NftMarketplace::buy_property_token(RuntimeOrigin::signed([0; 32].into()), 1, 1, 1984),
@@ -599,7 +578,6 @@ fn buy_property_token_doesnt_work() {
 fn buy_property_token_doesnt_work_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -634,7 +612,6 @@ fn buy_property_token_doesnt_work_2() {
 fn buy_property_token_fails_insufficient_balance() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -662,7 +639,6 @@ fn buy_property_token_fails_insufficient_balance() {
 fn listing_and_selling_multiple_objects() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -760,7 +736,6 @@ fn listing_and_selling_multiple_objects() {
 fn claim_property_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -799,7 +774,6 @@ fn claim_property_works() {
 fn claim_property_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -876,7 +850,6 @@ fn claim_property_fails() {
 fn remove_from_case_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -929,7 +902,6 @@ fn remove_from_case_works() {
 fn remove_from_case_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -977,7 +949,6 @@ fn remove_from_case_fails() {
 fn distributes_nfts_and_funds() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1052,7 +1023,6 @@ fn distributes_nfts_and_funds() {
 fn distributes_nfts_and_funds_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1120,7 +1090,6 @@ fn distributes_nfts_and_funds_2() {
 fn distributes_nfts_and_funds_3() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_parts(32_500)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1196,7 +1165,6 @@ fn distributes_nfts_and_funds_3() {
 fn reject_contract_and_refund() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1299,7 +1267,6 @@ fn reject_contract_and_refund() {
 fn reject_contract_and_refund_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1381,7 +1348,6 @@ fn reject_contract_and_refund_2() {
 fn second_attempt_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1455,7 +1421,6 @@ fn second_attempt_works() {
 fn lawyer_confirm_documents_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1516,7 +1481,6 @@ fn lawyer_confirm_documents_fails() {
 fn relist_a_nft() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1574,7 +1538,6 @@ fn relist_a_nft() {
 fn relist_nfts_not_created_with_marketplace_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Nfts::create(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -1601,7 +1564,6 @@ fn relist_nfts_not_created_with_marketplace_fails() {
 fn relist_a_nft_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1670,7 +1632,6 @@ fn relist_a_nft_fails() {
 fn buy_relisted_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1753,7 +1714,6 @@ fn buy_relisted_token_works() {
 fn buy_relisted_token_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1820,7 +1780,6 @@ fn buy_relisted_token_fails() {
 #[test]
 fn make_offer_works() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1880,7 +1839,6 @@ fn make_offer_works() {
 #[test]
 fn make_offer_fails() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -1963,7 +1921,6 @@ fn make_offer_fails() {
 #[test]
 fn handle_offer_works() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2050,7 +2007,6 @@ fn handle_offer_works() {
 #[test]
 fn handle_offer_fails() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2132,7 +2088,6 @@ fn handle_offer_fails() {
 #[test]
 fn cancel_offer_works() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2196,7 +2151,6 @@ fn cancel_offer_works() {
 #[test]
 fn cancel_offer_fails() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2265,7 +2219,6 @@ fn cancel_offer_fails() {
 fn upgrade_price_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2320,7 +2273,6 @@ fn upgrade_price_works() {
 fn upgrade_price_fails_if_not_owner() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2379,7 +2331,6 @@ fn upgrade_price_fails_if_not_owner() {
 fn upgrade_object_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2402,7 +2353,6 @@ fn upgrade_object_works() {
 fn upgrade_object_and_distribute_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2464,7 +2414,6 @@ fn upgrade_object_and_distribute_works() {
 fn upgrade_single_nft_from_listed_object_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2489,7 +2438,6 @@ fn upgrade_single_nft_from_listed_object_fails() {
 fn upgrade_object_for_relisted_nft_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2545,7 +2493,6 @@ fn upgrade_object_for_relisted_nft_fails() {
 fn upgrade_object_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2591,7 +2538,6 @@ fn upgrade_object_fails() {
 fn delist_single_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2662,7 +2608,6 @@ fn delist_single_token_works() {
 fn delist_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2724,7 +2669,6 @@ fn delist_fails() {
 fn listing_objects_in_different_regions() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
@@ -2838,7 +2782,6 @@ fn listing_objects_in_different_regions() {
 fn cancel_property_purchase_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2878,7 +2821,6 @@ fn cancel_property_purchase_works() {
 fn cancel_property_purchase_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2916,7 +2858,6 @@ fn cancel_property_purchase_fails() {
 fn cancel_property_purchase_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2946,7 +2887,6 @@ fn cancel_property_purchase_fails_2() {
 fn withdraw_expired_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -2982,7 +2922,6 @@ fn withdraw_expired_works() {
 fn withdraw_expired_works_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3041,7 +2980,6 @@ fn withdraw_expired_works_2() {
 fn withdraw_expired_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3077,7 +3015,6 @@ fn withdraw_expired_fails() {
 fn withdraw_expired_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3105,7 +3042,6 @@ fn withdraw_expired_fails_2() {
 fn send_property_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3188,7 +3124,6 @@ fn send_property_token_works() {
 fn send_property_token_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3262,7 +3197,6 @@ fn send_property_token_fails() {
 fn send_property_token_fails_if_relist() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3329,7 +3263,6 @@ fn send_property_token_fails_if_relist() {
 fn withdraw_deposit_unsold_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3356,7 +3289,6 @@ fn withdraw_deposit_unsold_works() {
 fn withdraw_deposit_unsold_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
@@ -3385,7 +3317,6 @@ fn withdraw_deposit_unsold_fails() {
 fn withdraw_deposit_unsold_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		Timestamp::set_timestamp(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));

@@ -65,8 +65,7 @@ use super::{
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, EXISTENTIAL_DEPOSIT, HOURS,
 	MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION, deposit,
-	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsHolder, TIMESTAMP_DAYS,
-	Assets, Timestamp,
+	OriginCaller, UNIT, Nfts, RealEstateAssets, DAYS, AssetsHolder, Assets,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 use codec::{Decode, Encode, DecodeWithMemTracking, MaxEncodedLen};
@@ -588,7 +587,7 @@ parameter_types! {
 	pub const LocationDepositAmount: Balance = 10_000 * UNIT;
 	pub const PropertyFundingAmount: Balance = 10 * UNIT;
 	pub const MarketplaceFeePercent: Balance = 1;
-	pub const MaximumListingDuration: u64 = 30 * TIMESTAMP_DAYS;
+	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
 	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
@@ -622,7 +621,6 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type MarketplaceFeePercentage = MarketplaceFeePercent;
 	type MaxListingDuration = MaximumListingDuration;
 	type AcceptedAssets = AcceptedPaymentAssets;
-	type TimeProvider = Timestamp;
 }
 
 parameter_types! {
