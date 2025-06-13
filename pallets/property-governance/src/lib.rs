@@ -547,6 +547,8 @@ pub mod pallet {
 		BuyerNotSet,
 		/// No reserve has been set for the sale.
 		NoReserve,
+		/// Token amount is zero.
+		ZeroTokenAmount,
 	}
 
 	#[pallet::hooks]
@@ -1290,6 +1292,7 @@ pub mod pallet {
 						}; 
 					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(proposal.asset_id);
 					if let Some(asset_details) = asset_details {
+						ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
 						let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
 
@@ -1316,6 +1319,7 @@ pub mod pallet {
 			if let Some(voting_result) = voting_results {
 				let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id);
 				if let Some(asset_details) = asset_details {
+					ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 					let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
 					let required_threshold = T::SaleApprovalYesThreshold::get();
 					if yes_votes_percentage >= required_threshold
@@ -1373,6 +1377,7 @@ pub mod pallet {
 					if let Some(voting_result) = voting_results {
 						let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(challenge.asset_id);
 						if let Some(asset_details) = asset_details {
+							ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
 							let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
 							let required_threshold = <T as Config>::Threshold::get();
