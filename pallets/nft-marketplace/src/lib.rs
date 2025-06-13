@@ -206,20 +206,26 @@ pub mod pallet {
 		type PostcodeLimit: Get<u32>;
 
 		/// A deposit for listing a property.
+		#[pallet::constant]
 		type ListingDeposit: Get<Balance>;
 
 		/// Amount to fund a property account.
+		#[pallet::constant]
 		type PropertyAccountFundingAmount: Get<Balance>;
 
 		/// A deposit for operating a region.
+		#[pallet::constant]
 		type RegionDeposit: Get<Balance>;
 
 		/// A deposit for operating a location.
+		#[pallet::constant]
 		type LocationDeposit: Get<Balance>;
 
 		/// The fee percentage charged by the marketplace (e.g., 1 for 1%).
+		#[pallet::constant]
 		type MarketplaceFeePercentage: Get<Balance>;
 		
+		#[pallet::constant]
 		type MaxListingDuration: Get<BlockNumberFor<Self>>;
 
 		#[pallet::constant]

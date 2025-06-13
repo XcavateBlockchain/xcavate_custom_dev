@@ -127,6 +127,7 @@ pub mod pallet {
 		type AgentOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The minimum amount of a letting agent that has to be deposited.
+		#[pallet::constant]
 		type LettingAgentDeposit: Get<Balance>;
 
 		/// The maximum amount of properties that can be assigned to a letting agent.

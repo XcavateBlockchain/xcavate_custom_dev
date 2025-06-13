@@ -5,8 +5,8 @@ use frame_support::{
 	sp_runtime::{Percent, Permill},
 };
 
-use crate::{Proposals, Challenges, ChallengeRoundsExpiring, OngoingChallengeVotes, OngoingVotes, SalesFunds,
-	OngoingSalesVotes, SaleProposals, UserProposalVote, UserSalesVote, PropertySale, SaleAuctions,
+use crate::{Proposals, Challenges, ChallengeRoundsExpiring, OngoingChallengeVotes, OngoingProposalVotes, SaleFunds,
+	OngoingSaleProposalVotes, SaleProposals, UserProposalVote, UserSaleProposalVote, PropertySale, SaleAuctions, Reserve,
 };
 
 use pallet_property_management::{
@@ -110,7 +110,7 @@ fn propose_works() {
 			bvec![10, 10]
 		));
 		assert_eq!(Proposals::<Test>::get(1).unwrap().asset_id, 0);
-		assert_eq!(OngoingVotes::<Test>::get(1).is_some(), true);
+		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), true);
 	});
 }
 
@@ -138,7 +138,7 @@ fn proposal_with_low_amount_works() {
 		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 500}.into());
 		assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(OngoingVotes::<Test>::get(1).is_some(), false);
+		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), false);
 	});
 }
 
@@ -255,8 +255,8 @@ fn vote_on_proposal_works() {
 			1,
 			crate::Vote::No
 		));
-		assert_eq!(OngoingVotes::<Test>::get(1).unwrap().yes_voting_power, 10);
-		assert_eq!(OngoingVotes::<Test>::get(1).unwrap().no_voting_power, 90);
+		assert_eq!(OngoingProposalVotes::<Test>::get(1).unwrap().yes_voting_power, 10);
+		assert_eq!(OngoingProposalVotes::<Test>::get(1).unwrap().no_voting_power, 90);
 	});
 }
 
@@ -308,7 +308,7 @@ fn proposal_pass() {
 		run_to_block(31);
 		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 1000}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(OngoingVotes::<Test>::get(1).is_none(), true);
+		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_none(), true);
 	});
 }
 
@@ -468,6 +468,12 @@ fn vote_on_proposal_fails() {
 			),
 			Error::<Test>::NoPermission
 		);
+		run_to_block(31);
+		assert_noop!(PropertyGovernance::vote_on_proposal(
+			RuntimeOrigin::signed([1; 32].into()),
+			1,
+			crate::Vote::Yes
+		), Error::<Test>::NotOngoing);
 	});
 }
 
@@ -986,7 +992,7 @@ fn propose_property_sale_works() {
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), true);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
 	});
 }
 
@@ -1016,7 +1022,7 @@ fn propose_property_sale_fails() {
 		lawyer_process();
 		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0), Error::<Test>::NoPermission);
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::SaleProposalOngoing);
+		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::PropertySaleProposalOngoing);
 		assert_ok!(PropertyGovernance::vote_on_property_sale(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
@@ -1043,7 +1049,7 @@ fn vote_on_property_sale_works() {
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), true);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
 		assert_ok!(PropertyGovernance::vote_on_property_sale(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
@@ -1059,17 +1065,17 @@ fn vote_on_property_sale_works() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 65);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().no_voting_power, 35);
-		assert_eq!(UserSalesVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::Yes);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 65);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 35);
+		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::Yes);
 		assert_ok!(PropertyGovernance::vote_on_property_sale(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
 			crate::Vote::No
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 25);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().no_voting_power, 75);
-		assert_eq!(UserSalesVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::No);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 25);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 75);
+		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::No);
 	});
 }
 
@@ -1111,7 +1117,7 @@ fn auction_starts() {
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), true);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
 		assert_ok!(PropertyGovernance::vote_on_property_sale(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
@@ -1127,12 +1133,12 @@ fn auction_starts() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
 		run_to_block(31);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), false);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSalesVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
+		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, None);
@@ -1154,7 +1160,7 @@ fn proposal_does_not_pass() {
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
 		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), true);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
 		assert_ok!(PropertyGovernance::vote_on_property_sale(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
@@ -1170,13 +1176,13 @@ fn proposal_does_not_pass() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 85);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 85);
 		run_to_block(31);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
-		System::assert_last_event(Event::SaleProposalRejected{ asset_id: 0}.into());
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), false);
+		System::assert_last_event(Event::PropertySaleProposalRejected{ asset_id: 0}.into());
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSalesVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
+		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
 		assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
 	});
 }
@@ -1211,7 +1217,7 @@ fn bid_on_sale_works() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
 		run_to_block(31);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, None);
@@ -1235,7 +1241,7 @@ fn bid_on_sale_works() {
 		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()), 300);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([4; 32].into()));
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 3000);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, Some((1984, 300)));
+		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, Some(Reserve{payment_asset: 1984, amount: 300}));
 		run_to_block(61);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, Some(3000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer, Some([4; 32].into()));
@@ -1272,7 +1278,7 @@ fn bid_on_sale_fails() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
 		assert_noop!(
 			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1984),
 			Error::<Test>::NoOngoingAuction,
@@ -1281,6 +1287,10 @@ fn bid_on_sale_fails() {
 		assert_noop!(
 			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 10, 1337),
 			Error::<Test>::UserNotWhitelisted,
+		);
+		assert_noop!(
+			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1),
+			Error::<Test>::PaymentAssetNotSupported,
 		);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
@@ -1322,7 +1332,7 @@ fn lawyer_claim_sale_works() {
 		run_to_block(61);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer.unwrap(), [7; 32].into());
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price.unwrap(), 300_000);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().reserve.unwrap(), (1984, 30_000));
+		assert_eq!(PropertySale::<Test>::get(0).unwrap().reserve.unwrap(), Reserve { payment_asset: 1984, amount: 30_000 });
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(), [10; 32].into());
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer_costs, 1_000);
@@ -1409,8 +1419,8 @@ fn lawyer_claim_sale_fails_2() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 75);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().no_voting_power, 25);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 75);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 25);
 		run_to_block(31);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
@@ -1583,7 +1593,57 @@ fn lawyer_confirm_sale_works_deny() {
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
 		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, false));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Rejected);
+		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 30_000);
 		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, false));
+		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 0);
+		assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+	});
+}
+
+#[test]
+fn lawyer_confirm_sale_works_deny_2() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		listing_process();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
+		assert_ok!(NftMarketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
+		assert_ok!(NftMarketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
+		assert_ok!(NftMarketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
+		lawyer_process();
+		setting_letting_agent([2; 32].into());
+		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
+		assert_ok!(PropertyGovernance::vote_on_property_sale(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
+			crate::Vote::Yes
+		));
+		assert_ok!(PropertyGovernance::vote_on_property_sale(
+			RuntimeOrigin::signed([2; 32].into()),
+			0,
+			crate::Vote::No
+		));
+		assert_ok!(PropertyGovernance::vote_on_property_sale(
+			RuntimeOrigin::signed([3; 32].into()),
+			0,
+			crate::Vote::Yes
+		));
+		run_to_block(31);
+		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
+		run_to_block(61);
+		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
+		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
+		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
+		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(), [10; 32].into());
+		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, false));
+		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Rejected);
+		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 30_000);
+		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
+		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
+		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, false));
+		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 0);
 		assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
 	});
 }
@@ -1617,8 +1677,8 @@ fn lawyer_confirm_sale_fails() {
 			0,
 			crate::Vote::Yes
 		));
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().yes_voting_power, 90);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).unwrap().no_voting_power, 10);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 90);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 10);
 		assert_noop!(
 			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
 			Error::<Test>::NotForSale
@@ -1695,10 +1755,10 @@ fn finalize_sale_works() {
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
 		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
 		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 264_000);
 		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 1_000);
@@ -1746,10 +1806,10 @@ fn finalize_sale_works_2() {
 		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
 		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
 		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 264_000);
 		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 3_000);
@@ -1864,10 +1924,10 @@ fn claim_sale_funds_works() {
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 264_000);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 600);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 0);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 29_400);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 264_000);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 600);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 0);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 29_400);
 		assert_eq!(LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)), 0);
 		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984));
 		assert_eq!(LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)), 90);
@@ -1876,11 +1936,11 @@ fn claim_sale_funds_works() {
 		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 0);
 		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_600);
 		assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 264_000);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 0);
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 0);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 0);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 0);
 		assert_eq!(LocalAssets::total_issuance(0), 100);
 		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([2; 32].into()), 0, 1984));
-		assert_eq!(SalesFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 0);
+		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 0);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 0);
 		assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_075_400);
 		assert_eq!(Nfts::owner(0, 0).is_none(), true);
@@ -1919,9 +1979,9 @@ fn claim_sale_funds_fails() {
 		);
 		run_to_block(31);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSalesVotes::<Test>::get(0).is_some(), false);
+		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSalesVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
+		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
 		run_to_block(61);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));

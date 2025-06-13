@@ -299,7 +299,6 @@ parameter_types! {
 	pub const PropertyVotingTime: BlockNumber = 30;
 	pub const PropertySaleVotingTime: BlockNumber = 30;
 	pub const MaxVoteForBlock: u32 = 100;
-	pub const MaximumVoter: u32 = 100;
 	pub const VotingThreshold: Percent = Percent::from_percent(51);
 	pub const HighVotingThreshold: Percent = Percent::from_percent(67);
 	pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
@@ -319,7 +318,6 @@ impl pallet_property_governance::Config for Test {
 	type SaleVotingTime = PropertySaleVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = ConstU128<100>;
-	type MaxVoter = MaximumVoter;
 	type Threshold = VotingThreshold;
 	type HighThreshold = HighVotingThreshold;
 	#[cfg(feature = "runtime-benchmarks")]
@@ -327,7 +325,6 @@ impl pallet_property_governance::Config for Test {
 	type LowProposal = ConstU128<500>;
 	type HighProposal = ConstU128<2000>;
 	type MarketplacePalletId = NftMarketplacePalletId;
-	type SalesAgentDeposit = ConstU128<100>;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
 	type AuctionTime = AuctionDuration;
 }

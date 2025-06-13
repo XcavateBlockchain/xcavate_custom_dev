@@ -35,6 +35,7 @@ pub mod pallet {
 		type WhitelistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Max users allowed in the whitelist.
+		#[pallet::constant]
 		type MaxUsersInWhitelist: Get<u32>;
 	}
 
