@@ -29,6 +29,7 @@ pallet-nft-fractionalization = { workspace = true }
 # Local dependencies
 pallet-xcavate-whitelist = { workspace = true }
 pallet-nft-marketplace = { workspace = true }
+pallet-region = { workspace = true }
 
 [dev-dependencies]
 sp-core = { workspace = true }
@@ -50,6 +51,7 @@ std = [
 	"pallet-xcavate-whitelist/std",
 	"pallet-balances/std",
 	"pallet-nft-marketplace/std",
+	"pallet-region/std",
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"sp-api/std",

@@ -40,8 +40,8 @@ fn run_to_block(n: u64) {
 
 fn listing_process() {
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-	assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
-	assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
+	assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+	assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 	assert_ok!(NftMarketplace::list_object(
@@ -265,8 +265,8 @@ fn proposal_pass() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
@@ -625,8 +625,8 @@ fn challenge_does_not_pass() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
@@ -701,7 +701,7 @@ fn challenge_pass_only_one_agent() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		listing_process();
-		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![9, 10]));
+		assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![9, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::signed([6; 32].into()),
@@ -846,8 +846,8 @@ fn different_proposals() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
@@ -1001,8 +1001,8 @@ fn propose_property_sale_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::AssetNotFound);
@@ -1376,7 +1376,7 @@ fn lawyer_claim_sale_fails() {
 		run_to_block(31);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
@@ -1425,7 +1425,7 @@ fn lawyer_claim_sale_fails_2() {
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(NftMarketplace::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Region::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);

@@ -11,7 +11,7 @@ use frame_support::sp_runtime::Permill;
 #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct RegionInfo<T: Config> {
-    pub collection_id: <T as pallet::Config>::NftCollectionId,
+    pub collection_id: <T as pallet_region::Config>::NftCollectionId,
     pub listing_duration: BlockNumberFor<T>,
 	pub owner: AccountIdOf<T>,
 	pub tax: Permill,
@@ -33,10 +33,10 @@ pub struct NftDetails<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
     pub real_estate_developer: AccountIdOf<T>,
-    pub token_price: Balance,
-    pub collected_funds: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
-    pub collected_tax: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
-    pub collected_fees: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
+    pub token_price: <T as pallet::Config>::Balance,
+    pub collected_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub collected_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub collected_fees: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
     pub asset_id: u32,
     pub item_id: NftId,
     pub collection_id: NftCollectionId,
@@ -51,7 +51,7 @@ pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
     pub seller: AccountIdOf<T>,
-    pub token_price: Balance,
+    pub token_price: <T as pallet::Config>::Balance,
     pub asset_id: u32,
     pub item_id: NftId,
     pub collection_id: NftCollectionId,
@@ -67,7 +67,7 @@ pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
     pub item_id: NftId,
     pub region: u32,
     pub location: LocationId<T>,
-    pub price: Balance,
+    pub price: <T as pallet::Config>::Balance,
     pub token_amount: u32,
     pub spv_created: bool,
 }
@@ -76,9 +76,9 @@ pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct OfferDetails<Balance, T: Config> {
+pub struct OfferDetails<T: Config> {
     pub buyer: AccountIdOf<T>,
-    pub token_price: Balance,
+    pub token_price: <T as pallet::Config>::Balance,
     pub amount: u32,
     pub payment_assets: u32,
 }
@@ -90,17 +90,17 @@ pub struct PropertyLawyerDetails<T: Config> {
     pub spv_lawyer: Option<AccountIdOf<T>>,
     pub real_estate_developer_status: DocumentStatus,
     pub spv_status: DocumentStatus,
-    pub real_estate_developer_lawyer_costs: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
-    pub spv_lawyer_costs: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
+    pub real_estate_developer_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub spv_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
     pub second_attempt: bool,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, DefaultNoBound)]
 #[scale_info(skip_type_params(T))]
-pub struct TokenOwnerDetails<Balance, T: Config> {
+pub struct TokenOwnerDetails<T: Config> {
     pub token_amount: u32,
-    pub paid_funds: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
-    pub paid_tax: BoundedBTreeMap<u32, Balance, T::MaxNftToken>,
+    pub paid_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub paid_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
 }
 
 #[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -110,12 +110,12 @@ pub struct RefundInfos<T: Config> {
     pub property_lawyer_details: PropertyLawyerDetails<T>,
 }
 
-impl<Balance, T: Config> OfferDetails<Balance, T>
+impl<T: Config> OfferDetails<T>
 where
-    Balance: CheckedMul + TryFrom<u128>,
+    <T as pallet::Config>::Balance: CheckedMul + TryFrom<u128>,
 {
-    pub fn get_total_amount(&self) -> Result<Balance, Error<T>> {
-        let amount_in_balance: Balance = (self.amount as u128)
+    pub fn get_total_amount(&self) -> Result<<T as pallet::Config>::Balance, Error<T>> {
+        let amount_in_balance: <T as pallet::Config>::Balance = (self.amount as u128)
             .try_into()
             .map_err(|_| Error::<T>::ConversionError)?;
 
@@ -125,7 +125,7 @@ where
     }
 }
 
-/// Offer enum.
+/// Takeover enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum TakeoverAction {

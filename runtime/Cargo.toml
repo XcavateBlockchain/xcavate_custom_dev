@@ -90,6 +90,7 @@ pallet-nft-marketplace.workspace = true
 pallet-xcavate-whitelist.workspace = true
 pallet-property-management.workspace = true
 pallet-property-governance.workspace = true
+pallet-region.workspace = true
 
 [features]
 default = ["std"]
@@ -157,6 +158,7 @@ std = [
 	"pallet-xcavate-whitelist/std",
 	"pallet-property-management/std",
 	"pallet-property-governance/std",
+	"pallet-region/std",
 ]
 
 runtime-benchmarks = [
@@ -192,6 +194,7 @@ runtime-benchmarks = [
 	"pallet-xcavate-whitelist/runtime-benchmarks",
 	"pallet-property-governance/runtime-benchmarks",
 	"pallet-property-management/runtime-benchmarks",
+	"pallet-region/runtime-benchmarks",
 ]
 
 try-runtime = [
@@ -228,6 +231,7 @@ try-runtime = [
 	"pallet-xcavate-whitelist/try-runtime",
 	"pallet-property-governance/try-runtime",
 	"pallet-property-management/try-runtime",
+	"pallet-region/try-runtime",
 ]
 
 # Enable the metadata hash generation.

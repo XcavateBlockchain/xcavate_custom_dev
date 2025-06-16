@@ -53,6 +53,7 @@ frame_support::construct_runtime!(
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
 		AssetsHolder: pallet_assets_holder::<Instance2>,
+		Region: pallet_region,
 	}
 );
 
@@ -232,15 +233,33 @@ impl pallet_xcavate_whitelist::Config for Test {
 }
 
 parameter_types! {
+	pub const Postcode: u32 = 10;
+	pub const RegionDepositAmount: Balance = 100_000;
+	pub const LocationDepositAmount: Balance = 10_000;
+	pub const MaximumListingDuration: u64 = 10_000;
+}
+
+impl pallet_region::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = u128;
+	type NativeCurrency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type Nfts = Nfts;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type RegionDeposit = RegionDepositAmount;
+	type PalletId = NftMarketplacePalletId;
+	type MaxListingDuration = MaximumListingDuration;
+	type PostcodeLimit = Postcode;
+	type LocationDeposit = LocationDepositAmount;
+}
+
+parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 1000;
 	pub const MaxNftsInCollection: u32 = 100;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const Postcode: u32 = 10;
-	pub const RegionDepositAmount: Balance = 100_000;
-	pub const LocationDepositAmount: Balance = 10_000;
-	pub const MaximumListingDuration: BlockNumber = 10_000;
 	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
@@ -248,6 +267,7 @@ parameter_types! {
 impl pallet_nft_marketplace::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Test>;
+	type Balance = u128;
 	type NativeCurrency = Balances;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = LocalAssets;
@@ -257,20 +277,14 @@ impl pallet_nft_marketplace::Config for Test {
 	type PalletId = NftMarketplacePalletId;
 	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
-	type LocationOrigin = EnsureRoot<Self::AccountId>;
-	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type TreasuryId = TreasuryPalletId;
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type PostcodeLimit = Postcode;
 	type ListingDeposit = ConstU128<10>;
 	type PropertyAccountFundingAmount = ConstU128<100>;
-	type RegionDeposit = RegionDepositAmount;
-	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = ConstU128<1>;
-	type MaxListingDuration = MaximumListingDuration;
 	type AcceptedAssets = AcceptedPaymentAssets;
 }
 

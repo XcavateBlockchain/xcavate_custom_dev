@@ -580,14 +580,10 @@ parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 250;
-	pub const Postcode: u32 = 10;
 	pub const ListingDepositAmount: Balance = 10 * UNIT;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
-	pub const LocationDepositAmount: Balance = 10_000 * UNIT;
 	pub const PropertyFundingAmount: Balance = 10 * UNIT;
 	pub const MarketplaceFeePercent: Balance = 1;
-	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
 	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
@@ -595,6 +591,7 @@ parameter_types! {
 impl pallet_nft_marketplace::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
+	type Balance = Balance;
 	type NativeCurrency = Balances;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type LocalCurrency = RealEstateAssets;
@@ -604,8 +601,6 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type PalletId = NftMarketplacePalletId;
 	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
-	type LocationOrigin = EnsureRoot<Self::AccountId>;
-	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_nft_marketplace::NftHelper;
@@ -613,13 +608,9 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type PostcodeLimit = Postcode;
 	type ListingDeposit = ListingDepositAmount;
 	type PropertyAccountFundingAmount = PropertyFundingAmount;
-	type RegionDeposit = RegionDepositAmount;
-	type LocationDeposit = LocationDepositAmount;
 	type MarketplaceFeePercentage = MarketplaceFeePercent;
-	type MaxListingDuration = MaximumListingDuration;
 	type AcceptedAssets = AcceptedPaymentAssets;
 }
 
@@ -695,3 +686,25 @@ impl pallet_property_governance::Config for Runtime {
 	type AuctionTime = AuctionDuration;
 }
 
+parameter_types! {
+	pub const Postcode: u32 = 10;
+	pub const RegionDepositAmount: Balance = 100_000 * UNIT;
+	pub const LocationDepositAmount: Balance = 10_000 * UNIT;
+	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
+}
+
+/// Configure the pallet-property-governance in pallets/property-governance.
+impl pallet_region::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type NativeCurrency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type Nfts = Nfts;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
+	type RegionDeposit = RegionDepositAmount;
+	type PalletId = NftMarketplacePalletId;
+	type MaxListingDuration = MaximumListingDuration;
+	type PostcodeLimit = Postcode;
+	type LocationDeposit = LocationDepositAmount;
+}

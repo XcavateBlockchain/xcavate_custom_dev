@@ -90,6 +90,7 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_xcavate_whitelist::Config
 		+ pallet_nft_marketplace::Config
+		+ pallet_region::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -143,7 +144,7 @@ pub mod pallet {
 		type MaxLocations: Get<u32>;
 	}
 
-	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_region::Config>::PostcodeLimit>;
 
 	/// Mapping from the real estate object to the letting agent.
 	#[pallet::storage]
@@ -255,10 +256,10 @@ pub mod pallet {
 			letting_agent: AccountIdOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let region_info = pallet_nft_marketplace::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = pallet_region::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 			ensure!(
-				pallet_nft_marketplace::LocationRegistration::<T>::get(
+				pallet_region::LocationRegistration::<T>::get(
 					region,
 					location.clone()
 				),
@@ -330,11 +331,11 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			LettingInfo::<T>::try_mutate(letting_agent.clone(), |maybe_letting_info| {
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoLettingAgentFound)?;
-				let region_info = pallet_nft_marketplace::Regions::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
+				let region_info = pallet_region::Regions::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 				ensure!(letting_info.deposited, Error::<T>::NotDeposited);
 				ensure!(
-					pallet_nft_marketplace::LocationRegistration::<T>::get(
+					pallet_region::LocationRegistration::<T>::get(
 						letting_info.region,
 						location.clone()
 					),

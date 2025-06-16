@@ -30,6 +30,7 @@ pallet-nft-fractionalization = { workspace = true }
 
 # Local dependencies
 pallet-xcavate-whitelist = { workspace = true }
+pallet-region = { workspace = true }
 primitives = { path = "../../primitives", default-features = false }
 
 [dev-dependencies]
@@ -50,6 +51,7 @@ std = [
 	"pallet-nfts/std",
 	"pallet-balances/std",
 	# "pallet-xcavate-whitelist/std",
+	"pallet-region/std",
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"sp-api/std",

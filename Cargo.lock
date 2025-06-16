@@ -7417,6 +7417,7 @@ dependencies = [
  "pallet-balances",
  "pallet-nft-fractionalization",
  "pallet-nfts",
+ "pallet-region",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
  "primitives",
@@ -7598,6 +7599,7 @@ dependencies = [
  "pallet-nft-marketplace",
  "pallet-nfts",
  "pallet-property-management",
+ "pallet-region",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
  "primitives",
@@ -7622,6 +7624,7 @@ dependencies = [
  "pallet-nft-fractionalization",
  "pallet-nft-marketplace",
  "pallet-nfts",
+ "pallet-region",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
  "primitives",
@@ -7693,6 +7696,24 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-arithmetic",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-region"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-nfts",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
  "sp-io",
  "sp-runtime",
 ]
@@ -8183,6 +8204,7 @@ dependencies = [
  "pallet-property-governance",
  "pallet-property-management",
  "pallet-proxy",
+ "pallet-region",
  "pallet-session",
  "pallet-sudo",
  "pallet-timestamp",

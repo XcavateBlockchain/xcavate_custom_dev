@@ -12,6 +12,7 @@ members = [
     "pallets/xcavate-whitelist",
     "pallets/property-governance",
     "pallets/property-management",
+    "pallets/region",
     "runtime",
 ]
 resolver = "2"
@@ -129,3 +130,4 @@ pallet-nft-marketplace = { path = "./pallets/nft-marketplace", default-features 
 pallet-xcavate-whitelist = {  path = "./pallets/xcavate-whitelist", default-features = false }
 pallet-property-management = {  path = "./pallets/property-management", default-features = false }
 pallet-property-governance = {  path = "./pallets/property-governance", default-features = false }
+pallet-region = {  path = "./pallets/region", default-features = false }

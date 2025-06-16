@@ -196,6 +196,7 @@ pub mod pallet {
 		+ pallet_nft_marketplace::Config
 		+ pallet_property_management::Config
 		+ pallet_xcavate_whitelist::Config
+		+ pallet_region::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -276,7 +277,7 @@ pub mod pallet {
 		type AuctionTime: Get<BlockNumberFor<Self>>;
 	}
 
-	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_region::Config>::PostcodeLimit>;
 
 	/// Number of proposals that have been made.
 	#[pallet::storage]
@@ -1089,7 +1090,7 @@ pub mod pallet {
 				let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 				let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 					.ok_or(Error::<T>::NoObjectFound)?;
-				let region_info = pallet_nft_marketplace::Regions::<T>::get(property_info.region)
+				let region_info = pallet_region::Regions::<T>::get(property_info.region)
 					.ok_or(Error::<T>::RegionUnknown)?;
 				
 				let total_token = property_info.token_amount;
