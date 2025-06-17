@@ -11,7 +11,7 @@ use frame_support::sp_runtime::Permill;
 #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct RegionInfo<T: Config> {
-    pub collection_id: <T as pallet_region::Config>::NftCollectionId,
+    pub collection_id: <T as pallet_regions::Config>::NftCollectionId,
     pub listing_duration: BlockNumberFor<T>,
 	pub owner: AccountIdOf<T>,
 	pub tax: Permill,

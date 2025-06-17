@@ -577,7 +577,7 @@ impl pallet_asset_tx_payment::Config for Runtime {
 }
 
 parameter_types! {
-	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
+	pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 250;
 	pub const ListingDepositAmount: Balance = 10 * UNIT;
@@ -587,10 +587,10 @@ parameter_types! {
 	pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
 }
 
-/// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
-impl pallet_nft_marketplace::Config for Runtime {
+/// Configure the pallet-marketplace in pallets/marketplace.
+impl pallet_marketplace::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_marketplace::weights::SubstrateWeight<Runtime>;
 	type Balance = Balance;
 	type NativeCurrency = Balances;
 	type RuntimeHoldReason = RuntimeHoldReason;
@@ -598,12 +598,12 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type ForeignCurrency = Assets;
 	type ForeignAssetsHolder = AssetsHolder;
 	type Nfts = Nfts;
-	type PalletId = NftMarketplacePalletId;
+	type PalletId = MarketplacePalletId;
 	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	#[cfg(feature = "runtime-benchmarks")]
-	type Helper = pallet_nft_marketplace::NftHelper;
+	type Helper = pallet_marketplace::NftHelper;
 	type TreasuryId = TreasuryPalletId;
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
@@ -640,7 +640,7 @@ impl pallet_property_management::Config for Runtime {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
 	type ForeignCurrency = Assets;
-	type MarketplacePalletId = NftMarketplacePalletId;
+	type MarketplacePalletId = MarketplacePalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_property_management::AssetHelper;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
@@ -681,7 +681,7 @@ impl pallet_property_governance::Config for Runtime {
 	type Helper = pallet_property_governance::AssetHelper;
 	type LowProposal = LowProposal;
 	type HighProposal = HighProposal;
-	type MarketplacePalletId = NftMarketplacePalletId;
+	type MarketplacePalletId = MarketplacePalletId;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
 	type AuctionTime = AuctionDuration;
 }
@@ -694,7 +694,7 @@ parameter_types! {
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
-impl pallet_region::Config for Runtime {
+impl pallet_regions::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
 	type NativeCurrency = Balances;
@@ -703,7 +703,7 @@ impl pallet_region::Config for Runtime {
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type RegionDeposit = RegionDepositAmount;
-	type PalletId = NftMarketplacePalletId;
+	type PalletId = MarketplacePalletId;
 	type MaxListingDuration = MaximumListingDuration;
 	type PostcodeLimit = Postcode;
 	type LocationDeposit = LocationDepositAmount;

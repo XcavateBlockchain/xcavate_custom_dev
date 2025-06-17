@@ -1,7 +1,7 @@
 [package]
-name = "pallet-region"
+name = "pallet-regions"
 version = "4.0.0-dev"
-description = "The Xcavate pallet region"
+description = "The Xcavate pallet regions"
 authors = ["Xcavate Network"]
 homepage = "https://xcavate.io"
 edition = "2021"

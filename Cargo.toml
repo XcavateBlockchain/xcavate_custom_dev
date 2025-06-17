@@ -8,11 +8,11 @@ edition = "2021"
 [workspace]
 members = [
     "node",
-    "pallets/nft-marketplace",
+    "pallets/marketplace",
     "pallets/xcavate-whitelist",
     "pallets/property-governance",
     "pallets/property-management",
-    "pallets/region",
+    "pallets/regions",
     "runtime",
 ]
 resolver = "2"
@@ -126,8 +126,8 @@ xcm-executor = { version = "19.1.2", default-features = false, package = "stagin
 substrate-wasm-builder = { version = "26.0.1", default-features = false }
 
 # Local Dependencies
-pallet-nft-marketplace = { path = "./pallets/nft-marketplace", default-features = false }
+pallet-marketplace = { path = "./pallets/marketplace", default-features = false }
 pallet-xcavate-whitelist = {  path = "./pallets/xcavate-whitelist", default-features = false }
 pallet-property-management = {  path = "./pallets/property-management", default-features = false }
 pallet-property-governance = {  path = "./pallets/property-governance", default-features = false }
-pallet-region = {  path = "./pallets/region", default-features = false }
+pallet-regions = {  path = "./pallets/regions", default-features = false }

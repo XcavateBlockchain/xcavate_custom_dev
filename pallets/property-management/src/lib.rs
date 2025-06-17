@@ -89,8 +89,8 @@ pub mod pallet {
 	pub trait Config:
 		frame_system::Config
 		+ pallet_xcavate_whitelist::Config
-		+ pallet_nft_marketplace::Config
-		+ pallet_region::Config
+		+ pallet_marketplace::Config
+		+ pallet_regions::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -144,7 +144,7 @@ pub mod pallet {
 		type MaxLocations: Get<u32>;
 	}
 
-	pub type LocationId<T> = BoundedVec<u8, <T as pallet_region::Config>::PostcodeLimit>;
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
 	/// Mapping from the real estate object to the letting agent.
 	#[pallet::storage]
@@ -256,10 +256,10 @@ pub mod pallet {
 			letting_agent: AccountIdOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let region_info = pallet_region::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = pallet_regions::RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 			ensure!(
-				pallet_region::LocationRegistration::<T>::get(
+				pallet_regions::LocationRegistration::<T>::get(
 					region,
 					location.clone()
 				),
@@ -331,11 +331,11 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			LettingInfo::<T>::try_mutate(letting_agent.clone(), |maybe_letting_info| {
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoLettingAgentFound)?;
-				let region_info = pallet_region::Regions::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
+				let region_info = pallet_regions::RegionDetails::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 				ensure!(letting_info.deposited, Error::<T>::NotDeposited);
 				ensure!(
-					pallet_region::LocationRegistration::<T>::get(
+					pallet_regions::LocationRegistration::<T>::get(
 						letting_info.region,
 						location.clone()
 					),
@@ -367,7 +367,7 @@ pub mod pallet {
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::set_letting_agent())]
 		pub fn set_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			ensure!(pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).is_some(), Error::<T>::NoObjectFound);
+			ensure!(pallet_marketplace::AssetIdDetails::<T>::get(asset_id).is_some(), Error::<T>::NoObjectFound);
 			ensure!(LettingStorage::<T>::get(asset_id).is_none(), Error::<T>::LettingAgentAlreadySet);
 			LettingInfo::<T>::try_mutate(signer.clone(), |maybe_letting_info|{
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
@@ -406,7 +406,7 @@ pub mod pallet {
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			ensure!(letting_agent == signer, Error::<T>::NoPermission);
 			ensure!(
-				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+				<T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 				Error::<T>::PaymentAssetNotSupported
 			);
 		
@@ -423,13 +423,13 @@ pub mod pallet {
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
-			let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
+			let property_info = pallet_marketplace::AssetIdDetails::<T>::get(asset_id)
 				.ok_or(Error::<T>::NoObjectFound)?;
 		
 			let total_token = property_info.token_amount;
 			for owner in owner_list {
-				let token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+				let token_amount = pallet_marketplace::PropertyOwnerToken::<T>::get(
 					asset_id,
 					owner.clone(),
 				);
@@ -461,7 +461,7 @@ pub mod pallet {
 		pub fn withdraw_funds(origin: OriginFor<T>, asset_id: u32, payment_asset: u32) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+				<T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 				Error::<T>::PaymentAssetNotSupported
 			);
 			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset));

@@ -1,7 +1,7 @@
 [package]
-name = "pallet-nft-marketplace"
+name = "pallet-marketplace"
 version = "4.0.0-dev"
-description = "The Xcavate pallet nft-marketplace"
+description = "The Xcavate pallet marketplace"
 authors = ["Xcavate Network"]
 homepage = "https://xcavate.io"
 edition = "2021"
@@ -30,7 +30,7 @@ pallet-nft-fractionalization = { workspace = true }
 
 # Local dependencies
 pallet-xcavate-whitelist = { workspace = true }
-pallet-region = { workspace = true }
+pallet-regions = { workspace = true }
 primitives = { path = "../../primitives", default-features = false }
 
 [dev-dependencies]
@@ -51,7 +51,7 @@ std = [
 	"pallet-nfts/std",
 	"pallet-balances/std",
 	# "pallet-xcavate-whitelist/std",
-	"pallet-region/std",
+	"pallet-regions/std",
 	"pallet-assets/std",
 	"pallet-nft-fractionalization/std",
 	"sp-api/std",

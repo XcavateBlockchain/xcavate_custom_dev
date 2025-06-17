@@ -323,7 +323,7 @@ mod runtime {
 
 	// Custom pallets,
 	#[runtime::pallet_index(50)]
-	pub type NftMarketplace = pallet_nft_marketplace;
+	pub type Marketplace = pallet_marketplace;
 	#[runtime::pallet_index(51)]
 	pub type XcavateWhitelist = pallet_xcavate_whitelist;
 	#[runtime::pallet_index(52)]
@@ -331,7 +331,7 @@ mod runtime {
 	#[runtime::pallet_index(53)]
 	pub type PropertyGovernance = pallet_property_governance;
 	#[runtime::pallet_index(54)]
-	pub type Region = pallet_region;
+	pub type Regions = pallet_regions;
 }
 
 #[docify::export(register_validate_block)]

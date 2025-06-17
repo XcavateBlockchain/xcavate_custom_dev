@@ -96,7 +96,7 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_nfts::Config
 		+ pallet_xcavate_whitelist::Config
-		+ pallet_region::Config
+		+ pallet_regions::Config
 		+ pallet_nft_fractionalization::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -133,7 +133,7 @@ pub mod pallet {
 			+ fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
 		
 		type Nfts: nonfungibles_v2::Inspect<AccountIdOf<Self>, ItemId = <Self as pallet::Config>::NftId,
-			CollectionId = <Self as pallet_region::Config>::NftCollectionId>	
+			CollectionId = <Self as pallet_regions::Config>::NftCollectionId>	
 			+ Transfer<Self::AccountId>
 			+ nonfungibles_v2::Mutate<AccountIdOf<Self>, ItemConfig>
 			+ nonfungibles_v2::Create<AccountIdOf<Self>, CollectionConfig<<Self as pallet::Config>::Balance, 
@@ -163,7 +163,7 @@ pub mod pallet {
 		/// Collection id type from pallet nft fractionalization.
 		type FractionalizeCollectionId: IsType<<Self as pallet_nft_fractionalization::Config>::NftCollectionId>
 			+ Parameter
-			+ From<<Self as pallet_region::Config>::NftCollectionId>
+			+ From<<Self as pallet_regions::Config>::NftCollectionId>
 			+ Ord
 			+ Copy
 			+ MaxEncodedLen
@@ -210,24 +210,24 @@ pub mod pallet {
 	pub type FractionalizeItemId<T> = <T as Config>::FractionalizeItemId;
 	pub type RegionId = u32;
 	pub type ListingId = u32;
-	pub type LocationId<T> = BoundedVec<u8, <T as pallet_region::Config>::PostcodeLimit>;
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
 	pub(super) type NftListingDetailsType<T> = NftListingDetails<
 		<T as pallet::Config>::NftId,
-		<T as pallet_region::Config>::NftCollectionId,
+		<T as pallet_regions::Config>::NftCollectionId,
 		T,
 	>;
 
 	pub(super) type ListingDetailsType<T> = TokenListingDetails<
 		<T as pallet::Config>::NftId,
-		<T as pallet_region::Config>::NftCollectionId,
+		<T as pallet_regions::Config>::NftCollectionId,
 		T,
 	>;
 
 	/// Id for the next nft in a collection.
 	#[pallet::storage]
 	pub(super) type NextNftId<T: Config> =
-		StorageMap<_, Blake2_128Concat, <T as pallet_region::Config>::NftCollectionId, <T as pallet::Config>::NftId, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, <T as pallet_regions::Config>::NftCollectionId, <T as pallet::Config>::NftId, ValueQuery>;
 
 	/// Id of the possible next asset that would be used for
 	/// Nft fractionalization.
@@ -303,7 +303,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		u32,
-		AssetDetails<<T as pallet::Config>::NftId, <T as pallet_region::Config>::NftCollectionId, T>,
+		AssetDetails<<T as pallet::Config>::NftId, <T as pallet_regions::Config>::NftCollectionId, T>,
 		OptionQuery,
 	>;
 
@@ -364,7 +364,7 @@ pub mod pallet {
 		/// A new object has been listed on the marketplace.
 		ObjectListed {
 			listing_index: ListingId,
-			collection_index: <T as pallet_region::Config>::NftCollectionId,
+			collection_index: <T as pallet_regions::Config>::NftCollectionId,
 			item_index: <T as pallet::Config>::NftId,
 			asset_id: u32,
 			token_price: <T as pallet::Config>::Balance,
@@ -398,7 +398,7 @@ pub mod pallet {
 		/// Documents have been approved or rejected.
 		DocumentsConfirmed { signer: AccountIdOf<T>, listing_id: ListingId, legal_side: LegalProperty, approve: bool },
 		/// The property nft got burned.
-		PropertyNftBurned { collection_id: <T as pallet_region::Config>::NftCollectionId, item_id: <T as pallet::Config>::NftId, asset_id: u32 },
+		PropertyNftBurned { collection_id: <T as pallet_regions::Config>::NftCollectionId, item_id: <T as pallet::Config>::NftId, asset_id: u32 },
 		/// Property token have been send to the investors.
 		PropertyTokenSent { listing_id: ListingId, asset_id: u32 },
 		/// The property deal has been successfully sold.
@@ -551,9 +551,9 @@ pub mod pallet {
 			ensure!(token_amount >= T::MinNftToken::get(), Error::<T>::TokenAmountTooLow);
 			ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
 
-			let region_info = pallet_region::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = pallet_regions::RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(
-				pallet_region::LocationRegistration::<T>::get(region, location.clone()),
+				pallet_regions::LocationRegistration::<T>::get(region, location.clone()),
 				Error::<T>::LocationUnknown
 			);
 			let item_id = NextNftId::<T>::get(region_info.collection_id);
@@ -730,7 +730,7 @@ pub mod pallet {
 
 				let fee_percent = T::MarketplaceFeePercentage::get();
 				ensure!(fee_percent < 100u128.into(), Error::<T>::InvalidFeePercentage);
-				let region_info = pallet_region::Regions::<T>::get(asset_details.region).ok_or(Error::<T>::RegionUnknown)?;
+				let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region).ok_or(Error::<T>::RegionUnknown)?;
 				let tax_percent = region_info.tax;
 				ensure!(tax_percent < Permill::from_percent(100), Error::<T>::InvalidTaxPercentage);
 
@@ -1485,7 +1485,7 @@ pub mod pallet {
 			lawyer: AccountIdOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let region_info = pallet_region::Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = pallet_regions::RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 			ensure!(RealEstateLawyer::<T>::get(lawyer.clone()).is_none(), Error::<T>::LawyerAlreadyRegistered);
 			RealEstateLawyer::<T>::insert(lawyer.clone(), region);
@@ -1837,7 +1837,7 @@ pub mod pallet {
 				AssetIdDetails::<T>::get(nft_details.asset_id).ok_or(Error::<T>::InvalidIndex)?;
 			let treasury_id = Self::treasury_account_id();
 			let property_account = Self::property_account_id(nft_details.asset_id);
-			let region = pallet_region::Regions::<T>::get(asset_details.region).ok_or(Error::<T>::RegionUnknown)?;
+			let region = pallet_regions::RegionDetails::<T>::get(asset_details.region).ok_or(Error::<T>::RegionUnknown)?;
 
 			// Get lawyer accounts
 			let real_estate_developer_lawyer_id = property_lawyer_details

@@ -49,7 +49,7 @@ mod test_runtime {
     #[runtime::pallet_index(3)]
     pub type XcavateWhitelist = pallet_xcavate_whitelist;
 	#[runtime::pallet_index(4)]
-	pub type Region = crate;
+	pub type Regions = crate;
 }
 
 parameter_types! {

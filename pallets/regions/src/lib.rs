@@ -114,7 +114,7 @@ pub mod pallet {
 
     /// Mapping of region to the region information.
 	#[pallet::storage]
-	pub type Regions<T: Config> = 
+	pub type RegionDetails<T: Config> = 
 		StorageMap<_, Blake2_128Concat, RegionId, RegionInfo<T>, OptionQuery>;
 
     /// Id of the next region.
@@ -222,7 +222,7 @@ pub mod pallet {
 				owner: signer.clone(),
 				tax,
 			};
-			Regions::<T>::insert(current_region_id, region_info);
+			RegionDetails::<T>::insert(current_region_id, region_info);
 			NextRegionId::<T>::put(next_region_id);
 			
 			Self::deposit_event(Event::<T>::RegionCreated { 
@@ -253,7 +253,7 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 
-			Regions::<T>::try_mutate(region, |maybe_region| {
+			RegionDetails::<T>::try_mutate(region, |maybe_region| {
 				let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(signer == region.owner, Error::<T>::NoPermission);
 
@@ -286,7 +286,7 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 
-			Regions::<T>::try_mutate(region, |maybe_region| {
+			RegionDetails::<T>::try_mutate(region, |maybe_region| {
 				let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(region.owner == signer, Error::<T>::NoPermission);
 
@@ -314,7 +314,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 		
 			ensure!(signer != region_info.owner, Error::<T>::AlreadyRegionOwner);
 			ensure!(!TakeoverRequests::<T>::contains_key(region), Error::<T>::TakeoverAlreadyPending);
@@ -351,7 +351,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let mut region_info = Regions::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let mut region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(signer == region_info.owner, Error::<T>::NoPermission);
 
 			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
@@ -366,7 +366,7 @@ pub mod pallet {
 					)?;
 	
 					region_info.owner = requester.clone();
-					Regions::<T>::insert(region, region_info);
+					RegionDetails::<T>::insert(region, region_info);
 	
 					Self::deposit_event(Event::<T>::TakeoverAccepted { region, new_owner: requester });
 				},
@@ -435,7 +435,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			ensure!(Regions::<T>::contains_key(region), Error::<T>::RegionUnknown);
+			ensure!(RegionDetails::<T>::contains_key(region), Error::<T>::RegionUnknown);
 			ensure!(
 				!LocationRegistration::<T>::contains_key(region, &location),
 				Error::<T>::LocationRegistered

@@ -193,10 +193,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
-		+ pallet_nft_marketplace::Config
+		+ pallet_marketplace::Config
 		+ pallet_property_management::Config
 		+ pallet_xcavate_whitelist::Config
-		+ pallet_region::Config
+		+ pallet_regions::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -277,7 +277,7 @@ pub mod pallet {
 		type AuctionTime: Get<BlockNumberFor<Self>>;
 	}
 
-	pub type LocationId<T> = BoundedVec<u8, <T as pallet_region::Config>::PostcodeLimit>;
+	pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
 	/// Number of proposals that have been made.
 	#[pallet::storage]
@@ -668,7 +668,7 @@ pub mod pallet {
 			asset_id: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			ensure!(pallet_property_management::LettingStorage::<T>::get(asset_id).is_some(), Error::<T>::NoLettingAgentFound);
 			let challenge_id = ChallengeCount::<T>::get().saturating_add(1);
@@ -709,9 +709,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(proposal.asset_id);
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(proposal.asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-			let voting_power = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				proposal.asset_id,
 				signer.clone(),
 			);
@@ -754,9 +754,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let challenge = Challenges::<T>::get(challenge_id).ok_or(Error::<T>::NotOngoing)?;
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(challenge.asset_id);
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(challenge.asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-			let voting_power = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				challenge.asset_id,
 				signer.clone(),
 			);
@@ -797,12 +797,12 @@ pub mod pallet {
 			asset_id: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
+			let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
 
 			ensure!(PropertySale::<T>::get(asset_id).is_none(), Error::<T>::SaleOngoing);
 			ensure!(SaleProposals::<T>::get(asset_id).is_none(), Error::<T>::PropertySaleProposalOngoing);
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			let sale_proposal = PropertySaleProposal {
@@ -841,9 +841,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(SaleProposals::<T>::get(asset_id).is_some(), Error::<T>::NotOngoing);
-			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
+			let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-			let voting_power = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				asset_id,
 				signer.clone(),
 			);
@@ -892,7 +892,7 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(
-				<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+				<T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 				Error::<T>::PaymentAssetNotSupported
 			);
 			let reserve_amount = price.checked_div(10).ok_or(Error::<T>::DivisionError)?;
@@ -940,8 +940,8 @@ pub mod pallet {
 			costs: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let lawyer_region = pallet_nft_marketplace::RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
-			let asset_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
+			let lawyer_region = pallet_marketplace::RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
+			let asset_info = pallet_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(lawyer_region == asset_info.region, Error::<T>::NoPermissionInRegion);
 			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
 			let price = property_sale_info.price.ok_or(Error::<T>::PriceNotSet)?;
@@ -1076,7 +1076,7 @@ pub mod pallet {
 				ensure!(sale_info.lawyer_approved, Error::<T>::SaleHasNotBeenApproved);
 				ensure!(!sale_info.finalized, Error::<T>::AlreadyFinalized);
 				ensure!(
-					<T as pallet_nft_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
+					<T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 					Error::<T>::PaymentAssetNotSupported
 				);
 
@@ -1085,12 +1085,12 @@ pub mod pallet {
 				let buyer_lawyer_fees = sale_info.buyer_lawyer_costs;
 				let spv_lawyer_account = sale_info.spv_lawyer.clone().ok_or(Error::<T>::SpvLawyerNotSet)?;
 				let property_account = Self::property_account_id(asset_id);
-				let treasury_account = pallet_nft_marketplace::Pallet::<T>::treasury_account_id();
+				let treasury_account = pallet_marketplace::Pallet::<T>::treasury_account_id();
 
-				let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
-				let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
+				let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
+				let property_info = pallet_marketplace::AssetIdDetails::<T>::get(asset_id)
 					.ok_or(Error::<T>::NoObjectFound)?;
-				let region_info = pallet_region::Regions::<T>::get(property_info.region)
+				let region_info = pallet_regions::RegionDetails::<T>::get(property_info.region)
 					.ok_or(Error::<T>::RegionUnknown)?;
 				
 				let total_token = property_info.token_amount;
@@ -1141,7 +1141,7 @@ pub mod pallet {
 
 				// Store the shares of the token holder
 				for owner in owner_list {
-					let property_token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::get(
+					let property_token_amount = pallet_marketplace::PropertyOwnerToken::<T>::get(
 						asset_id,
 						owner.clone(),
 					);
@@ -1211,7 +1211,7 @@ pub mod pallet {
 			ensure!(amount > 0, Error::<T>::NoFundsToClaim);
 			let property_account = Self::property_account_id(asset_id);
 			Self::transfer_funds(&property_account, &signer, amount, payment_asset)?;
-			let property_token_amount = pallet_nft_marketplace::PropertyOwnerToken::<T>::take(
+			let property_token_amount = pallet_marketplace::PropertyOwnerToken::<T>::take(
 				asset_id,
 				signer.clone(),
 			);
@@ -1224,8 +1224,8 @@ pub mod pallet {
 			)?;	
 			property_sale_info.property_token_amount = property_sale_info.property_token_amount.checked_sub(property_token_amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
 			if property_sale_info.property_token_amount == 0 {
-				pallet_nft_marketplace::Pallet::<T>::burn_tokens_and_nfts(asset_id)?;
-				pallet_nft_marketplace::PropertyOwner::<T>::take(asset_id);
+				pallet_marketplace::Pallet::<T>::burn_tokens_and_nfts(asset_id)?;
+				pallet_marketplace::PropertyOwner::<T>::take(asset_id);
 			} else {
 				PropertySale::<T>::insert(asset_id, property_sale_info);
 			}
@@ -1291,7 +1291,7 @@ pub mod pallet {
 						}  else {
 							<T as Config>::Threshold::get()
 						}; 
-					let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(proposal.asset_id);
+					let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(proposal.asset_id);
 					if let Some(asset_details) = asset_details {
 						ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
@@ -1318,7 +1318,7 @@ pub mod pallet {
 			let voting_results = <OngoingSaleProposalVotes<T>>::take(asset_id);
 			let _ = <SaleProposals<T>>::take(asset_id);
 			if let Some(voting_result) = voting_results {
-				let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id);
+				let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(asset_id);
 				if let Some(asset_details) = asset_details {
 					ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 					let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
@@ -1376,7 +1376,7 @@ pub mod pallet {
 				else {
 					let voting_results = <OngoingChallengeVotes<T>>::take(challenge_id, challenge.state.clone());
 					if let Some(voting_result) = voting_results {
-						let asset_details = pallet_nft_marketplace::AssetIdDetails::<T>::get(challenge.asset_id);
+						let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(challenge.asset_id);
 						if let Some(asset_details) = asset_details {
 							ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);

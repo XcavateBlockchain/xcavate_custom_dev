@@ -7288,6 +7288,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-marketplace"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-assets-holder",
+ "pallet-balances",
+ "pallet-nft-fractionalization",
+ "pallet-nfts",
+ "pallet-regions",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "primitives",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-membership"
 version = "40.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7403,31 +7428,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
-]
-
-[[package]]
-name = "pallet-nft-marketplace"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-assets-holder",
- "pallet-balances",
- "pallet-nft-fractionalization",
- "pallet-nfts",
- "pallet-region",
- "pallet-xcavate-whitelist",
- "parity-scale-codec",
- "primitives",
- "scale-info",
- "serde",
- "sp-api",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -7595,11 +7595,11 @@ dependencies = [
  "pallet-assets",
  "pallet-assets-holder",
  "pallet-balances",
+ "pallet-marketplace",
  "pallet-nft-fractionalization",
- "pallet-nft-marketplace",
  "pallet-nfts",
  "pallet-property-management",
- "pallet-region",
+ "pallet-regions",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
  "primitives",
@@ -7621,10 +7621,10 @@ dependencies = [
  "pallet-assets",
  "pallet-assets-holder",
  "pallet-balances",
+ "pallet-marketplace",
  "pallet-nft-fractionalization",
- "pallet-nft-marketplace",
  "pallet-nfts",
- "pallet-region",
+ "pallet-regions",
  "pallet-xcavate-whitelist",
  "parity-scale-codec",
  "primitives",
@@ -7701,7 +7701,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-region"
+name = "pallet-regions"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
@@ -8196,15 +8196,15 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-collator-selection",
+ "pallet-marketplace",
  "pallet-message-queue",
  "pallet-multisig",
  "pallet-nft-fractionalization",
- "pallet-nft-marketplace",
  "pallet-nfts",
  "pallet-property-governance",
  "pallet-property-management",
  "pallet-proxy",
- "pallet-region",
+ "pallet-regions",
  "pallet-session",
  "pallet-sudo",
  "pallet-timestamp",

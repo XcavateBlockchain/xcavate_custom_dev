@@ -86,11 +86,11 @@ parachain-info.workspace = true
 primitives = { path = "../primitives", default-features = false }
 
 # Local Dependencies
-pallet-nft-marketplace.workspace = true
+pallet-marketplace.workspace = true
 pallet-xcavate-whitelist.workspace = true
 pallet-property-management.workspace = true
 pallet-property-governance.workspace = true
-pallet-region.workspace = true
+pallet-regions.workspace = true
 
 [features]
 default = ["std"]
@@ -154,11 +154,11 @@ std = [
 	"xcm-builder/std",
 	"xcm-executor/std",
 	"xcm/std",
-	"pallet-nft-marketplace/std",
+	"pallet-marketplace/std",
 	"pallet-xcavate-whitelist/std",
 	"pallet-property-management/std",
 	"pallet-property-governance/std",
-	"pallet-region/std",
+	"pallet-regions/std",
 ]
 
 runtime-benchmarks = [
@@ -190,11 +190,11 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 	"xcm-builder/runtime-benchmarks",
 	"xcm-executor/runtime-benchmarks",
-	"pallet-nft-marketplace/runtime-benchmarks",
+	"pallet-marketplace/runtime-benchmarks",
 	"pallet-xcavate-whitelist/runtime-benchmarks",
 	"pallet-property-governance/runtime-benchmarks",
 	"pallet-property-management/runtime-benchmarks",
-	"pallet-region/runtime-benchmarks",
+	"pallet-regions/runtime-benchmarks",
 ]
 
 try-runtime = [
@@ -227,11 +227,11 @@ try-runtime = [
 	"parachain-info/try-runtime",
 	"polkadot-runtime-common/try-runtime",
 	"sp-runtime/try-runtime",
-	"pallet-nft-marketplace/try-runtime",
+	"pallet-marketplace/try-runtime",
 	"pallet-xcavate-whitelist/try-runtime",
 	"pallet-property-governance/try-runtime",
 	"pallet-property-management/try-runtime",
-	"pallet-region/try-runtime",
+	"pallet-regions/try-runtime",
 ]
 
 # Enable the metadata hash generation.

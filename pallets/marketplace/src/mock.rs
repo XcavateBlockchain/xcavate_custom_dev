@@ -1,6 +1,6 @@
 use super::*;
 
-use crate as pallet_nft_marketplace;
+use crate as pallet_marketplace;
 use frame_support::{parameter_types, traits::AsEnsureOriginWithArg, BoundedVec, derive_impl};
 use sp_core::{ConstU32, ConstU128};
 use sp_runtime::{
@@ -38,13 +38,13 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Nfts: pallet_nfts::{Pallet, Call, Storage, Event<T>},
 		NftFractionalization: pallet_nft_fractionalization,
-		NftMarketplace: pallet_nft_marketplace,
+		Marketplace: pallet_marketplace,
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		LocalAssets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		XcavateWhitelist: pallet_xcavate_whitelist,
 		AssetsHolder: pallet_assets_holder::<Instance2>,
-		Region: pallet_region,
+		Regions: pallet_regions,
 	}
 );
 
@@ -230,7 +230,7 @@ parameter_types! {
 	pub const MaximumListingDuration: u64 = 10_000;
 }
 
-impl pallet_region::Config for Test {
+impl pallet_regions::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type NativeCurrency = Balances;
@@ -239,14 +239,14 @@ impl pallet_region::Config for Test {
 	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type RegionDeposit = RegionDepositAmount;
-	type PalletId = NftMarketplacePalletId;
+	type PalletId = MarketplacePalletId;
 	type MaxListingDuration = MaximumListingDuration;
 	type PostcodeLimit = Postcode;
 	type LocationDeposit = LocationDepositAmount;
 }
 
 parameter_types! {
-	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
+	pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MinNftTokens: u32 = 100;
 	pub const MaxNftTokens: u32 = 250;
 	pub const MaxNftsInCollection: u32 = 100;
@@ -255,7 +255,7 @@ parameter_types! {
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
-impl pallet_nft_marketplace::Config for Test {
+impl pallet_marketplace::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type Balance = u128;
@@ -265,7 +265,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type ForeignCurrency = ForeignAssets;
 	type ForeignAssetsHolder = AssetsHolder;
 	type Nfts = Nfts;
-	type PalletId = NftMarketplacePalletId;
+	type PalletId = MarketplacePalletId;
 	type MinNftToken = MinNftTokens;
 	type MaxNftToken = MaxNftTokens;
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
@@ -296,7 +296,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([8; 32].into(), 400_000),
 			([14; 32].into(), 200_000_000_000_000_000_000),
 			([15; 32].into(), 3_500_000),
-			((NftMarketplace::account_id()), 20_000_000),
+			((Marketplace::account_id()), 20_000_000),
 		],
 		dev_accounts: None,
 	}
