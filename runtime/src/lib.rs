@@ -332,6 +332,8 @@ mod runtime {
 	pub type PropertyGovernance = pallet_property_governance;
 	#[runtime::pallet_index(54)]
 	pub type Regions = pallet_regions;
+	#[runtime::pallet_index(55)]
+	pub type RealEstateAsset = pallet_real_estate_asset;
 }
 
 #[docify::export(register_validate_block)]

@@ -91,6 +91,7 @@ pallet-xcavate-whitelist.workspace = true
 pallet-property-management.workspace = true
 pallet-property-governance.workspace = true
 pallet-regions.workspace = true
+pallet-real-estate-asset.workspace = true
 
 [features]
 default = ["std"]
@@ -159,6 +160,7 @@ std = [
 	"pallet-property-management/std",
 	"pallet-property-governance/std",
 	"pallet-regions/std",
+	"pallet-real-estate-asset/std",
 ]
 
 runtime-benchmarks = [
@@ -195,6 +197,7 @@ runtime-benchmarks = [
 	"pallet-property-governance/runtime-benchmarks",
 	"pallet-property-management/runtime-benchmarks",
 	"pallet-regions/runtime-benchmarks",
+	"pallet-real-estate-asset/runtime-benchmarks",
 ]
 
 try-runtime = [
@@ -232,6 +235,7 @@ try-runtime = [
 	"pallet-property-governance/try-runtime",
 	"pallet-property-management/try-runtime",
 	"pallet-regions/try-runtime",
+	"pallet-real-estate-asset/try-runtime",
 ]
 
 # Enable the metadata hash generation.

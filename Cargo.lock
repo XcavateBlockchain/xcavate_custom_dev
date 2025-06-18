@@ -7667,6 +7667,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-real-estate-asset"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-nfts",
+ "pallet-regions",
+ "pallet-xcavate-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-recovery"
 version = "40.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8204,6 +8223,7 @@ dependencies = [
  "pallet-property-governance",
  "pallet-property-management",
  "pallet-proxy",
+ "pallet-real-estate-asset",
  "pallet-regions",
  "pallet-session",
  "pallet-sudo",

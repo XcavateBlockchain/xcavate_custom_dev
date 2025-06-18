@@ -16,11 +16,12 @@ use pallet_nfts::{
 };
 
 use frame_support::{
+	sp_runtime::{Saturating, traits::Zero, Percent},
     pallet_prelude::*, PalletId,
     traits::{
         tokens::{fungible, nonfungibles_v2, Balance, Precision},
 		nonfungibles_v2::{Create, Transfer},
-        fungible::MutateHold,
+        fungible::{MutateHold, Inspect},
     }
 };
 
@@ -30,7 +31,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{traits::{CheckedAdd, One, AccountIdConversion}, Permill};
 
-    /// Infos regarding the listing of a real estate object.
+    /// Infos regarding regions.
     #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
     #[scale_info(skip_type_params(T))]
     pub struct RegionInfo<T: Config> {
@@ -40,12 +41,48 @@ pub mod pallet {
         pub tax: Permill,
     }
 
+	/// Infos regarding the proposal of a region
+    #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+    #[scale_info(skip_type_params(T))]
+	pub struct RegionProposal<T: Config> {
+		pub proposer: T::AccountId,
+		pub data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
+		pub created_at: BlockNumberFor<T>,
+		pub proposal_expiry: BlockNumberFor<T>,
+	}
+
+	/// Voting stats.
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct VoteStats<T: Config> {
+		pub yes_voting_power: T::Balance,
+		pub no_voting_power: T::Balance,
+	}
+
+	/// Info for region auctions.
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct RegionAuction<T: Config> {
+		pub highest_bidder: Option<T::AccountId>,
+		pub collateral: T::Balance,
+		pub auction_expiry: BlockNumberFor<T>,
+	}
+
 	/// Takeover enum.
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	pub enum TakeoverAction {
 		Accept,
 		Reject,
+	}
+
+	/// Vote enum.
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+	pub enum Vote {
+		Yes,
+		No,
 	}
 
 	#[pallet::composite_enum]
@@ -104,13 +141,64 @@ pub mod pallet {
 		/// A deposit for operating a location.
 		#[pallet::constant]
 		type LocationDeposit: Get<Self::Balance>;
+
+		/// The amount of time give to vote for a new region.
+		#[pallet::constant]
+		type RegionVotingTime: Get<BlockNumberFor<Self>>;
+
+		/// The amount of time give to vote for a new region.
+		#[pallet::constant]
+		type RegionAuctionTime: Get<BlockNumberFor<Self>>;
+
+		/// Threshold that needs to be reached to let a region get created.
+		#[pallet::constant]
+		type RegionThreshold: Get<Percent>;
+
+		/// Minimum number of blocks between two proposals.
+		#[pallet::constant]
+		type RegionProposalCooldown: Get<BlockNumberFor<Self>>;
 	}
 	pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
     pub type RegionId = u32;
+	pub type ProposalIndex = u32;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
+
+	#[pallet::storage]
+	pub type LastRegionProposalBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub type RegionProposalCount<T> = StorageValue<_, ProposalIndex, ValueQuery>;
+
+	#[pallet::storage]
+	pub type RegionProposals<T: Config> =
+		StorageMap<_, Blake2_128Concat, ProposalIndex, RegionProposal<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub type OngoingRegionProposalVotes<T: Config> =
+		StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub(super) type UserRegionVote<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		ProposalIndex,
+		Blake2_128Concat,
+		T::AccountId,
+		Vote,
+		OptionQuery,	
+	>;
+
+	#[pallet::storage]
+	pub(super) type RegionAuctions<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		ProposalIndex,
+		RegionAuction<T>,
+		OptionQuery,
+	>;
 
     /// Mapping of region to the region information.
 	#[pallet::storage]
@@ -141,6 +229,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// A new region has been proposed.
+		RegionProposed { region_proposal_id: ProposalIndex, proposer: T::AccountId },
+		/// Voted on region proposal.
+		VotedOnRegionProposal { region_proposal_id: ProposalIndex, voter: T::AccountId, vote: Vote },
         /// New region has been created.
 		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: T::AccountId, listing_duration: BlockNumberFor<T>, tax: Permill },
 		/// Someone proposed to take over a region.
@@ -157,6 +249,12 @@ pub mod pallet {
 		RegionTaxChanged { region: RegionId, new_tax: Permill },
 		/// New location has been created.
 		LocationCreated { region_id: u32, location_id: LocationId<T> },
+		/// An auction for a region has started.
+		RegionAuctionStarted { proposal_id: ProposalIndex },
+		/// A region got rejected.
+		RegionRejected { proposal_id: ProposalIndex },
+		/// A bid for a region got placed.
+		BidSuccessfullyPlaced { proposal_id: ProposalIndex, bidder: T::AccountId, new_leading_bid: T::Balance },
 	}
 
 	#[pallet::error]
@@ -180,10 +278,155 @@ pub mod pallet {
 		NoTakeoverRequest,
 		/// The location is already registered.
 		LocationRegistered,
+		/// The proposal is not ongoing.
+		NotOngoing,
+		/// There is no auction to bid on.
+		NoOngoingAuction,
+		/// The bid is lower than the current highest bid.
+		BidTooLow,
+		/// The voting has not ended yet.
+		VotingStillOngoing,
+		/// No Auction found.
+		NoAuction,
+		/// Auction is still ongoing.
+		AuctionNotFinished,
+		/// Noone bid on the region so there is no region owner.
+		NoNewRegionOwner,
+		/// Cant propose a new regions since the cooldown is still active.
+		RegionProposalCooldownActive,
+		/// The proposa has already expired.
+		ProposalExpired,
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(10)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn propose_new_region(
+			origin: OriginFor<T>, 
+			data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			if let Some(last_proposal_block) = LastRegionProposalBlock::<T>::get() {
+				let cooldown = T::RegionProposalCooldown::get();
+				ensure!(
+					current_block_number.saturating_sub(last_proposal_block) >= cooldown,
+					Error::<T>::RegionProposalCooldownActive
+				);
+			}
+			let region_proposal_id = RegionProposalCount::<T>::get();
+			let expiry_block = current_block_number
+				.saturating_add(<T as Config>::RegionVotingTime::get());
+			let sale_proposal = RegionProposal {
+				proposer: signer.clone(),
+				created_at: current_block_number,
+				proposal_expiry: expiry_block,
+				data,
+			};
+			let vote_stats = VoteStats { yes_voting_power: Zero::zero(), no_voting_power: Zero::zero() };
+			let next_region_proposal_id = region_proposal_id.saturating_add(1);
+			RegionProposals::<T>::insert(region_proposal_id, sale_proposal);
+			OngoingRegionProposalVotes::<T>::insert(region_proposal_id, vote_stats);
+			RegionProposalCount::<T>::put(next_region_proposal_id);
+			LastRegionProposalBlock::<T>::put(current_block_number);
+			Self::deposit_event(Event::RegionProposed { region_proposal_id, proposer: signer });
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn vote_on_region_proposal(
+			origin: OriginFor<T>,
+			proposal_id: ProposalIndex,
+			vote: Vote,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			ensure!(region_proposal.proposal_expiry > current_block_number, Error::<T>::ProposalExpired);
+			let voting_power = T::NativeCurrency::total_balance(&signer);
+ 			OngoingRegionProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote|{
+				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
+				let previous_vote_opt = UserRegionVote::<T>::get(proposal_id, signer.clone());
+				if let Some(previous_vote) = previous_vote_opt {
+					match previous_vote {
+						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
+						Vote::No => current_vote.no_voting_power = current_vote.no_voting_power.saturating_sub(voting_power),
+					}
+				}
+				
+				match vote {
+					Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_add(voting_power),
+					Vote::No => current_vote.no_voting_power = current_vote.no_voting_power.saturating_add(voting_power),
+				}
+				Ok::<(), DispatchError>(())
+			})?;
+			UserRegionVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
+			Self::deposit_event(Event::VotedOnRegionProposal { region_proposal_id: proposal_id, voter: signer, vote });
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn process_region_voting(
+			origin: OriginFor<T>,
+			proposal_id: ProposalIndex,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			ensure!(region_proposal.proposal_expiry <= current_block_number, Error::<T>::VotingStillOngoing);
+			Self::finalize_region_proposal(proposal_id, current_block_number)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn bid_on_region(
+			origin: OriginFor<T>,
+			proposal_id: ProposalIndex,
+			amount: T::Balance,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				Error::<T>::UserNotWhitelisted
+			);
+			RegionAuctions::<T>::try_mutate(proposal_id, |maybe_auction| -> DispatchResult {
+				let auction = maybe_auction.as_mut().ok_or(Error::<T>::NoOngoingAuction)?;
+				let current_block_number = <frame_system::Pallet<T>>::block_number();
+				ensure!(auction.auction_expiry > current_block_number, Error::<T>::NoOngoingAuction);
+				ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
+				T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
+				if let Some(ref old_bidder) = auction.highest_bidder {
+					T::NativeCurrency::release(
+						&HoldReason::RegionDepositReserve.into(),
+						old_bidder,
+						auction.collateral,
+						Precision::Exact,
+					)?;
+				}
+				auction.highest_bidder = Some(signer.clone());
+				auction.collateral = amount;
+				Ok::<(), DispatchError>(())
+			})?;
+			Self::deposit_event(Event::BidSuccessfullyPlaced { proposal_id, bidder: signer, new_leading_bid: amount });
+			Ok(())
+		}
+
         /// Creates a new region for the marketplace.
 		/// This function calls the nfts-pallet to create a new collection.
 		///
@@ -196,15 +439,19 @@ pub mod pallet {
 		/// Emits `RegionCreated` event when succesfful.
         #[pallet::call_index(0)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn create_new_region(origin: OriginFor<T>, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
+		pub fn create_new_region(origin: OriginFor<T>, proposal_id: ProposalIndex, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
+			let auction = RegionAuctions::<T>::get(proposal_id).ok_or(Error::<T>::NoAuction)?;
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			ensure!(auction.auction_expiry <= current_block_number, Error::<T>::AuctionNotFinished);
+			let region_owner = auction.highest_bidder.ok_or(Error::<T>::NoNewRegionOwner)?;
+
 			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
 			ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
-			T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, T::RegionDeposit::get())?;
 			
 			let pallet_id: T::AccountId = Self::account_id();
 			let collection_id = <T as pallet::Config>::Nfts::create_collection(
@@ -219,7 +466,7 @@ pub mod pallet {
 			let region_info = RegionInfo {
 				collection_id,
 				listing_duration,
-				owner: signer.clone(),
+				owner: region_owner.clone(),
 				tax,
 			};
 			RegionDetails::<T>::insert(current_region_id, region_info);
@@ -228,7 +475,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::RegionCreated { 
 				region_id: current_region_id, 
 				collection_id,
-				owner: signer,
+				owner: region_owner,
 				listing_duration,
 				tax, 
 			});
@@ -454,6 +701,28 @@ pub mod pallet {
 		/// Get the account id of the pallet
 		pub fn account_id() -> T::AccountId {
 			<T as pallet::Config>::PalletId::get().into_account_truncating()
+		}
+
+		fn finalize_region_proposal(proposal_id: ProposalIndex, current_block_number: BlockNumberFor<T>) -> DispatchResult {
+			let voting_results = <OngoingRegionProposalVotes<T>>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+			let _ = <RegionProposals<T>>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+			let _ = UserRegionVote::<T>::clear_prefix(proposal_id, u32::MAX, None);	
+			let required_threshold = T::RegionThreshold::get();
+			let total_voting_amount = voting_results.yes_voting_power.checked_add(&voting_results.no_voting_power).ok_or(Error::<T>::ArithmeticOverflow)?;
+			let yes_votes_percentage = Percent::from_rational(voting_results.yes_voting_power, total_voting_amount);
+			let auction_expiry_block = current_block_number.saturating_add(T::RegionAuctionTime::get());
+			if yes_votes_percentage > required_threshold {
+				let auction = RegionAuction {
+					highest_bidder: None,
+					collateral: Zero::zero(),
+					auction_expiry: auction_expiry_block,
+				};
+				RegionAuctions::<T>::insert(proposal_id, auction);
+				Self::deposit_event(Event::RegionAuctionStarted { proposal_id });
+			} else {
+				Self::deposit_event(Event::RegionRejected { proposal_id });
+			}						
+			Ok(())
 		}
 
 		/// Set the default collection configuration for creating a collection.

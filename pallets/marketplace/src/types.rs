@@ -115,9 +115,7 @@ where
     <T as pallet::Config>::Balance: CheckedMul + TryFrom<u128>,
 {
     pub fn get_total_amount(&self) -> Result<<T as pallet::Config>::Balance, Error<T>> {
-        let amount_in_balance: <T as pallet::Config>::Balance = (self.amount as u128)
-            .try_into()
-            .map_err(|_| Error::<T>::ConversionError)?;
+        let amount_in_balance: <T as pallet::Config>::Balance = (self.amount as u128).into();
 
         self.token_price
             .checked_mul(&amount_in_balance)

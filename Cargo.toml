@@ -13,6 +13,7 @@ members = [
     "pallets/property-governance",
     "pallets/property-management",
     "pallets/regions",
+    "pallets/real-estate-asset",
     "runtime",
 ]
 resolver = "2"
@@ -131,3 +132,4 @@ pallet-xcavate-whitelist = {  path = "./pallets/xcavate-whitelist", default-feat
 pallet-property-management = {  path = "./pallets/property-management", default-features = false }
 pallet-property-governance = {  path = "./pallets/property-governance", default-features = false }
 pallet-regions = {  path = "./pallets/regions", default-features = false }
+pallet-real-estate-asset = {  path = "./pallets/real-estate-asset", default-features = false }

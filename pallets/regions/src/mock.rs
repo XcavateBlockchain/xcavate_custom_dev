@@ -154,7 +154,11 @@ parameter_types! {
 	pub const Postcode: u32 = 10;
 	pub const RegionDepositAmount: Balance = 100_000;
 	pub const LocationDepositAmount: Balance = 10_000;
-	pub const MaximumListingDuration: u64 = 10_000;
+	pub const MaximumListingDuration: BlockNumber = 10_000;
+	pub const RegionVotingTime: BlockNumber = 30;
+	pub const RegionAuctionTime: BlockNumber = 30;
+	pub const RegionThreshold: Percent = Percent::from_percent(75);
+	pub const RegionProposalCooldown: BlockNumber = 28;
 }
 
 impl crate::Config for Test {
@@ -170,6 +174,10 @@ impl crate::Config for Test {
 	type MaxListingDuration = MaximumListingDuration;
 	type PostcodeLimit = Postcode;
 	type LocationDeposit = LocationDepositAmount;
+	type RegionVotingTime = RegionVotingTime;
+	type RegionAuctionTime = RegionAuctionTime;
+	type RegionThreshold = RegionThreshold;
+	type RegionProposalCooldown = RegionProposalCooldown;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -178,9 +186,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
-			([0; 32].into(), 20_000_000),
-			([1; 32].into(), 15_000_000),
-			([2; 32].into(), 1_150_000),
+			([0; 32].into(), 200_000),
+			([1; 32].into(), 150_000),
+			([2; 32].into(), 300_000),
 			([3; 32].into(), 5_000),
             ([8; 32].into(), 400_000),
 		],
