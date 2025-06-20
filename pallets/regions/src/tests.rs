@@ -26,6 +26,16 @@ fn run_to_block(n: u64) {
 	}
 }
 
+fn new_region_helper() {
+	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+	run_to_block(31);
+	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
+	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
+	run_to_block(61);
+	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 30, Permill::from_percent(3)));
+}
+
 #[test]
 fn propose_new_region_works() {
 	new_test_ext().execute_with(|| {
@@ -180,50 +190,99 @@ fn bid_on_region_works() {
 		run_to_block(31);
 		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 1_000));
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 199_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 1_000);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 1_000);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().highest_bidder.unwrap(), [0; 32].into());
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 25_001));
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 200_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 0);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 124_999);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 25_001);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 25_001);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().highest_bidder.unwrap(), [1; 32].into());
-		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 140_000));
-		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 140_000);
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 190_000));
+		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 190_000);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().highest_bidder.unwrap(), [0; 32].into());
-		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 145_000));
-		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 145_000);
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 195_000));
+		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 195_000);
 		assert_eq!(RegionAuctions::<Test>::get(0).unwrap().highest_bidder.unwrap(), [0; 32].into());
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 5_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 195_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
 	})
 }
 
-/* 
+#[test]
+fn bid_on_region_fails() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 1_000),
+			Error::<Test>::NoOngoingAuction,
+		);
+		run_to_block(31);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([1; 32].into()), 0));
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([3; 32].into()), 0, 1_000),
+			Error::<Test>::UserNotWhitelisted,
+		);
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 0),
+			Error::<Test>::BidCannotBeZero,
+		);
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 1_000));
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 500),
+			Error::<Test>::BidTooLow,
+		);
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 1_000),
+			Error::<Test>::BidTooLow,
+		);
+		assert_noop!(
+			Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 160_000),
+			TokenError::FundsUnavailable,
+		);
+	})
+}
+
+ 
 #[test]
 fn create_new_region_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 200_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 200_000);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(29);
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([1; 32].into()), 1, crate::Vote::Yes));
+		run_to_block(31);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([1; 32].into()), 0));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 100_000));
+		run_to_block(59);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([1; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 1, 70_000));
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 30_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 170_000);
+		run_to_block(61);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([1; 32].into()), 0, 30, Permill::from_percent(3)));
+		assert_eq!(RegionAuctions::<Test>::get(0).is_none(), true);
+		run_to_block(89);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([1; 32].into()), 1, 30, Permill::from_percent(3)));
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 30_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 170_000);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
 		assert_eq!(RegionDetails::<Test>::get(1).unwrap().collection_id, 1);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().listing_duration, 30);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [8; 32].into());
-	})
-} */
-
-/* #[test]
-fn create_new_region_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 200_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 200_000);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
-		assert_eq!(RegionDetails::<Test>::get(1).unwrap().collection_id, 1);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().listing_duration, 30);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [8; 32].into());
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [0; 32].into());
 	})
 }
 
@@ -232,23 +291,41 @@ fn create_new_region_does_not_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_noop!(
-			Regions::create_new_region(RuntimeOrigin::signed([7; 32].into()), 30, Permill::from_percent(3)),
+			Regions::create_new_region(RuntimeOrigin::signed([7; 32].into()), 0, 30, Permill::from_percent(3)),
 			Error::<Test>::UserNotWhitelisted
 		);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
 		assert_noop!(
-			Regions::create_new_region(RuntimeOrigin::signed([7; 32].into()), 30, Permill::from_percent(3)),
-			TokenError::FundsUnavailable
+			Regions::create_new_region(RuntimeOrigin::signed([7; 32].into()), 0, 30, Permill::from_percent(3)),
+			Error::<Test>::NoAuction
 		);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(31);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
 		assert_noop!(
-			Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, Permill::from_percent(3)),
+			Regions::create_new_region(RuntimeOrigin::signed([7; 32].into()), 0, 30, Permill::from_percent(3)),
+			Error::<Test>::AuctionNotFinished
+		);
+		run_to_block(61);
+		assert_noop!(
+			Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 0, Permill::from_percent(3)),
 			Error::<Test>::ListingDurationCantBeZero
 		);
 		assert_noop!(
-			Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 10_001, Permill::from_percent(3)),
+			Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 10_001, Permill::from_percent(3)),
 			Error::<Test>::ListingDurationTooHigh
 		);
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, crate::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 10_001, Permill::from_percent(3)));
+		assert_eq!(RegionDetails::<Test>::get(0).is_none(), true);
+		System::assert_last_event(Event::NoRegionCreated{ region_proposal_id: 1}.into());
 	})
 }
 
@@ -257,7 +334,7 @@ fn adjust_listing_duration_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().listing_duration, 30);
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
@@ -318,7 +395,7 @@ fn adjust_listing_duration_fails() {
 			),
 			Error::<Test>::RegionUnknown
 		);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Regions::adjust_listing_duration(
 				RuntimeOrigin::signed([0; 32].into()),
@@ -352,13 +429,13 @@ fn propose_region_takeover_works() {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
 		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 14_900_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
 	})
 }
@@ -368,7 +445,7 @@ fn propose_region_takeover_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0),
 			Error::<Test>::UserNotWhitelisted,
@@ -398,26 +475,26 @@ fn handle_takeover_works() {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
 		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 14_900_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
 		assert_ok!(Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Reject));
 		assert_eq!(TakeoverRequests::<Test>::get(0).is_none(), true);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 15_000_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [8; 32].into());
 		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_900_000);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 100_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 100_000);
 		assert_ok!(Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Accept));
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_900_000);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 100_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 100_000);
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 400_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 0);
@@ -432,7 +509,7 @@ fn handle_takeover_fails() {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Reject),
 			Error::<Test>::NoTakeoverRequest
@@ -456,17 +533,17 @@ fn cancel_takeover_works() {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
 		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 14_900_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
 		assert_ok!(Regions::cancel_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(TakeoverRequests::<Test>::get(0).is_none(), true);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 15_000_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
@@ -480,20 +557,20 @@ fn cancel_takeover_fails() {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Regions::cancel_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0),
 			Error::<Test>::NoTakeoverRequest
 		);
 		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 14_900_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
 		assert_noop!(
 			Regions::cancel_region_takeover(RuntimeOrigin::signed([8; 32].into()), 0),
 			Error::<Test>::NoPermission
 		);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 14_900_000);
+		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
 		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
 		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
@@ -506,8 +583,14 @@ fn create_new_location_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, crate::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![9, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![9, 10]));
@@ -557,4 +640,4 @@ fn create_new_location_fails() {
 			Error::<Test>::RegionUnknown
 		);
 	})
-} */
+}

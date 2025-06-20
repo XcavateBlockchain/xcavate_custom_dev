@@ -1,7 +1,7 @@
 use crate::{mock::*, Error};
 use frame_support::traits::Currency;
 use frame_support::BoundedVec;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::{OnFinalize, OnInitialize}};
 
 use crate::{LettingStorage, LettingInfo, InvestorFunds};
 
@@ -15,12 +15,35 @@ macro_rules! bvec {
 	}
 }
 
+fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		if System::block_number() > 0 {
+			PropertyManagement::on_finalize(System::block_number());
+			System::on_finalize(System::block_number());
+		}
+		System::reset_events();
+		System::set_block_number(System::block_number() + 1);
+		System::on_initialize(System::block_number());
+		PropertyManagement::on_initialize(System::block_number());
+	}
+}
+
+fn new_region_helper() {
+	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
+	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 0, pallet_regions::Vote::Yes));
+	run_to_block(31);
+	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([6; 32].into()), 0));
+	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 0, 100_000));
+	run_to_block(61);
+	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 0, 30, Permill::from_percent(3)));
+}
+
 #[test]
 fn add_letting_agent_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::signed([6; 32].into()),
@@ -51,7 +74,7 @@ fn add_letting_agent_fails() {
 			Error::<Test>::RegionUnknown
 		);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			PropertyManagement::add_letting_agent(
 				RuntimeOrigin::signed([6; 32].into()),
@@ -86,7 +109,7 @@ fn let_letting_agent_deposit() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::signed([6; 32].into()),
@@ -114,7 +137,7 @@ fn let_letting_agent_deposit_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::signed([6; 32].into()),
@@ -161,7 +184,7 @@ fn let_letting_agent_deposit_not_enough_funds() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
 			RuntimeOrigin::signed([6; 32].into()),
@@ -181,7 +204,7 @@ fn add_letting_agent_to_location_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![9, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -222,7 +245,7 @@ fn add_letting_agent_to_location_fails() {
 			Error::<Test>::NoLettingAgentFound
 		);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![9, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -275,7 +298,7 @@ fn set_letting_agent_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -383,7 +406,13 @@ fn set_letting_agent_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([0; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([0; 32].into()), 0, pallet_regions::Vote::Yes));
+		run_to_block(31);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 100_000));
+		run_to_block(61);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([0; 32].into()), 0, 30, Permill::from_percent(3)));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([0; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(PropertyManagement::add_letting_agent(
@@ -466,7 +495,7 @@ fn set_letting_agent_no_letting_agent() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -492,7 +521,7 @@ fn distribute_income_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -562,7 +591,7 @@ fn distribute_income_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -611,7 +640,7 @@ fn withdraw_funds_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -692,7 +721,7 @@ fn withdraw_funds_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));

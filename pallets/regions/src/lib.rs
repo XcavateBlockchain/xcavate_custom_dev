@@ -235,6 +235,8 @@ pub mod pallet {
 		VotedOnRegionProposal { region_proposal_id: ProposalIndex, voter: T::AccountId, vote: Vote },
         /// New region has been created.
 		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: T::AccountId, listing_duration: BlockNumberFor<T>, tax: Permill },
+		/// No region has been created.
+		NoRegionCreated { region_proposal_id: ProposalIndex },
 		/// Someone proposed to take over a region.
 		TakeoverProposed { region: RegionId, proposer: T::AccountId },
 		/// A takeover has been accepted from the region owner.
@@ -296,6 +298,8 @@ pub mod pallet {
 		RegionProposalCooldownActive,
 		/// The proposa has already expired.
 		ProposalExpired,
+		/// Bid amount can not be zero.
+		BidCannotBeZero,
 	}
 
 	#[pallet::call]
@@ -405,19 +409,31 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
+			ensure!(!amount.is_zero(), Error::<T>::BidCannotBeZero);
 			RegionAuctions::<T>::try_mutate(proposal_id, |maybe_auction| -> DispatchResult {
 				let auction = maybe_auction.as_mut().ok_or(Error::<T>::NoOngoingAuction)?;
 				let current_block_number = <frame_system::Pallet<T>>::block_number();
 				ensure!(auction.auction_expiry > current_block_number, Error::<T>::NoOngoingAuction);
 				ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
-				T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
-				if let Some(ref old_bidder) = auction.highest_bidder {
-					T::NativeCurrency::release(
-						&HoldReason::RegionDepositReserve.into(),
-						old_bidder,
-						auction.collateral,
-						Precision::Exact,
-					)?;
+				match &auction.highest_bidder {
+					Some(old_bidder) if old_bidder == &signer => {
+						let additional = amount.saturating_sub(auction.collateral);
+						if additional > Zero::zero() {
+							T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, additional)?;
+						}
+					},
+					Some(old_bidder) => {
+						T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
+						T::NativeCurrency::release(
+							&HoldReason::RegionDepositReserve.into(),
+							old_bidder,
+							auction.collateral,
+							Precision::Exact,
+						)?;
+					},
+					None => {
+						T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
+					}
 				}
 				auction.highest_bidder = Some(signer.clone());
 				auction.collateral = amount;
@@ -445,40 +461,48 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let auction = RegionAuctions::<T>::get(proposal_id).ok_or(Error::<T>::NoAuction)?;
+			let auction = RegionAuctions::<T>::take(proposal_id).ok_or(Error::<T>::NoAuction)?;
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			ensure!(auction.auction_expiry <= current_block_number, Error::<T>::AuctionNotFinished);
-			let region_owner = auction.highest_bidder.ok_or(Error::<T>::NoNewRegionOwner)?;
 
-			ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
-			ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
-			
-			let pallet_id: T::AccountId = Self::account_id();
-			let collection_id = <T as pallet::Config>::Nfts::create_collection(
-				&pallet_id, 
-				&pallet_id, 
-				&Self::default_collection_config(),
-			)?;
+			if let Some(region_owner) = auction.highest_bidder {
+				if auction.collateral.is_zero() {
+					Self::deposit_event(Event::<T>::NoRegionCreated { region_proposal_id: proposal_id });
+					return Ok(());
+				}
+				ensure!(!listing_duration.is_zero(), Error::<T>::ListingDurationCantBeZero);
+				ensure!(listing_duration <= T::MaxListingDuration::get(), Error::<T>::ListingDurationTooHigh);
+				
+				let pallet_id: T::AccountId = Self::account_id();
+				let collection_id = <T as pallet::Config>::Nfts::create_collection(
+					&pallet_id, 
+					&pallet_id, 
+					&Self::default_collection_config(),
+				)?;
 
-			let current_region_id = NextRegionId::<T>::get();
-			let next_region_id = current_region_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
-			
-			let region_info = RegionInfo {
-				collection_id,
-				listing_duration,
-				owner: region_owner.clone(),
-				tax,
-			};
-			RegionDetails::<T>::insert(current_region_id, region_info);
-			NextRegionId::<T>::put(next_region_id);
-			
-			Self::deposit_event(Event::<T>::RegionCreated { 
-				region_id: current_region_id, 
-				collection_id,
-				owner: region_owner,
-				listing_duration,
-				tax, 
-			});
+				let current_region_id = NextRegionId::<T>::get();
+				let next_region_id = current_region_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+				
+				let region_info = RegionInfo {
+					collection_id,
+					listing_duration,
+					owner: region_owner.clone(),
+					tax,
+				};
+				RegionDetails::<T>::insert(current_region_id, region_info);
+				NextRegionId::<T>::put(next_region_id);
+				
+				Self::deposit_event(Event::<T>::RegionCreated { 
+					region_id: current_region_id, 
+					collection_id,
+					owner: region_owner,
+					listing_duration,
+					tax, 
+				});
+			} else {
+				Self::deposit_event(Event::<T>::NoRegionCreated { region_proposal_id: proposal_id });
+				return Ok(());
+			}
 			Ok(())
 		}
 

@@ -26,12 +26,22 @@ fn run_to_block(n: u64) {
 	}
 }
 
+fn new_region_helper() {
+	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, pallet_regions::Vote::Yes));
+	run_to_block(31);
+	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
+	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
+	run_to_block(61);
+	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 30, Permill::from_percent(3)));
+}
+
 #[test]
 fn adjust_listing_duration_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().listing_duration, 30);
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
@@ -59,9 +69,9 @@ fn adjust_listing_duration_works() {
 			bvec![22, 22],
 			false
 		));
-		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listing_expiry, 31);
-		assert_eq!(OngoingObjectListing::<Test>::get(1).unwrap().listing_expiry, 51);
-		run_to_block(32);
+		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listing_expiry, 91);
+		assert_eq!(OngoingObjectListing::<Test>::get(1).unwrap().listing_expiry, 111);
+		run_to_block(92);
 		assert_noop!(
 			Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984),
 			Error::<Test>::ListingExpired
@@ -76,7 +86,7 @@ fn register_lawyer_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_eq!(RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(), true);
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()));
 		assert_eq!(RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_some(), true);
@@ -89,10 +99,16 @@ fn register_lawyer_fails() {
 		System::set_block_number(1);
 		assert_noop!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()), Error::<Test>::RegionUnknown);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()));
 		assert_noop!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()), Error::<Test>::LawyerAlreadyRegistered);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
 		assert_noop!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 1, [0; 32].into()), Error::<Test>::LawyerAlreadyRegistered);
 	})
 }
@@ -103,7 +119,7 @@ fn list_object_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Marketplace::list_object(
@@ -144,7 +160,7 @@ fn list_object_fails() {
 			),
 			Error::<Test>::RegionUnknown
 		);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Marketplace::list_object(
 				RuntimeOrigin::signed([0; 32].into()),
@@ -203,7 +219,7 @@ fn buy_property_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [14; 32].into()));
@@ -232,7 +248,7 @@ fn buy_property_token_works_developer_covers_fees() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -274,7 +290,7 @@ fn buy_property_token_doesnt_work_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -295,7 +311,7 @@ fn buy_property_token_doesnt_work_2() {
 			Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1985),
 			Error::<Test>::PaymentAssetNotSupported
 		);
-		run_to_block(32);
+		run_to_block(92);
 		assert_noop!(
 			Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984),
 			Error::<Test>::ListingExpired
@@ -308,7 +324,7 @@ fn buy_property_token_fails_insufficient_balance() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [14; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
@@ -335,7 +351,7 @@ fn listing_and_selling_multiple_objects() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [15; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
@@ -432,7 +448,7 @@ fn claim_property_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -470,7 +486,7 @@ fn claim_property_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -519,7 +535,13 @@ fn claim_property_fails() {
 			4_000,
 		), Error::<Test>::LawyerJobTaken);
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![20, 10]));
 		assert_ok!(Marketplace::list_object(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -546,7 +568,7 @@ fn remove_from_case_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -592,13 +614,13 @@ fn remove_from_case_works() {
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer, Some([12; 32].into()));
 	})
 }
-
+ 
 #[test]
 fn remove_from_case_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -645,7 +667,7 @@ fn distributes_nfts_and_funds() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -719,7 +741,7 @@ fn distributes_nfts_and_funds_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -786,7 +808,13 @@ fn distributes_nfts_and_funds_3() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_parts(32_500)));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, pallet_regions::Vote::Yes));
+		run_to_block(31);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
+		run_to_block(61);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 30, Permill::from_parts(32_500)));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -861,7 +889,7 @@ fn reject_contract_and_refund() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -963,7 +991,7 @@ fn reject_contract_and_refund_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1044,7 +1072,7 @@ fn second_attempt_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1117,7 +1145,7 @@ fn lawyer_confirm_documents_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1177,7 +1205,7 @@ fn relist_a_nft() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1247,7 +1275,7 @@ fn relist_nfts_not_created_with_marketplace_fails() {
 			None
 		));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_noop!(
 			Marketplace::relist_token(RuntimeOrigin::signed([0; 32].into()), 0, 1000, 1),
 			Error::<Test>::NftNotFound
@@ -1260,7 +1288,7 @@ fn relist_a_nft_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1328,7 +1356,7 @@ fn buy_relisted_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1410,7 +1438,7 @@ fn buy_relisted_token_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1476,7 +1504,7 @@ fn buy_relisted_token_fails() {
 fn make_offer_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1535,7 +1563,7 @@ fn make_offer_works() {
 fn make_offer_fails() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1617,7 +1645,7 @@ fn make_offer_fails() {
 fn handle_offer_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1703,7 +1731,7 @@ fn handle_offer_works() {
 fn handle_offer_fails() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1784,7 +1812,7 @@ fn handle_offer_fails() {
 fn cancel_offer_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1847,7 +1875,7 @@ fn cancel_offer_works() {
 fn cancel_offer_fails() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1915,7 +1943,7 @@ fn upgrade_price_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1969,7 +1997,7 @@ fn upgrade_price_fails_if_not_owner() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2027,7 +2055,7 @@ fn upgrade_object_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Marketplace::list_object(
@@ -2049,7 +2077,7 @@ fn upgrade_object_and_distribute_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2110,7 +2138,7 @@ fn upgrade_single_nft_from_listed_object_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Marketplace::list_object(
@@ -2134,7 +2162,7 @@ fn upgrade_object_for_relisted_nft_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [10; 32].into()));
@@ -2189,7 +2217,7 @@ fn upgrade_object_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2220,7 +2248,7 @@ fn upgrade_object_fails() {
 			bvec![22, 22],
 			false
 		));
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(
 			Marketplace::upgrade_object(RuntimeOrigin::signed([0; 32].into()), 1, 300),
 			Error::<Test>::ListingExpired
@@ -2234,7 +2262,7 @@ fn delist_single_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2304,7 +2332,7 @@ fn delist_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2365,9 +2393,21 @@ fn listing_objects_in_different_regions() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 2, pallet_regions::Vote::Yes));
+		run_to_block(151);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 2));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 2, 100_000));
+		run_to_block(181);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 2, 30, Permill::from_percent(3)));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![10, 10]));
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 2, bvec![10, 10]));
@@ -2478,7 +2518,7 @@ fn cancel_property_purchase_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2517,7 +2557,7 @@ fn cancel_property_purchase_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2554,7 +2594,7 @@ fn cancel_property_purchase_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2570,7 +2610,7 @@ fn cancel_property_purchase_fails_2() {
 		));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 40, 1984));
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(
 			Marketplace::cancel_property_purchase(RuntimeOrigin::signed([1; 32].into()), 0),
 			Error::<Test>::ListingExpired
@@ -2583,7 +2623,7 @@ fn withdraw_expired_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2604,7 +2644,7 @@ fn withdraw_expired_works() {
 		assert_eq!(ForeignAssets::total_balance(1984, &[1; 32].into()), 1_500_000);
 		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[1; 32].into()), 312_000);
 		assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().collected_funds.get(&1984).copied(), Some(300_000));
-		run_to_block(40);
+		run_to_block(100);
 		assert_ok!(Marketplace::withdraw_expired(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(ListedToken::<Test>::get(0), None);
 		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
@@ -2618,7 +2658,7 @@ fn withdraw_expired_works_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2648,7 +2688,7 @@ fn withdraw_expired_works_2() {
 		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[1; 32].into()), 31_200);
 		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[2; 32].into()), 20_800);
 		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[3; 32].into()), 4_160);
-		run_to_block(40);
+		run_to_block(100);
 		assert_ok!(Marketplace::withdraw_expired(RuntimeOrigin::signed([1; 32].into()), 0));
 		assert_eq!(ListedToken::<Test>::get(0), Some(76));
 		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
@@ -2676,7 +2716,7 @@ fn withdraw_expired_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2698,7 +2738,7 @@ fn withdraw_expired_fails() {
 			Error::<Test>::ListingNotExpired
 		);
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(
 			Marketplace::withdraw_expired(RuntimeOrigin::signed([1; 32].into()), 0),
 			Error::<Test>::PropertyAlreadySold
@@ -2711,7 +2751,7 @@ fn withdraw_expired_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2725,7 +2765,7 @@ fn withdraw_expired_fails_2() {
 			false
 		));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 99, 1984));
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(
 			Marketplace::withdraw_expired(RuntimeOrigin::signed([2; 32].into()), 0),
 			Error::<Test>::NoTokenBought
@@ -2738,7 +2778,7 @@ fn send_property_token_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2820,7 +2860,7 @@ fn send_property_token_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_noop!(Marketplace::send_property_token(
@@ -2893,7 +2933,7 @@ fn send_property_token_fails_if_relist() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -2959,7 +2999,7 @@ fn withdraw_deposit_unsold_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Marketplace::list_object(
@@ -2972,7 +3012,7 @@ fn withdraw_deposit_unsold_works() {
 			false
 		));
 		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 100_000);
-		run_to_block(40);
+		run_to_block(100);
 		assert_ok!(Marketplace::withdraw_deposit_unsold(RuntimeOrigin::signed([0; 32].into()), 0));
 		assert_eq!(ListedToken::<Test>::get(0), None);
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
@@ -2985,7 +3025,7 @@ fn withdraw_deposit_unsold_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -3003,7 +3043,7 @@ fn withdraw_deposit_unsold_fails() {
 		assert_noop!(Marketplace::withdraw_deposit_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::ListingNotExpired);
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 10, 1984));
 		assert_noop!(Marketplace::withdraw_deposit_unsold(RuntimeOrigin::signed([0; 32].into()), 1), Error::<Test>::InvalidIndex);
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(Marketplace::withdraw_deposit_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::TokenNotReturned);
 	})
 }
@@ -3013,7 +3053,7 @@ fn withdraw_deposit_unsold_fails_2() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -3029,7 +3069,7 @@ fn withdraw_deposit_unsold_fails_2() {
 		assert_eq!(Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())), 100_000);
 		run_to_block(20);
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		run_to_block(40);
+		run_to_block(100);
 		assert_noop!(Marketplace::withdraw_deposit_unsold(RuntimeOrigin::signed([0; 32].into()), 0), Error::<Test>::PropertyAlreadySold);
 	})
 }

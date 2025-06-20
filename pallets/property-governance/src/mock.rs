@@ -237,6 +237,10 @@ parameter_types! {
 	pub const RegionDepositAmount: Balance = 100_000;
 	pub const LocationDepositAmount: Balance = 10_000;
 	pub const MaximumListingDuration: u64 = 10_000;
+	pub const RegionVotingTime: BlockNumber = 30;
+	pub const RegionAuctionTime: BlockNumber = 30;
+	pub const RegionThreshold: Percent = Percent::from_percent(75);
+	pub const RegionProposalCooldown: BlockNumber = 28;
 }
 
 impl pallet_regions::Config for Test {
@@ -252,6 +256,10 @@ impl pallet_regions::Config for Test {
 	type MaxListingDuration = MaximumListingDuration;
 	type PostcodeLimit = Postcode;
 	type LocationDeposit = LocationDepositAmount;
+	type RegionVotingTime = RegionVotingTime;
+	type RegionAuctionTime = RegionAuctionTime;
+	type RegionThreshold = RegionThreshold;
+	type RegionProposalCooldown = RegionProposalCooldown;
 }
 
 parameter_types! {

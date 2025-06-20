@@ -38,9 +38,19 @@ fn run_to_block(n: u64) {
 	}
 }
 
+fn new_region_helper() {
+	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
+	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 0, pallet_regions::Vote::Yes));
+	run_to_block(31);
+	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([6; 32].into()), 0));
+	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 0, 100_000));
+	run_to_block(61);
+	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 0, 30, Permill::from_percent(3)));
+}
+
 fn listing_process() {
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+	new_region_helper();
 	assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -265,7 +275,7 @@ fn proposal_pass() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -305,7 +315,7 @@ fn proposal_pass() {
 		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
 		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1_000);
-		run_to_block(31);
+		run_to_block(91);
 		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 1000}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_none(), true);
@@ -339,7 +349,7 @@ fn proposal_pass_2() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		run_to_block(31);
+		run_to_block(91);
 		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 10000}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 0);
@@ -377,7 +387,7 @@ fn proposal_not_pass() {
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
 		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
@@ -418,7 +428,7 @@ fn proposal_not_pass_2() {
 		assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-		run_to_block(31);
+		run_to_block(91);
 		System::assert_last_event(Event::ProposalThresHoldNotReached{ proposal_id: 1, required_threshold: Percent::from_percent(67)}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
@@ -468,7 +478,7 @@ fn vote_on_proposal_fails() {
 			),
 			Error::<Test>::NoPermission
 		);
-		run_to_block(31);
+		run_to_block(91);
 		assert_noop!(PropertyGovernance::vote_on_proposal(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -568,11 +578,11 @@ fn challenge_pass() {
 			1,
 			crate::Vote::Yes
 		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
-		run_to_block(31);
+		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+		run_to_block(91);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
@@ -585,7 +595,7 @@ fn challenge_pass() {
 			1,
 			crate::Vote::Yes
 		));
-		run_to_block(91);
+		run_to_block(151);
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
@@ -605,7 +615,7 @@ fn challenge_pass() {
 				.len(),
 			1
 		);
-		run_to_block(121);
+		run_to_block(181);
 		assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
 		assert_eq!(
 			LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -625,7 +635,7 @@ fn challenge_does_not_pass() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -677,11 +687,11 @@ fn challenge_does_not_pass() {
 			1,
 			crate::Vote::Yes
 		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
-		run_to_block(31);
+		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+		run_to_block(91);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
@@ -689,7 +699,7 @@ fn challenge_does_not_pass() {
 			1,
 			crate::Vote::Yes
 		));
-		run_to_block(91);
+		run_to_block(151);
 		System::assert_last_event(Event::ChallengeThresHoldNotReached{ challenge_id: 1, required_threshold: Percent::from_percent(51), challenge_state: crate::ChallengeState::SlashVoting}.into());
 		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
 	});
@@ -741,11 +751,11 @@ fn challenge_pass_only_one_agent() {
 			1,
 			crate::Vote::Yes
 		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(31).len(), 1);
-		run_to_block(31);
+		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+		run_to_block(91);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
@@ -758,7 +768,7 @@ fn challenge_pass_only_one_agent() {
 			1,
 			crate::Vote::Yes
 		));
-		run_to_block(91);
+		run_to_block(151);
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),
@@ -771,7 +781,7 @@ fn challenge_pass_only_one_agent() {
 			crate::Vote::Yes
 		));
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		run_to_block(121);
+		run_to_block(181);
 		assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
 		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
 	});
@@ -799,7 +809,7 @@ fn challenge_not_pass() {
 			crate::Vote::No
 		));
 		assert_eq!(Challenges::<Test>::get(1).is_some(), true);
-		run_to_block(31);
+		run_to_block(91);
 		System::assert_last_event(Event::ChallengeRejected{ challenge_id: 1, challenge_state: crate::ChallengeState::MistrustVoting}.into());
 		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
 	});
@@ -846,7 +856,7 @@ fn different_proposals() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -889,7 +899,7 @@ fn different_proposals() {
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
 		assert_eq!(UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(), true);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(), false);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
@@ -911,7 +921,7 @@ fn different_proposals() {
 			2,
 			crate::Vote::Yes
 		));
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
 		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
 		assert_ok!(PropertyGovernance::propose(
@@ -1001,7 +1011,7 @@ fn propose_property_sale_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
@@ -1028,7 +1038,7 @@ fn propose_property_sale_fails() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::SaleOngoing);
 	});
@@ -1134,7 +1144,7 @@ fn auction_starts() {
 			crate::Vote::Yes
 		));
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
@@ -1177,7 +1187,7 @@ fn proposal_does_not_pass() {
 			crate::Vote::Yes
 		));
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 85);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
 		System::assert_last_event(Event::PropertySaleProposalRejected{ asset_id: 0}.into());
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
@@ -1218,7 +1228,7 @@ fn bid_on_sale_works() {
 			crate::Vote::Yes
 		));
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, None);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
@@ -1242,7 +1252,7 @@ fn bid_on_sale_works() {
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([4; 32].into()));
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 3000);
 		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, Some(Reserve{payment_asset: 1984, amount: 300}));
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, Some(3000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer, Some([4; 32].into()));
 	});
@@ -1283,7 +1293,7 @@ fn bid_on_sale_fails() {
 			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1984),
 			Error::<Test>::NoOngoingAuction,
 		);
-		run_to_block(31);
+		run_to_block(91);
 		assert_noop!(
 			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 10, 1337),
 			Error::<Test>::UserNotWhitelisted,
@@ -1327,9 +1337,9 @@ fn lawyer_claim_sale_works() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer.unwrap(), [7; 32].into());
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().price.unwrap(), 300_000);
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().reserve.unwrap(), Reserve { payment_asset: 1984, amount: 30_000 });
@@ -1373,15 +1383,15 @@ fn lawyer_claim_sale_fails() {
 			crate::Vote::Yes
 		));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
-		run_to_block(31);
+		run_to_block(91);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000), Error::<Test>::NoPermission);
@@ -1421,11 +1431,11 @@ fn lawyer_claim_sale_fails_2() {
 		));
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 75);
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 25);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 30, Permill::from_percent(3)));
+		new_region_helper();
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
@@ -1484,9 +1494,9 @@ fn lawyer_confirm_sale_works() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 2_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 2_500));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1532,9 +1542,9 @@ fn lawyer_confirm_sale_works_2() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 2_500));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 2_500));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1583,9 +1593,9 @@ fn lawyer_confirm_sale_works_deny() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1629,9 +1639,9 @@ fn lawyer_confirm_sale_works_deny_2() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1683,9 +1693,9 @@ fn lawyer_confirm_sale_fails() {
 			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
 			Error::<Test>::NotForSale
 		);
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_noop!(
 			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
 			Error::<Test>::NoPermission
@@ -1742,9 +1752,9 @@ fn finalize_sale_works() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1797,9 +1807,9 @@ fn finalize_sale_works_2() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 3_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 3_000));
 		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
@@ -1852,13 +1862,13 @@ fn finalize_sale_fails() {
 			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([5; 32].into()), 0, 1984),
 			Error::<Test>::NotForSale,
 		);
-		run_to_block(31);
+		run_to_block(91);
 		assert_noop!(
 			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([4; 32].into()), 0, 1984),
 			Error::<Test>::NoPermission,
 		);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
@@ -1913,9 +1923,9 @@ fn claim_sale_funds_works() {
 			0,
 			crate::Vote::No
 		));
-		run_to_block(31);
+		run_to_block(91);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
@@ -1977,13 +1987,13 @@ fn claim_sale_funds_fails() {
 			RuntimeOrigin::signed([1; 32].into()), 0, 1984),
 			Error::<Test>::NotForSale,
 		);
-		run_to_block(31);
+		run_to_block(91);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
 		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
 		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(61);
+		run_to_block(121);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
