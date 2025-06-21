@@ -374,9 +374,9 @@ pub mod pallet {
 			listing_expiry: BlockNumberFor<T>,
 		},
 		/// A token has been bought.
-		RelistedTokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: <T as pallet::Config>::Balance, amount: u32, payment_asset: u32 },
+		RelistedTokenBought { listing_index: ListingId, asset_id: u32, buyer: AccountIdOf<T>, price: <T as pallet::Config>::Balance, amount: u32, payment_asset: u32 },
 		/// Token from listed object have been bought.
-		PropertyTokenBought { asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: <T as pallet::Config>::Balance, payment_asset: u32 },
+		PropertyTokenBought { listing_index: ListingId, asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: <T as pallet::Config>::Balance, payment_asset: u32 },
 		/// Token have been listed.
 		TokenRelisted { listing_index: ListingId, asset_id: u32, price: <T as pallet::Config>::Balance, token_amount: u32, seller: AccountIdOf<T> },
 		/// The price of the token listing has been updated.
@@ -390,9 +390,9 @@ pub mod pallet {
 		/// An offer has been cancelled.
 		OfferCancelled { listing_id: ListingId, account_id: AccountIdOf<T> },
 		/// A lawyer has been registered.
-		LawyerRegistered { lawyer: AccountIdOf<T> },
+		LawyerRegistered { lawyer: AccountIdOf<T>, region_id: RegionId },
 		/// A lawyer claimed a property.
-		LawyerClaimedProperty { lawyer: AccountIdOf<T>, listing_id: ListingId, legal_side: LegalProperty},
+		LawyerClaimedProperty { lawyer: AccountIdOf<T>, details: PropertyLawyerDetails<T>},
 		/// A lawyer stepped back from a legal case.
 		LawyerRemovedFromCase { lawyer: AccountIdOf<T>, listing_id: ListingId },
 		/// Documents have been approved or rejected.
@@ -837,6 +837,7 @@ pub mod pallet {
 					*maybe_listed_token = None;
 				} 
 				Self::deposit_event(Event::<T>::PropertyTokenBought {
+					listing_index: listing_id,
 					asset_id,
 					buyer: signer.clone(),
 					amount,
@@ -1489,7 +1490,7 @@ pub mod pallet {
 			ensure!(region_info.owner == signer, Error::<T>::NoPermission);
 			ensure!(RealEstateLawyer::<T>::get(lawyer.clone()).is_none(), Error::<T>::LawyerAlreadyRegistered);
 			RealEstateLawyer::<T>::insert(lawyer.clone(), region);
-			Self::deposit_event(Event::<T>::LawyerRegistered {lawyer});
+			Self::deposit_event(Event::<T>::LawyerRegistered {lawyer, region_id: region});
 			Ok(())
 		}
 
@@ -1563,7 +1564,7 @@ pub mod pallet {
 							.try_insert(asset_id_usdc, remaining_costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
-					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
 				}
 				LegalProperty::SpvSide => {
 					ensure!(property_lawyer_details.spv_lawyer.is_none(), Error::<T>::LawyerJobTaken);
@@ -1591,10 +1592,10 @@ pub mod pallet {
 							.try_insert(asset_id_usdc, remaining_costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
-					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+					PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
 				}
 			}
-			Self::deposit_event(Event::<T>::LawyerClaimedProperty {lawyer: signer, listing_id, legal_side});
+			Self::deposit_event(Event::<T>::LawyerClaimedProperty {lawyer: signer, details: property_lawyer_details});
 			Ok(())
 		}
 
@@ -2162,6 +2163,7 @@ pub mod pallet {
 				TokenListings::<T>::insert(listing_id, listing_details.clone());
 			}
 			Self::deposit_event(Event::<T>::RelistedTokenBought {
+				listing_index: listing_id,
 				asset_id: listing_details.asset_id,
 				buyer: account.clone(),
 				price: listing_details.token_price,

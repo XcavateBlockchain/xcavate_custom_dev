@@ -302,6 +302,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([6; 32].into(), 5_000),
 			([7; 32].into(), 5_000),
 			([8; 32].into(), 400_000),
+			([9; 32].into(), 5_000),
 			([14; 32].into(), 200_000_000_000_000_000_000),
 			([15; 32].into(), 3_500_000),
 			((Marketplace::account_id()), 20_000_000),
@@ -339,6 +340,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1337, [5; 32].into(), 500),
 			(1337, [6; 32].into(), 1_500_000_000_000_000_000),
 			(1337, [7; 32].into(), 500_000),
+			(1337, [9; 32].into(), 3_500_000),
 		], // Genesis accounts: id, account_id, balance
 		next_asset_id: None,
 	}

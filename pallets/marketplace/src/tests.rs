@@ -444,7 +444,7 @@ fn listing_and_selling_multiple_objects() {
 
 // lawyer_claim_property function
 #[test]
-fn claim_property_works() {
+fn claim_property_works1() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
@@ -478,6 +478,50 @@ fn claim_property_works() {
 			4_000,
 		));
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, Some([11; 32].into()));
+	})
+}
+
+#[test]
+fn claim_property_works2() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [9; 32].into()));
+		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [10; 32].into()));
+		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [11; 32].into()));
+		assert_ok!(Marketplace::list_object(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+			bvec![10, 10],
+			10_000,
+			200,
+			bvec![22, 22],
+			false
+		));
+		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 1, 1984));
+		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([9; 32].into()), 0, 199, 1337));
+		assert_ok!(Marketplace::lawyer_claim_property(
+			RuntimeOrigin::signed([10; 32].into()),
+			0,
+			crate::LegalProperty::RealEstateDeveloperSide,
+			15_000,
+		));
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer, Some([10; 32].into()));
+		assert_ok!(Marketplace::lawyer_claim_property(
+			RuntimeOrigin::signed([11; 32].into()),
+			0,
+			crate::LegalProperty::SpvSide,
+			16_000,
+		));
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, Some([11; 32].into()));
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer_costs.get(&1984).unwrap(), &0u128);
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer_costs.get(&1337).unwrap(), &16_000u128);
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer_costs.get(&1984).unwrap(), &0u128);
+		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer_costs.get(&1337).unwrap(), &15_000u128);
 	})
 }
 

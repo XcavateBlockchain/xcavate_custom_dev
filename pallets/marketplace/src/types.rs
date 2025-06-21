@@ -83,7 +83,7 @@ pub struct OfferDetails<T: Config> {
     pub payment_assets: u32,
 }
 
-#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, CloneNoBound, PartialEqNoBound, EqNoBound, MaxEncodedLen, RuntimeDebugNoBound, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct PropertyLawyerDetails<T: Config> {
     pub real_estate_developer_lawyer: Option<AccountIdOf<T>>,
@@ -147,7 +147,7 @@ pub enum LegalProperty {
 }
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum DocumentStatus {
     Pending,
     Approved,

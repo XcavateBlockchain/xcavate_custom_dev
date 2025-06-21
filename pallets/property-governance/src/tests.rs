@@ -1363,6 +1363,13 @@ fn lawyer_claim_sale_fails() {
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 1, pallet_regions::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([6; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 1, 30, Permill::from_percent(3)));
 		lawyer_process();
 		setting_letting_agent([2; 32].into());
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -1383,15 +1390,14 @@ fn lawyer_claim_sale_fails() {
 			crate::Vote::Yes
 		));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
-		run_to_block(91);
+		run_to_block(151);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		new_region_helper();
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
+		run_to_block(181);
 		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
 		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000), Error::<Test>::NoPermission);
@@ -1410,6 +1416,13 @@ fn lawyer_claim_sale_fails_2() {
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 40, 1984));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 25, 1984));
 		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
+		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
+		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 1, pallet_regions::Vote::Yes));
+		run_to_block(91);
+		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([6; 32].into()), 1));
+		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 1, 100_000));
+		run_to_block(121);
+		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 1, 30, Permill::from_percent(3)));
 		lawyer_process();
 		setting_letting_agent([2; 32].into());
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -1431,11 +1444,10 @@ fn lawyer_claim_sale_fails_2() {
 		));
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 75);
 		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 25);
-		run_to_block(91);
+		run_to_block(151);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		new_region_helper();
 		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
@@ -1455,11 +1467,11 @@ fn lawyer_claim_sale_fails_2() {
 			0,
 			crate::Vote::Yes
 		));
-		run_to_block(62);
+		run_to_block(182);
 		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
 		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(92);
+		run_to_block(212);
 		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 5_000), Error::<Test>::CostsTooHigh);
 	});
 }
