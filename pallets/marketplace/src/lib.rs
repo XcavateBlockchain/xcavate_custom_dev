@@ -1556,7 +1556,7 @@ pub mod pallet {
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
-							.try_insert(asset_id_usdt, costs)
+							.try_insert(asset_id_usdt, *collected_fee_usdt)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
@@ -1584,7 +1584,7 @@ pub mod pallet {
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.spv_lawyer_costs
-							.try_insert(asset_id_usdt, costs)
+							.try_insert(asset_id_usdt, *collected_fee_usdt)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 						property_lawyer_details
 							.spv_lawyer_costs
