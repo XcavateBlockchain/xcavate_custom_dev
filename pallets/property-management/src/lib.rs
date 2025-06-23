@@ -261,12 +261,12 @@ pub mod pallet {
 			ensure!(
 				pallet_regions::LocationRegistration::<T>::get(
 					region,
-					location.clone()
+					&location
 				),
 				Error::<T>::LocationUnknown
 			);
 			ensure!(
-				!<LettingInfo<T>>::contains_key(letting_agent.clone()),
+				!<LettingInfo<T>>::contains_key(&letting_agent),
 				Error::<T>::LettingAgentExists
 			);
 			let mut letting_info = LettingAgentInfo {
@@ -280,7 +280,7 @@ pub mod pallet {
 				.locations
 				.try_push(location)
 				.map_err(|_| Error::<T>::TooManyLocations)?;
-			LettingInfo::<T>::insert(letting_agent.clone(), letting_info);
+			LettingInfo::<T>::insert(&letting_agent, letting_info);
 			Self::deposit_event(Event::<T>::LettingAgentAdded { region, who: letting_agent });
 			Ok(())
 		}
@@ -294,7 +294,7 @@ pub mod pallet {
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_deposit())]
 		pub fn letting_agent_deposit(origin: OriginFor<T>) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			LettingInfo::<T>::try_mutate(signer.clone(), |maybe_letting_info|{
+			LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info|{
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoPermission)?;
 				ensure!(!letting_info.deposited, Error::<T>::AlreadyDeposited);
 				ensure!(!letting_info.locations.is_empty(), Error::<T>::NoLoactions);
@@ -329,7 +329,7 @@ pub mod pallet {
 			letting_agent: AccountIdOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			LettingInfo::<T>::try_mutate(letting_agent.clone(), |maybe_letting_info| {
+			LettingInfo::<T>::try_mutate(&letting_agent, |maybe_letting_info| {
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::NoLettingAgentFound)?;
 				let region_info = pallet_regions::RegionDetails::<T>::get(letting_info.region).ok_or(Error::<T>::RegionUnknown)?;
 				ensure!(region_info.owner == signer, Error::<T>::NoPermission);
@@ -337,7 +337,7 @@ pub mod pallet {
 				ensure!(
 					pallet_regions::LocationRegistration::<T>::get(
 						letting_info.region,
-						location.clone()
+						&location
 					),
 					Error::<T>::LocationUnknown
 				);
@@ -369,7 +369,7 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			ensure!(pallet_marketplace::AssetIdDetails::<T>::get(asset_id).is_some(), Error::<T>::NoObjectFound);
 			ensure!(LettingStorage::<T>::get(asset_id).is_none(), Error::<T>::LettingAgentAlreadySet);
-			LettingInfo::<T>::try_mutate(signer.clone(), |maybe_letting_info|{
+			LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info|{
 				let letting_info = maybe_letting_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
 				LettingStorage::<T>::insert(asset_id, signer.clone());
 				letting_info
@@ -431,14 +431,14 @@ pub mod pallet {
 			for owner in owner_list {
 				let token_amount = pallet_marketplace::PropertyOwnerToken::<T>::get(
 					asset_id,
-					owner.clone(),
+					&owner,
 				);
 				let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
 					.checked_mul(amount)
 					.ok_or(Error::<T>::MultiplyError)?
 					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
-				InvestorFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
+				InvestorFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
 					*stored = stored.checked_add(amount_for_owner).ok_or(Error::<T>::ArithmeticOverflow)?;
 					Ok::<(), DispatchError>(())
 				})?;
@@ -464,7 +464,7 @@ pub mod pallet {
 				<T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset), 
 				Error::<T>::PaymentAssetNotSupported
 			);
-			let amount = InvestorFunds::<T>::take((signer.clone(), asset_id, payment_asset));
+			let amount = InvestorFunds::<T>::take((&signer, asset_id, payment_asset));
 			ensure!(
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored

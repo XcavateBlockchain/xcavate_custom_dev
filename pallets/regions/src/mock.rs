@@ -178,6 +178,7 @@ impl crate::Config for Test {
 	type RegionAuctionTime = RegionAuctionTime;
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
+	type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -1,13 +1,14 @@
 use crate::{mock::*, Error};
 use frame_support::{assert_noop, assert_ok};
 use sp_runtime::traits::BadOrigin;
+use crate::WhitelistedAccounts;
 
 #[test]
 fn add_to_whitelist_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(Whitelist::add_to_whitelist(RuntimeOrigin::root(), 1));
-		assert_eq!(Whitelist::whitelisted_accounts(1), true);
+		assert_eq!(WhitelistedAccounts::<Test>::get(1), true);
 	});
 }
 
@@ -37,7 +38,7 @@ fn remove_from_whitelist_works() {
 		System::set_block_number(1);
 		assert_ok!(Whitelist::add_to_whitelist(RuntimeOrigin::root(), 1));
 		assert_ok!(Whitelist::remove_from_whitelist(RuntimeOrigin::root(), 1));
-		assert_eq!(Whitelist::whitelisted_accounts(1), false);
+		assert_eq!(WhitelistedAccounts::<Test>::get(1), false);
 	});
 }
 

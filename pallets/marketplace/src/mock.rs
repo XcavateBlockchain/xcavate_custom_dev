@@ -251,6 +251,7 @@ impl pallet_regions::Config for Test {
 	type RegionAuctionTime = RegionAuctionTime;
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
+	type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
 }
 
 parameter_types! {

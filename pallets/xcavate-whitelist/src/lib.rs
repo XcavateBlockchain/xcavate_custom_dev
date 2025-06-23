@@ -41,7 +41,6 @@ pub mod pallet {
 
 	/// Mapping of an account to a bool.
 	#[pallet::storage]
-	#[pallet::getter(fn whitelisted_accounts)]
 	pub type WhitelistedAccounts<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountIdOf<T>, bool, ValueQuery>;
 
@@ -80,10 +79,10 @@ pub mod pallet {
 		pub fn add_to_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
 			T::WhitelistOrigin::ensure_origin(origin)?;
 			ensure!(
-				!Self::whitelisted_accounts(user.clone()),
+				!WhitelistedAccounts::<T>::get(&user),
 				Error::<T>::AccountAlreadyWhitelisted
 			);
-			WhitelistedAccounts::<T>::insert(user.clone(), true);
+			WhitelistedAccounts::<T>::insert(&user, true);
 			Self::deposit_event(Event::<T>::NewUserWhitelisted { user });
 			Ok(())
 		}
@@ -100,8 +99,8 @@ pub mod pallet {
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_whitelist())]
 		pub fn remove_from_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
 			T::WhitelistOrigin::ensure_origin(origin)?;
-			ensure!(Self::whitelisted_accounts(user.clone()), Error::<T>::UserNotInWhitelist);
-			WhitelistedAccounts::<T>::take(user.clone());
+			ensure!(WhitelistedAccounts::<T>::get(&user), Error::<T>::UserNotInWhitelist);
+			WhitelistedAccounts::<T>::take(&user);
 			Self::deposit_event(Event::<T>::UserRemoved { user });
 			Ok(())
 		}

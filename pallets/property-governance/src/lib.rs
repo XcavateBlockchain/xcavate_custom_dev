@@ -617,7 +617,7 @@ pub mod pallet {
 			ensure!(
 				pallet_property_management::LettingStorage::<T>::get(asset_id)
 					.ok_or(Error::<T>::NoLettingAgentFound)?
-					== signer.clone(),
+					== signer,
 				Error::<T>::NoPermission
 			);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -683,7 +683,7 @@ pub mod pallet {
 				Ok::<(), DispatchError>(())
 			})?;
 			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
-			OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
+			OngoingChallengeVotes::<T>::insert(challenge_id, &challenge.state, vote_stats);
 			Challenges::<T>::insert(challenge_id, challenge);
 			ChallengeCount::<T>::put(challenge_id);
 			
@@ -713,11 +713,11 @@ pub mod pallet {
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				proposal.asset_id,
-				signer.clone(),
+				&signer,
 			);
 			OngoingProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-				let previous_vote_opt = UserProposalVote::<T>::get(proposal_id, signer.clone());
+				let previous_vote_opt = UserProposalVote::<T>::get(proposal_id, &signer);
 				if let Some(previous_vote) = previous_vote_opt {
 					match previous_vote {
 						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
@@ -731,7 +731,7 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			UserProposalVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
+			UserProposalVote::<T>::insert(proposal_id, &signer, vote.clone());
 			Self::deposit_event(Event::VotedOnProposal { proposal_id, voter: signer, vote });
 			Ok(())
 		}
@@ -758,11 +758,11 @@ pub mod pallet {
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				challenge.asset_id,
-				signer.clone(),
+				&signer,
 			);
-			OngoingChallengeVotes::<T>::try_mutate(challenge_id, challenge.state.clone(), |maybe_current_vote|{
+			OngoingChallengeVotes::<T>::try_mutate(challenge_id, &challenge.state, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-				let previous_vote_opt = UserChallengeVote::<T>::get(challenge_id, signer.clone());
+				let previous_vote_opt = UserChallengeVote::<T>::get(challenge_id, &signer);
 				if let Some(previous_vote) = previous_vote_opt {
 					match previous_vote {
 						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
@@ -776,7 +776,7 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			UserChallengeVote::<T>::insert(challenge_id, signer.clone(), vote.clone());
+			UserChallengeVote::<T>::insert(challenge_id, &signer, vote.clone());
 			Self::deposit_event(Event::VotedOnChallenge { challenge_id, voter: signer, vote });
 			Ok(())
 		}
@@ -845,11 +845,11 @@ pub mod pallet {
 			ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
 			let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(
 				asset_id,
-				signer.clone(),
+				&signer,
 			);
 			OngoingSaleProposalVotes::<T>::try_mutate(asset_id, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-				let previous_vote_opt = UserSaleProposalVote::<T>::get(asset_id, signer.clone());
+				let previous_vote_opt = UserSaleProposalVote::<T>::get(asset_id, &signer);
 				if let Some(previous_vote) = previous_vote_opt {
 					match previous_vote {
 						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
@@ -863,7 +863,7 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			UserSaleProposalVote::<T>::insert(asset_id, signer.clone(), vote.clone());
+			UserSaleProposalVote::<T>::insert(asset_id, &signer, vote.clone());
 			Self::deposit_event(Event::VotedOnPropertySaleProposal { asset_id, voter: signer, vote });
 			Ok(())
 		}
@@ -888,7 +888,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(
@@ -940,7 +940,7 @@ pub mod pallet {
 			costs: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let lawyer_region = pallet_marketplace::RealEstateLawyer::<T>::get(signer.clone()).ok_or(Error::<T>::NoPermission)?;
+			let lawyer_region = pallet_marketplace::RealEstateLawyer::<T>::get(&signer).ok_or(Error::<T>::NoPermission)?;
 			let asset_info = pallet_marketplace::AssetIdDetails::<T>::get(asset_id).ok_or(Error::<T>::AssetNotFound)?;
 			ensure!(lawyer_region == asset_info.region, Error::<T>::NoPermissionInRegion);
 			let mut property_sale_info = PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
@@ -950,14 +950,14 @@ pub mod pallet {
 			match legal_side {
 				LegalSale::SpvSide => {
 					ensure!(property_sale_info.spv_lawyer.is_none(), Error::<T>::LawyerJobTaken);
-					ensure!(property_sale_info.buyer_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
+					ensure!(property_sale_info.buyer_lawyer.as_ref() != Some(&signer), Error::<T>::NoPermission);
 					property_sale_info.spv_lawyer = Some(signer.clone());
 					property_sale_info.spv_lawyer_costs = costs;
 					PropertySale::<T>::insert(asset_id, property_sale_info);
 				}
 				LegalSale::BuyerSide => {
 					ensure!(property_sale_info.buyer_lawyer.is_none(), Error::<T>::LawyerJobTaken);
-					ensure!(property_sale_info.spv_lawyer != Some(signer.clone()), Error::<T>::NoPermission);
+					ensure!(property_sale_info.spv_lawyer.as_ref() != Some(&signer), Error::<T>::NoPermission);
 					property_sale_info.buyer_lawyer = Some(signer.clone());
 					property_sale_info.buyer_lawyer_costs = costs;
 					PropertySale::<T>::insert(asset_id, property_sale_info);
@@ -986,7 +986,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let mut property_sale_info = PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
-			if property_sale_info.spv_lawyer == Some(signer.clone()) {
+			if property_sale_info.spv_lawyer.as_ref() == Some(&signer) {
 				ensure!(property_sale_info.spv_status == DocumentStatus::Pending,
 					Error::<T>::SaleAlreadyConfirmed);
 				property_sale_info.spv_status = if approve {
@@ -996,7 +996,7 @@ pub mod pallet {
 					Self::deposit_event(Event::LawyerRejectsSale{ asset_id, lawyer: signer, legal_side: LegalSale::SpvSide });
 					DocumentStatus::Rejected
 				};
-			} else if property_sale_info.buyer_lawyer == Some(signer.clone()) {
+			} else if property_sale_info.buyer_lawyer.as_ref() == Some(&signer) {
 				ensure!(property_sale_info.buyer_status == DocumentStatus::Pending,
 					Error::<T>::SaleAlreadyConfirmed);
 				property_sale_info.buyer_status = if approve {
@@ -1072,7 +1072,7 @@ pub mod pallet {
 
  			PropertySale::<T>::try_mutate_exists(asset_id, |maybe_sale| -> DispatchResult {
 				let sale_info = maybe_sale.as_mut().ok_or(Error::<T>::NotForSale)?;
-				ensure!(sale_info.buyer_lawyer == Some(signer.clone()), Error::<T>::NoPermission);
+				ensure!(sale_info.buyer_lawyer.as_ref() == Some(&signer), Error::<T>::NoPermission);
 				ensure!(sale_info.lawyer_approved, Error::<T>::SaleHasNotBeenApproved);
 				ensure!(!sale_info.finalized, Error::<T>::AlreadyFinalized);
 				ensure!(
@@ -1143,7 +1143,7 @@ pub mod pallet {
 				for owner in owner_list {
 					let property_token_amount = pallet_marketplace::PropertyOwnerToken::<T>::get(
 						asset_id,
-						owner.clone(),
+						&owner,
 					);
 					
 					let owner_share = (property_token_amount as u128)
@@ -1153,7 +1153,7 @@ pub mod pallet {
 						.ok_or(Error::<T>::DivisionError)?;
 					if remaining_payment >= owner_share {
 						// Enough funds in payment_asset to cover full owner_share
-						SaleFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
+						SaleFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
 							*stored = stored.checked_add(owner_share).ok_or(Error::<T>::ArithmeticOverflow)?;
 							Ok::<(), DispatchError>(())
 						})?;
@@ -1162,7 +1162,7 @@ pub mod pallet {
 						// Not enough payment_asset funds, split owner_share
 						if remaining_payment > 0 {
 							// Pay what is left from payment_asset
-							SaleFunds::<T>::try_mutate((owner.clone(), asset_id, payment_asset), |stored| {
+							SaleFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
 								*stored = stored.checked_add(remaining_payment).ok_or(Error::<T>::ArithmeticOverflow)?;
 								Ok::<(), DispatchError>(())
 							})?;
@@ -1172,7 +1172,7 @@ pub mod pallet {
 						remaining_payment = 0;
 
 						// Pay the leftover from reserve_asset
-						SaleFunds::<T>::try_mutate((owner.clone(), asset_id, reserve_asset), |stored| {
+						SaleFunds::<T>::try_mutate((&owner, asset_id, reserve_asset), |stored| {
 							*stored = stored.checked_add(leftover).ok_or(Error::<T>::ArithmeticOverflow)?;
 							Ok::<(), DispatchError>(())
 						})?;
@@ -1207,13 +1207,13 @@ pub mod pallet {
 			let signer = ensure_signed(origin)?;
 			let mut property_sale_info = PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
 			ensure!(property_sale_info.finalized, Error::<T>::SaleNotFinalized);
-			let amount = SaleFunds::<T>::take((signer.clone(), asset_id, payment_asset));
+			let amount = SaleFunds::<T>::take((&signer, asset_id, payment_asset));
 			ensure!(amount > 0, Error::<T>::NoFundsToClaim);
 			let property_account = Self::property_account_id(asset_id);
 			Self::transfer_funds(&property_account, &signer, amount, payment_asset)?;
 			let property_token_amount = pallet_marketplace::PropertyOwnerToken::<T>::take(
 				asset_id,
-				signer.clone(),
+				&signer,
 			);
 			<T as pallet::Config>::LocalCurrency::transfer(
 				asset_id,

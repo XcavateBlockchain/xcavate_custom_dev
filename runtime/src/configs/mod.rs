@@ -715,6 +715,7 @@ impl pallet_regions::Config for Runtime {
 	type RegionAuctionTime = RegionAuctionTime;
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
+	type RegionOperatorOrigin = EnsureRoot<Self::AccountId>;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

@@ -157,6 +157,9 @@ pub mod pallet {
 		/// Minimum number of blocks between two proposals.
 		#[pallet::constant]
 		type RegionProposalCooldown: Get<BlockNumberFor<Self>>;
+
+		/// Origin who can add and remove users to the region operators.
+		type RegionOperatorOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 	pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -165,6 +168,10 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
+
+	#[pallet::storage]
+	pub type RegionOperatorAccounts<T: Config> = 
+		StorageMap<_, Blake2_128Concat, T::AccountId, bool, OptionQuery>;
 
 	#[pallet::storage]
 	pub type LastRegionProposalBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
@@ -257,6 +264,10 @@ pub mod pallet {
 		RegionRejected { proposal_id: ProposalIndex },
 		/// A bid for a region got placed.
 		BidSuccessfullyPlaced { proposal_id: ProposalIndex, bidder: T::AccountId, new_leading_bid: T::Balance },
+		/// A new regional operator has been added.
+		NewRegionOperatorAdded { new_operator: T::AccountId },
+		/// A regional operator has been removed.
+		RegionOperatorRemoved { regional_operator: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -300,6 +311,10 @@ pub mod pallet {
 		ProposalExpired,
 		/// Bid amount can not be zero.
 		BidCannotBeZero,
+		/// This account is already registers as a region operator.
+		AlreadyRegionOperator,
+		/// This account is not a regional operator.
+		NoRegionalOperator,
 	}
 
 	#[pallet::call]
@@ -312,7 +327,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -351,7 +366,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
@@ -360,7 +375,7 @@ pub mod pallet {
 			let voting_power = T::NativeCurrency::total_balance(&signer);
  			OngoingRegionProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-				let previous_vote_opt = UserRegionVote::<T>::get(proposal_id, signer.clone());
+				let previous_vote_opt = UserRegionVote::<T>::get(proposal_id, &signer);
 				if let Some(previous_vote) = previous_vote_opt {
 					match previous_vote {
 						Vote::Yes => current_vote.yes_voting_power = current_vote.yes_voting_power.saturating_sub(voting_power),
@@ -374,7 +389,7 @@ pub mod pallet {
 				}
 				Ok::<(), DispatchError>(())
 			})?;
-			UserRegionVote::<T>::insert(proposal_id, signer.clone(), vote.clone());
+			UserRegionVote::<T>::insert(proposal_id, &signer, vote.clone());
 			Self::deposit_event(Event::VotedOnRegionProposal { region_proposal_id: proposal_id, voter: signer, vote });
 			Ok(())
 		}
@@ -387,7 +402,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
@@ -406,7 +421,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(!amount.is_zero(), Error::<T>::BidCannotBeZero);
@@ -458,7 +473,7 @@ pub mod pallet {
 		pub fn create_new_region(origin: OriginFor<T>, proposal_id: ProposalIndex, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let auction = RegionAuctions::<T>::take(proposal_id).ok_or(Error::<T>::NoAuction)?;
@@ -520,7 +535,7 @@ pub mod pallet {
 		pub fn adjust_listing_duration(origin: OriginFor<T>, region: RegionId, listing_duration: BlockNumberFor<T>) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 
@@ -553,7 +568,7 @@ pub mod pallet {
 		pub fn adjust_region_tax(origin: OriginFor<T>, region: RegionId, new_tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 
@@ -582,7 +597,7 @@ pub mod pallet {
 		pub fn propose_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
@@ -619,7 +634,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let mut region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
@@ -668,7 +683,7 @@ pub mod pallet {
 		pub fn cancel_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
@@ -703,7 +718,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
+				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(RegionDetails::<T>::contains_key(region), Error::<T>::RegionUnknown);
@@ -717,6 +732,33 @@ pub mod pallet {
 				region_id: region,
 				location_id: location,
 			});
+			Ok(())
+		}
+
+		#[pallet::call_index(7)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn add_regional_operator(
+			origin: OriginFor<T>,
+			new_operator: T::AccountId,
+		) -> DispatchResult {
+			T::RegionOperatorOrigin::ensure_origin(origin)?;
+
+			ensure!(RegionOperatorAccounts::<T>::get(&new_operator).is_none(), Error::<T>::AlreadyRegionOperator);
+			RegionOperatorAccounts::<T>::insert(&new_operator, true);
+			Self::deposit_event(Event::<T>::NewRegionOperatorAdded { new_operator });
+			Ok(())
+		}
+
+		#[pallet::call_index(8)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn remove_regional_operator(
+			origin: OriginFor<T>,
+			regional_operator: T::AccountId,
+		) -> DispatchResult {
+			T::RegionOperatorOrigin::ensure_origin(origin)?;
+
+			RegionOperatorAccounts::<T>::take(&regional_operator).ok_or(Error::<T>::NoRegionalOperator)?;
+			Self::deposit_event(Event::<T>::RegionOperatorRemoved { regional_operator });
 			Ok(())
 		}
 	}
