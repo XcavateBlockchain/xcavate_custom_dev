@@ -171,7 +171,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type RegionOperatorAccounts<T: Config> = 
-		StorageMap<_, Blake2_128Concat, T::AccountId, bool, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, (), OptionQuery>;
 
 	#[pallet::storage]
 	pub type LastRegionProposalBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
@@ -315,6 +315,8 @@ pub mod pallet {
 		AlreadyRegionOperator,
 		/// This account is not a regional operator.
 		NoRegionalOperator,
+		/// The user is not a regional operator.
+		UserNotRegionalOperator,
 	}
 
 	#[pallet::call]
@@ -394,24 +396,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(12)]
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn process_region_voting(
-			origin: OriginFor<T>,
-			proposal_id: ProposalIndex,
-		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
-			);
-			let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
-			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			ensure!(region_proposal.proposal_expiry <= current_block_number, Error::<T>::VotingStillOngoing);
-			Self::finalize_region_proposal(proposal_id, current_block_number)?;
-			Ok(())
-		}
-
 		#[pallet::call_index(13)]
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn bid_on_region(
@@ -421,9 +405,19 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
+				RegionOperatorAccounts::<T>::contains_key(&signer),
+				Error::<T>::UserNotRegionalOperator
 			);
+
+			if let Some(region_proposal) = RegionProposals::<T>::get(proposal_id) {
+				let current_block_number = <frame_system::Pallet<T>>::block_number();
+				ensure!(region_proposal.proposal_expiry <= current_block_number, Error::<T>::VotingStillOngoing);
+				let auction_started = Self::finalize_region_proposal(proposal_id, current_block_number)?;
+				if !auction_started {
+					return Ok(());
+				}
+			}
+
 			ensure!(!amount.is_zero(), Error::<T>::BidCannotBeZero);
 			RegionAuctions::<T>::try_mutate(proposal_id, |maybe_auction| -> DispatchResult {
 				let auction = maybe_auction.as_mut().ok_or(Error::<T>::NoOngoingAuction)?;
@@ -473,8 +467,8 @@ pub mod pallet {
 		pub fn create_new_region(origin: OriginFor<T>, proposal_id: ProposalIndex, listing_duration: BlockNumberFor<T>, tax: Permill) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
+				RegionOperatorAccounts::<T>::contains_key(&signer),
+				Error::<T>::UserNotRegionalOperator
 			);
 			let auction = RegionAuctions::<T>::take(proposal_id).ok_or(Error::<T>::NoAuction)?;
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -742,9 +736,8 @@ pub mod pallet {
 			new_operator: T::AccountId,
 		) -> DispatchResult {
 			T::RegionOperatorOrigin::ensure_origin(origin)?;
-
 			ensure!(RegionOperatorAccounts::<T>::get(&new_operator).is_none(), Error::<T>::AlreadyRegionOperator);
-			RegionOperatorAccounts::<T>::insert(&new_operator, true);
+			RegionOperatorAccounts::<T>::insert(&new_operator, ());
 			Self::deposit_event(Event::<T>::NewRegionOperatorAdded { new_operator });
 			Ok(())
 		}
@@ -756,7 +749,6 @@ pub mod pallet {
 			regional_operator: T::AccountId,
 		) -> DispatchResult {
 			T::RegionOperatorOrigin::ensure_origin(origin)?;
-
 			RegionOperatorAccounts::<T>::take(&regional_operator).ok_or(Error::<T>::NoRegionalOperator)?;
 			Self::deposit_event(Event::<T>::RegionOperatorRemoved { regional_operator });
 			Ok(())
@@ -769,7 +761,7 @@ pub mod pallet {
 			<T as pallet::Config>::PalletId::get().into_account_truncating()
 		}
 
-		fn finalize_region_proposal(proposal_id: ProposalIndex, current_block_number: BlockNumberFor<T>) -> DispatchResult {
+		fn finalize_region_proposal(proposal_id: ProposalIndex, current_block_number: BlockNumberFor<T>) -> Result<bool, DispatchError> {
 			let voting_results = <OngoingRegionProposalVotes<T>>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
 			let _ = <RegionProposals<T>>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
 			let _ = UserRegionVote::<T>::clear_prefix(proposal_id, u32::MAX, None);	
@@ -785,10 +777,11 @@ pub mod pallet {
 				};
 				RegionAuctions::<T>::insert(proposal_id, auction);
 				Self::deposit_event(Event::RegionAuctionStarted { proposal_id });
+				return Ok(true);
 			} else {
 				Self::deposit_event(Event::RegionRejected { proposal_id });
+				return Ok(false);
 			}						
-			Ok(())
 		}
 
 		/// Set the default collection configuration for creating a collection.

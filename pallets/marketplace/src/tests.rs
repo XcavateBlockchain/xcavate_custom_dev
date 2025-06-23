@@ -27,10 +27,10 @@ fn run_to_block(n: u64) {
 }
 
 fn new_region_helper() {
+	assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
 	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, pallet_regions::Vote::Yes));
 	run_to_block(31);
-	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
 	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
 	run_to_block(61);
 	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 30, Permill::from_percent(3)));
@@ -105,7 +105,6 @@ fn register_lawyer_fails() {
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
 		run_to_block(91);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
 		run_to_block(121);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
@@ -582,7 +581,6 @@ fn claim_property_fails() {
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
 		run_to_block(91);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
 		run_to_block(121);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
@@ -855,7 +853,7 @@ fn distributes_nfts_and_funds_3() {
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 0, pallet_regions::Vote::Yes));
 		run_to_block(31);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 0));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 0, 100_000));
 		run_to_block(61);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 0, 30, Permill::from_parts(32_500)));
@@ -2441,14 +2439,12 @@ fn listing_objects_in_different_regions() {
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 1, pallet_regions::Vote::Yes));
 		run_to_block(91);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 1));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 1, 100_000));
 		run_to_block(121);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 1, 30, Permill::from_percent(3)));
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([8; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([8; 32].into()), 2, pallet_regions::Vote::Yes));
 		run_to_block(151);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([8; 32].into()), 2));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([8; 32].into()), 2, 100_000));
 		run_to_block(181);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([8; 32].into()), 2, 30, Permill::from_percent(3)));

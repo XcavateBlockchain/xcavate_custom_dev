@@ -29,10 +29,10 @@ fn run_to_block(n: u64) {
 }
 
 fn new_region_helper() {
+	assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [6; 32].into()));
 	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
 	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 0, pallet_regions::Vote::Yes));
 	run_to_block(31);
-	assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([6; 32].into()), 0));
 	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 0, 100_000));
 	run_to_block(61);
 	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 0, 30, Permill::from_percent(3)));
@@ -406,10 +406,10 @@ fn set_letting_agent_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), bvec![10, 10]));
 		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([0; 32].into()), 0, pallet_regions::Vote::Yes));
 		run_to_block(31);
-		assert_ok!(Regions::process_region_voting(RuntimeOrigin::signed([0; 32].into()), 0));
 		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 100_000));
 		run_to_block(61);
 		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([0; 32].into()), 0, 30, Permill::from_percent(3)));
