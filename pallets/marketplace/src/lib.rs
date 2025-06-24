@@ -1819,7 +1819,7 @@ pub mod pallet {
 
 		/// Get the account id of the treasury pallet
 		pub fn treasury_account_id() -> AccountIdOf<T> {
-			T::TreasuryId::get().into_account_truncating()
+			<T as pallet::Config>::TreasuryId::get().into_account_truncating()
 		}
 
 		pub fn next_listing_id(listing_id: ListingId) -> Result<ListingId, Error<T>> {

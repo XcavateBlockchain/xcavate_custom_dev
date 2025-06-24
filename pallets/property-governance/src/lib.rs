@@ -17,9 +17,9 @@ use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
 		tokens::{fungible, fungibles},
-		fungible::MutateHold,
+		fungible::{MutateHold, Credit, BalancedHold},
 		fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
-		tokens::{Fortitude, Precision, Restriction, Preservation},
+		tokens::{Fortitude, Precision, Restriction, Preservation, imbalance::OnUnbalanced},
 	},
 	PalletId,
 };
@@ -32,6 +32,9 @@ pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
 
 pub type Balance = u128;
+
+pub type NegativeImbalanceOf<T> =
+	Credit<<T as frame_system::Config>::AccountId, <T as Config>::NativeCurrency>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -275,6 +278,9 @@ pub mod pallet {
 		/// Time of auctions of a property sale.
 		#[pallet::constant]
 		type AuctionTime: Get<BlockNumberFor<Self>>;
+
+		/// Handler for the unbalanced reduction when slashing a letting agent.
+		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
 	}
 
 	pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -1245,15 +1251,14 @@ pub mod pallet {
 			let letting_agent =
 				pallet_property_management::LettingStorage::<T>::get(challenge.asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			let amount = <T as Config>::MinSlashingAmount::get();
-			let _slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
+
+			let (imbalance, _remaining) = <T as pallet::Config>::NativeCurrency::slash(
 				&<T as pallet_property_management::Config>::RuntimeHoldReason::from(pallet_property_management::HoldReason::LettingAgent),
-				&letting_agent, 
-				&Self::property_account_id(challenge.asset_id),
-				amount,
-				Precision::Exact,
-				Restriction::Free,
-				Fortitude::Force,
-			)?;
+				&letting_agent,
+				amount
+			);
+
+			<T as pallet::Config>::Slash::on_unbalanced(imbalance);
 			
 			challenge.state = ChallengeState::ReplacementVoting;
 			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };

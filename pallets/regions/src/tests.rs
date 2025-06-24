@@ -587,13 +587,15 @@ fn create_new_location_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_noop!(
-			Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![10, 10]),
-			Error::<Test>::UserNotWhitelisted
+			Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]),
+			Error::<Test>::RegionUnknown
 		);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
 		assert_noop!(
-			Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 1, bvec![10, 10]),
-			Error::<Test>::RegionUnknown
+			Regions::create_new_location(RuntimeOrigin::signed([7; 32].into()), 0, bvec![10, 10]),
+			Error::<Test>::NoPermission
 		);
 	})
 }

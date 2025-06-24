@@ -240,7 +240,11 @@ parameter_types! {
 	pub const RegionVotingTime: BlockNumber = 30;
 	pub const RegionAuctionTime: BlockNumber = 30;
 	pub const RegionThreshold: Percent = Percent::from_percent(75);
+	pub const RegionOperatorVotingTime: BlockNumber = 30;
 	pub const RegionProposalCooldown: BlockNumber = 28;
+	pub const MaxProposalForBlock: u32 = 100;
+	pub const RegionSlashingAmount: Balance = 10;
+	pub const RegionOwnerChangeTime: BlockNumber = 100;
 }
 
 impl pallet_regions::Config for Test {
@@ -261,6 +265,12 @@ impl pallet_regions::Config for Test {
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
 	type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type RegionOperatorVotingTime = RegionOperatorVotingTime;
+	type MaxProposalsForBlock = MaxProposalForBlock;
+	type RegionSlashingAmount = RegionSlashingAmount;
+	type TreasuryId = TreasuryPalletId;
+	type RegionOwnerChangePeriod = RegionOwnerChangeTime;
+	type Slash = ();
 }
 
 parameter_types! {
@@ -350,6 +360,7 @@ impl pallet_property_governance::Config for Test {
 	type MarketplacePalletId = MarketplacePalletId;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
 	type AuctionTime = AuctionDuration;
+	type Slash = ();
 }
 
 // Build genesis storage according to the mock runtime.

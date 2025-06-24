@@ -684,6 +684,7 @@ impl pallet_property_governance::Config for Runtime {
 	type MarketplacePalletId = MarketplacePalletId;
 	type SaleApprovalYesThreshold = SalesProposalThreshold;
 	type AuctionTime = AuctionDuration;
+	type Slash = ();
 }
 
 parameter_types! {
@@ -693,8 +694,12 @@ parameter_types! {
 	pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
 	pub const RegionVotingTime: BlockNumber = 20;
 	pub const RegionAuctionTime: BlockNumber = 20;
+	pub const RegionOperatorVotingTime: BlockNumber = 30;
 	pub const RegionThreshold: Percent = Percent::from_percent(75);
 	pub const RegionProposalCooldown: BlockNumber = 28 * DAYS;
+	pub const MaxProposalForBlock: u32 = 100;
+	pub const RegionSlashingAmount: Balance = 10 * UNIT;
+	pub const RegionOwnerChangeTime: BlockNumber = 100;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -716,6 +721,12 @@ impl pallet_regions::Config for Runtime {
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
 	type RegionOperatorOrigin = EnsureRoot<Self::AccountId>;
+	type RegionOperatorVotingTime = RegionOperatorVotingTime;
+	type MaxProposalsForBlock = MaxProposalForBlock;
+	type RegionSlashingAmount = RegionSlashingAmount;
+	type TreasuryId = TreasuryPalletId;
+	type RegionOwnerChangePeriod = RegionOwnerChangeTime;
+	type Slash = ();
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
