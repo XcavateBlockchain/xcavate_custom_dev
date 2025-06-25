@@ -1,9 +1,10 @@
 use crate::{mock::*, Error, Event};
 use frame_support::BoundedVec;
-use frame_support::{assert_noop, assert_ok, traits::{fungible::InspectHold, OnFinalize, OnInitialize}};
+use frame_support::{assert_noop, assert_ok, traits::{fungible::InspectHold, fungible::Inspect, OnFinalize, OnInitialize}};
 use crate::{
 	RegionDetails, LocationRegistration, HoldReason, TakeoverRequests, RegionProposals, RegionAuctions,
 	OngoingRegionProposalVotes, VoteStats, LastRegionProposalBlock, UserRegionVote, RegionOperatorAccounts,
+	RegionOwnerProposals, OngoingRegionOwnerProposalVotes, UserRegionOwnerVote,
 };
 use sp_runtime::{Permill, TokenError, traits::BadOrigin};
 
@@ -597,5 +598,147 @@ fn create_new_location_fails() {
 			Regions::create_new_location(RuntimeOrigin::signed([7; 32].into()), 0, bvec![10, 10]),
 			Error::<Test>::NoPermission
 		);
+	})
+}
+
+#[test]
+fn propose_remove_regional_operator_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_some(), true);
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 0, no_voting_power: 0 }
+		);
+	})
+}
+
+#[test]
+fn propose_remove_regional_operator_fails() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_noop!(
+			Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0),
+			Error::<Test>::RegionUnknown,
+		);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_noop!(
+			Regions::propose_remove_regional_operator(RuntimeOrigin::signed([1; 32].into()), 0),
+			Error::<Test>::UserNotWhitelisted,
+		);
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_some(), true);
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 0, no_voting_power: 0 }
+		);
+		assert_noop!(
+			Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0),
+			Error::<Test>::ProposalAlreadyOngoing,
+		);
+	})
+}
+
+#[test]
+fn vote_on_remove_owner_proposal_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_some(), true);
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 0, no_voting_power: 0 }
+		);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::No));
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 200_000, no_voting_power: 400_000 }
+		);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).unwrap(), crate::Vote::Yes);
+	})
+}
+
+#[test]
+fn vote_on_remove_owner_proposal_fails() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		assert_noop!(
+			Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes),
+			Error::<Test>::NotOngoing,
+		);
+		new_region_helper();
+		assert_noop!(
+			Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes),
+			Error::<Test>::NotOngoing,
+		);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_noop!(
+			Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([1; 32].into()), 0, crate::Vote::Yes),
+			Error::<Test>::UserNotWhitelisted,
+		);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(91);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::DefensePeriod);
+		assert_noop!(
+			Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes),
+			Error::<Test>::NotOngoing,
+		);
+	})
+}
+
+#[test]
+fn remove_owner_proposal_passes() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::MistrustVoting);
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 600_000, no_voting_power: 0 }
+		);
+		run_to_block(91);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::DefensePeriod);
+		run_to_block(121);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::SlashVoting);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
+		assert_eq!(Balances::total_balance(&([8; 32].into())), 400_000);
+		assert_eq!(Balances::total_issuance(), 1_055_000);
+		run_to_block(151);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::ReplacementVoting);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 90_000);
+		assert_eq!(Balances::total_balance(&([8; 32].into())), 390_000);
+		assert_eq!(Balances::total_issuance(), 1_045_000);
+		System::assert_last_event(Event::RegionalOperatorSlashed{ region_id: 0, operator: [8; 32].into(), amount: 10_000}.into());
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 261);
+		run_to_block(181);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
+		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 181);
+		System::assert_last_event(Event::RegionOwnerChangeEnabled{ region_id: 0, next_change_allowed: 181}.into());
 	})
 }

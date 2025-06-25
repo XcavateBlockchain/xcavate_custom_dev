@@ -159,6 +159,9 @@ parameter_types! {
 	pub const RegionAuctionTime: BlockNumber = 30;
 	pub const RegionThreshold: Percent = Percent::from_percent(75);
 	pub const RegionProposalCooldown: BlockNumber = 28;
+	pub const RegionOperatorVotingTime: BlockNumber = 30;
+	pub const RegionOwnerChangeTime: BlockNumber = 200;
+	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
 
 impl crate::Config for Test {
@@ -179,6 +182,12 @@ impl crate::Config for Test {
 	type RegionThreshold = RegionThreshold;
 	type RegionProposalCooldown = RegionProposalCooldown;
 	type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type RegionOperatorVotingTime = RegionOperatorVotingTime;
+	type MaxProposalsForBlock = ConstU32<100>;
+	type RegionSlashingAmount = ConstU128<10_000>;
+	type TreasuryId = TreasuryPalletId;
+	type RegionOwnerChangePeriod = RegionOwnerChangeTime;
+	type Slash = ();
 }
 
 // Build genesis storage according to the mock runtime.

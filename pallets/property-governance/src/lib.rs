@@ -17,9 +17,9 @@ use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
 		tokens::{fungible, fungibles},
-		fungible::{MutateHold, Credit, BalancedHold},
+		fungible::{Credit, BalancedHold},
 		fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
-		tokens::{Fortitude, Precision, Restriction, Preservation, imbalance::OnUnbalanced},
+		tokens::{Precision, Preservation, imbalance::OnUnbalanced},
 	},
 	PalletId,
 };
@@ -556,6 +556,8 @@ pub mod pallet {
 		NoReserve,
 		/// Token amount is zero.
 		ZeroTokenAmount,
+		/// There was an unexpected issue with the state of a challenge.
+		InvalidChallengeState,
 	}
 
 	#[pallet::hooks]
@@ -1365,24 +1367,26 @@ pub mod pallet {
 		fn finish_challenge(challenge_id: ChallengeIndex) -> DispatchResult {
 			let challenge = Challenges::<T>::get(challenge_id);
 			if let Some(mut challenge) = challenge {
-				if challenge.state == ChallengeState::DefensePeriod {
-					challenge.state = ChallengeState::SlashVoting;
-					let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
-					OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
-					Challenges::<T>::insert(challenge_id, challenge.clone());
-					let current_block_number = <frame_system::Pallet<T>>::block_number();
-					let expiry_block =
-						current_block_number.saturating_add(<T as Config>::VotingTime::get());
-					let _ = ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-						keys.try_push(challenge_id).map_err(|_| Error::<T>::TooManyProposals)?;
-						Ok::<(), DispatchError>(())
-					});
-				} 
-				else {
-					let voting_results = <OngoingChallengeVotes<T>>::take(challenge_id, challenge.state.clone());
-					if let Some(voting_result) = voting_results {
-						let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(challenge.asset_id);
-						if let Some(asset_details) = asset_details {
+				match challenge.state {
+					ChallengeState::DefensePeriod => {
+						challenge.state = ChallengeState::SlashVoting;
+						let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
+						OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
+						Challenges::<T>::insert(challenge_id, challenge.clone());
+						let current_block_number = <frame_system::Pallet<T>>::block_number();
+						let expiry_block =
+							current_block_number.saturating_add(<T as Config>::VotingTime::get());
+						ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
+							keys.try_push(challenge_id).map_err(|_| Error::<T>::TooManyProposals)?;
+							Ok::<(), DispatchError>(())
+						})?;
+					},
+					ChallengeState::MistrustVoting 
+					| ChallengeState::SlashVoting 
+					| ChallengeState::ReplacementVoting => {
+						let voting_results = <OngoingChallengeVotes<T>>::take(challenge_id, challenge.state.clone());
+						if let Some(voting_result) = voting_results {
+							let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(challenge.asset_id).ok_or(Error::<T>::AssetNotFound)?;
 							ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
 							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
 							let no_votes_percentage = Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
@@ -1391,23 +1395,28 @@ pub mod pallet {
 								&& required_threshold
 									< yes_votes_percentage.saturating_add(no_votes_percentage)
 							{
-								if challenge.state == ChallengeState::MistrustVoting {
-									challenge.state = ChallengeState::DefensePeriod;
-									Challenges::<T>::insert(challenge_id, challenge.clone());
-									let current_block_number = <frame_system::Pallet<T>>::block_number();
-									let expiry_block =
-										current_block_number.saturating_add(<T as Config>::VotingTime::get());
-									let _ = ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-										keys.try_push(challenge_id).map_err(|_| Error::<T>::TooManyProposals)?;
-										Ok::<(), DispatchError>(())
-									});
-								} 
-								if challenge.state == ChallengeState::SlashVoting {
-									let _ = Self::slash_letting_agent(challenge_id);
-								} 
-								if challenge.state == ChallengeState::ReplacementVoting {
-									let _ = Self::change_letting_agent(challenge_id);
-								} 
+								match challenge.state {
+									ChallengeState::MistrustVoting => {
+										challenge.state = ChallengeState::DefensePeriod;
+										Challenges::<T>::insert(challenge_id, challenge.clone());
+										let current_block_number = <frame_system::Pallet<T>>::block_number();
+										let expiry_block =
+											current_block_number.saturating_add(<T as Config>::VotingTime::get());
+										ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
+											keys.try_push(challenge_id).map_err(|_| Error::<T>::TooManyProposals)?;
+											Ok::<(), DispatchError>(())
+										})?;
+									},
+									ChallengeState::SlashVoting => {
+										Self::slash_letting_agent(challenge_id)?;
+									}, 
+									ChallengeState::ReplacementVoting => {
+										let _ = Self::change_letting_agent(challenge_id);
+									},
+									_ => {
+										return Err(Error::<T>::InvalidChallengeState.into());
+									}
+								}
 							} else {
 								Challenges::<T>::take(challenge_id);
 								if yes_votes_percentage <= no_votes_percentage {
@@ -1418,7 +1427,7 @@ pub mod pallet {
 							}
 						}
 					}
-				}	
+				}
 			}
 			Ok(())
 		}

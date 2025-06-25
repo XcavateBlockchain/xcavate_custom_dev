@@ -242,8 +242,6 @@ parameter_types! {
 	pub const RegionThreshold: Percent = Percent::from_percent(75);
 	pub const RegionOperatorVotingTime: BlockNumber = 30;
 	pub const RegionProposalCooldown: BlockNumber = 28;
-	pub const MaxProposalForBlock: u32 = 100;
-	pub const RegionSlashingAmount: Balance = 10;
 	pub const RegionOwnerChangeTime: BlockNumber = 100;
 }
 
@@ -266,8 +264,8 @@ impl pallet_regions::Config for Test {
 	type RegionProposalCooldown = RegionProposalCooldown;
 	type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type RegionOperatorVotingTime = RegionOperatorVotingTime;
-	type MaxProposalsForBlock = MaxProposalForBlock;
-	type RegionSlashingAmount = RegionSlashingAmount;
+	type MaxProposalsForBlock = ConstU32<100>;
+	type RegionSlashingAmount = ConstU128<10>;
 	type TreasuryId = TreasuryPalletId;
 	type RegionOwnerChangePeriod = RegionOwnerChangeTime;
 	type Slash = ();

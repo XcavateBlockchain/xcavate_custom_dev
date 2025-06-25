@@ -1,7 +1,7 @@
 use crate::{mock::*, Error, Event};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{OnFinalize, OnInitialize, fungibles::{Inspect, InspectHold as FungiblesInspectHold}},
+	traits::{OnFinalize, OnInitialize, fungibles::{Inspect, InspectHold as FungiblesInspectHold}, fungible::InspectHold},
 	sp_runtime::{Percent, Permill},
 };
 
@@ -595,7 +595,11 @@ fn challenge_pass() {
 			1,
 			crate::Vote::Yes
 		));
+		assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 100);
+		assert_eq!(Balances::total_issuance(), 57_465_001);
 		run_to_block(151);
+		assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 0);
+		assert_eq!(Balances::total_issuance(), 57_464_901);
 		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
 		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
 			RuntimeOrigin::signed([1; 32].into()),

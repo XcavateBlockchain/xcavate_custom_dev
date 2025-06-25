@@ -78,7 +78,6 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
 	pub struct RemoveRegionOwnerProposal<T: Config> {
 		pub proposer: T::AccountId,
-		pub proposal_expiry: BlockNumberFor<T>,
 		pub state: ProposalState,
 	}
 
@@ -416,6 +415,8 @@ pub mod pallet {
 		ProposalAlreadyOngoing,
 		/// There are already too many proposals in the ending block.
 		TooManyProposals,
+		/// There was an unexpected issue with the state of a proposal.
+		InvalidState,
 	}
 
  	#[pallet::hooks]
@@ -854,12 +855,13 @@ pub mod pallet {
 				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
+			ensure!(RegionDetails::<T>::get(region_id).is_some(), Error::<T>::RegionUnknown);
 			ensure!(RegionOwnerProposals::<T>::get(region_id).is_none(), Error::<T>::ProposalAlreadyOngoing);
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			let expiry_block = 
 				current_block_number.saturating_add(T::RegionOperatorVotingTime::get());
 			let proposal =
-				RemoveRegionOwnerProposal { proposer: signer.clone(), proposal_expiry: expiry_block, state: ProposalState::MistrustVoting };
+				RemoveRegionOwnerProposal { proposer: signer.clone(), state: ProposalState::MistrustVoting };
 			
 			RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
 				keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
@@ -884,9 +886,6 @@ pub mod pallet {
 				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
 				Error::<T>::UserNotWhitelisted
 			);
-			let removal_proposal = RegionOwnerProposals::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
-			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			ensure!(removal_proposal.proposal_expiry > current_block_number, Error::<T>::ProposalExpired);
 			let voting_power = T::NativeCurrency::total_balance(&signer);
  			OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote|{
 				let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
@@ -961,59 +960,71 @@ pub mod pallet {
 				};
 				RegionAuctions::<T>::insert(proposal_id, auction);
 				Self::deposit_event(Event::RegionAuctionStarted { proposal_id });
-				return Ok(true);
+				Ok(true)
 			} else {
 				Self::deposit_event(Event::RegionRejected { proposal_id });
-				return Ok(false);
+				Ok(false)
 			}						
 		}
 
 		fn finish_region_owner_proposal(region_id: RegionId) -> DispatchResult {
-			let proposal = RegionOwnerProposals::<T>::get(region_id);
-			if let Some(mut proposal) = proposal {
-				if proposal.state == ProposalState::DefensePeriod {
-					proposal.state = ProposalState::SlashVoting;
-					let vote_stats = VoteStats { yes_voting_power: Zero::zero(), no_voting_power: Zero::zero() };
-					OngoingRegionOwnerProposalVotes::<T>::insert(region_id, vote_stats);
-					RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
-					let current_block_number = <frame_system::Pallet<T>>::block_number();
-					let expiry_block =
-						current_block_number.saturating_add(<T as Config>::RegionOperatorVotingTime::get());
-					let _ = RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-						keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
-						Ok::<(), DispatchError>(())
-					});
-				}
-				else {
-					let voting_results = <OngoingRegionOwnerProposalVotes<T>>::take(region_id);
-					if let Some(voting_result) = voting_results {	
-						let required_threshold = T::RegionThreshold::get();
-						let total_voting_amount = voting_result.yes_voting_power.checked_add(&voting_result.no_voting_power).ok_or(Error::<T>::ArithmeticOverflow)?;					
-						let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, total_voting_amount);
-						if required_threshold < yes_votes_percentage {
-							if proposal.state == ProposalState::MistrustVoting {
-								proposal.state = ProposalState::DefensePeriod;
-								RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
-								let current_block_number = <frame_system::Pallet<T>>::block_number();
-								let expiry_block =
-									current_block_number.saturating_add(<T as Config>::RegionOperatorVotingTime::get());
-								let _ = RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-									keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
-									Ok::<(), DispatchError>(())
-								});
-							} 
-							if proposal.state == ProposalState::SlashVoting {
-								let _ = Self::slash_region_owner(region_id);
-							} 
-							if proposal.state == ProposalState::ReplacementVoting {
-								let _ = Self::enable_region_owner_change(region_id);
-							} 
-						} else {
-							RegionOwnerProposals::<T>::take(region_id);
-							Self::deposit_event(Event::RegionOwnerRemovalRejected { region_id, proposal_state: proposal.state});
-						}
+			if let Some(mut proposal) = RegionOwnerProposals::<T>::get(region_id) {
+				match proposal.state {
+					ProposalState::DefensePeriod => {
+						proposal.state = ProposalState::SlashVoting;
+						RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
+
+						OngoingRegionOwnerProposalVotes::<T>::insert(region_id, VoteStats { 
+							yes_voting_power: Zero::zero(), 
+							no_voting_power: Zero::zero(), 
+						});
+						
+						let current_block_number = <frame_system::Pallet<T>>::block_number();
+						let expiry_block =
+							current_block_number.saturating_add(<T as Config>::RegionOperatorVotingTime::get());
+						RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
+							keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
+							Ok::<(), DispatchError>(())
+						})?;
 					}
-				}	
+					 ProposalState::MistrustVoting
+					| ProposalState::SlashVoting
+					| ProposalState::ReplacementVoting => {
+						let voting_results = OngoingRegionOwnerProposalVotes::<T>::take(region_id);
+						if let Some(voting_result) = voting_results {	
+							let required_threshold = T::RegionThreshold::get();
+							let total_voting_amount = voting_result.yes_voting_power.checked_add(&voting_result.no_voting_power).ok_or(Error::<T>::ArithmeticOverflow)?;					
+							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, total_voting_amount);
+							if yes_votes_percentage > required_threshold {
+								match proposal.state {
+									ProposalState::MistrustVoting => {
+										proposal.state = ProposalState::DefensePeriod;
+										RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
+										let current_block_number = <frame_system::Pallet<T>>::block_number();
+										let expiry_block =
+											current_block_number.saturating_add(<T as Config>::RegionOperatorVotingTime::get());
+										RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
+											keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
+											Ok::<(), DispatchError>(())
+										})?;
+									},
+									ProposalState::SlashVoting => {
+										Self::slash_region_owner(region_id)?;
+									},
+									ProposalState::ReplacementVoting => {
+										Self::enable_region_owner_change(region_id)?;
+									},
+									_ => {
+										return Err(Error::<T>::InvalidState.into());
+									}
+								}
+							} else {
+								RegionOwnerProposals::<T>::remove(region_id);
+								Self::deposit_event(Event::RegionOwnerRemovalRejected { region_id, proposal_state: proposal.state});
+							}
+						}	
+					}
+				}					
 			}
 			Ok(())
 		}
