@@ -81,14 +81,6 @@ pub mod pallet {
 		pub state: ProposalState,
 	}
 
-	/// Takeover enum.
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-	pub enum TakeoverAction {
-		Accept,
-		Reject,
-	}
-
 	/// Vote enum.
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -256,6 +248,15 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	pub(super) type RegionReplacementAuctions<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		RegionId,
+		RegionAuction<T>,
+		OptionQuery,
+	>;
+
     /// Mapping of region to the region information.
 	#[pallet::storage]
 	pub type RegionDetails<T: Config> = 
@@ -264,11 +265,6 @@ pub mod pallet {
     /// Id of the next region.
 	#[pallet::storage]
 	pub(super) type NextRegionId<T: Config> = StorageValue<_, RegionId, ValueQuery>;
-
-	/// Mapping of region to requests for takeover.
-	#[pallet::storage]
-	pub type TakeoverRequests<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, T::AccountId, OptionQuery>;
 
 	/// True if a location is registered.
 	#[pallet::storage]
@@ -328,14 +324,6 @@ pub mod pallet {
 		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId, owner: T::AccountId, listing_duration: BlockNumberFor<T>, tax: Permill },
 		/// No region has been created.
 		NoRegionCreated { region_proposal_id: ProposalIndex },
-		/// Someone proposed to take over a region.
-		TakeoverProposed { region: RegionId, proposer: T::AccountId },
-		/// A takeover has been accepted from the region owner.
-		TakeoverAccepted { region: RegionId, new_owner: T::AccountId },
-		/// A takeover has been rejected from the region owner.
-		TakeoverRejected { region: RegionId },
-		/// A Takeover has been cancelled.
-		TakeoverCancelled { region: RegionId, signer: T::AccountId },
 		/// Listing duration of a region changed.
 		ListingDurationChanged { region: RegionId, listing_duration: BlockNumberFor<T> },
 		/// Tax of a region changed.
@@ -362,6 +350,8 @@ pub mod pallet {
 		RegionalOperatorSlashed { region_id: RegionId, operator: T::AccountId, amount: T::Balance },
 		/// The region is now eligible for an owner change after the specified block.
 		RegionOwnerChangeEnabled { region_id: RegionId, next_change_allowed: BlockNumberFor<T> },
+		/// A bid for a region got placed.
+		ReplacementBidSuccessfullyPlaced { region_id: RegionId, bidder: T::AccountId, new_leading_bid: T::Balance },
 	}
 
 	#[pallet::error]
@@ -379,10 +369,6 @@ pub mod pallet {
 		NoPermission,
 		/// The proposer is already owner of this region.
 		AlreadyRegionOwner,
-		/// There is already a takeover request pending.
-		TakeoverAlreadyPending,
-		/// There is no pending takeover request.
-		NoTakeoverRequest,
 		/// The location is already registered.
 		LocationRegistered,
 		/// The proposal is not ongoing.
@@ -417,6 +403,8 @@ pub mod pallet {
 		TooManyProposals,
 		/// There was an unexpected issue with the state of a proposal.
 		InvalidState,
+		/// Region owner cant be changed at the moment.
+		RegionOwnerCantBeChanged,
 	}
 
  	#[pallet::hooks]
@@ -696,122 +684,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Caller proposes to become new owner of a region.
-		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
-		///
-		/// Parameters:
-		/// - `region`: Region which the caller wants to own.
-		///
-		/// Emits `TakeoverProposed` event when succesfful.
-		#[pallet::call_index(6)]
-		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn propose_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
-			);
-			let region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-		
-			ensure!(signer != region_info.owner, Error::<T>::AlreadyRegionOwner);
-			ensure!(!TakeoverRequests::<T>::contains_key(region), Error::<T>::TakeoverAlreadyPending);
-		
-			T::NativeCurrency::hold(
-				&HoldReason::RegionDepositReserve.into(),
-				&signer,
-				T::RegionDeposit::get(),
-			)?;
-		
-			TakeoverRequests::<T>::insert(region, signer.clone());
-			Self::deposit_event(Event::<T>::TakeoverProposed { region, proposer: signer });
-			Ok(())
-		}
-
-		/// The region owner can handle the takeover request.
-		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
-		///
-		/// Parameters:
-		/// - `region`: Region which the caller wants to own.
-		/// - `action`: Enum for takeover which is either Accept or Reject.
-		///
-		/// Emits `TakeoverRejected` event when succesfful.
-		#[pallet::call_index(7)]
-		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn handle_takeover(
-			origin: OriginFor<T>,
-			region: RegionId,
-			action: TakeoverAction,
-		) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
-			);
-			let mut region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-			ensure!(signer == region_info.owner, Error::<T>::NoPermission);
-
-			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
-
-			match action {
-				TakeoverAction::Accept => {	
-					T::NativeCurrency::release(
-						&HoldReason::RegionDepositReserve.into(),
-						&region_info.owner,
-						T::RegionDeposit::get(),
-						Precision::Exact,
-					)?;
-	
-					region_info.owner = requester.clone();
-					RegionDetails::<T>::insert(region, region_info);
-	
-					Self::deposit_event(Event::<T>::TakeoverAccepted { region, new_owner: requester });
-				},
-				TakeoverAction::Reject => {
-					T::NativeCurrency::release(
-						&HoldReason::RegionDepositReserve.into(),
-						&requester,
-						T::RegionDeposit::get(),
-						Precision::Exact,
-					)?;
-	
-					Self::deposit_event(Event::<T>::TakeoverRejected { region });
-				},
-			}
-			Ok(())
-		}
-
-		/// The proposer of a takeover can cancel the request.
-		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
-		///
-		/// Parameters:
-		/// - `region`: Region in which the caller wants to cancel the request.
-		///
-		/// Emits `TakeoverCancelled` event when succesfful.
-		#[pallet::call_index(8)]
-		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-		pub fn cancel_region_takeover(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
-			let signer = ensure_signed(origin)?;
-			ensure!(
-				pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-				Error::<T>::UserNotWhitelisted
-			);
-			let requester = TakeoverRequests::<T>::take(region).ok_or(Error::<T>::NoTakeoverRequest)?;
-			ensure!(requester == signer, Error::<T>::NoPermission);
-		
-			T::NativeCurrency::release(
-				&HoldReason::RegionDepositReserve.into(),
-				&signer,
-				T::RegionDeposit::get(),
-				Precision::Exact,
-			)?;
-		
-			Self::deposit_event(Event::<T>::TakeoverCancelled { region, signer });
-			Ok(())
-		}
-
 		/// Creates a new location for a region.
 		///
 		/// The origin must be the LocationOrigin.
@@ -907,6 +779,58 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::call_index(22)]
+		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+		pub fn bid_on_region_replacement(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			amount: T::Balance,
+		) -> DispatchResult {
+			let signer = ensure_signed(origin)?;
+			ensure!(
+				RegionOperatorAccounts::<T>::contains_key(&signer),
+				Error::<T>::UserNotRegionalOperator
+			);
+			let region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
+			let current_block_number = <frame_system::Pallet<T>>::block_number();
+			ensure!(region_info.next_owner_change > current_block_number, Error::<T>::RegionOwnerCantBeChanged);
+			
+			RegionReplacementAuctions::<T>::try_mutate(region_id, |maybe_auction| {
+				let auction = maybe_auction.get_or_insert_with(|| RegionAuction {
+					highest_bidder: None,
+					collateral: Zero::zero(),
+					auction_expiry: current_block_number.saturating_add(T::RegionAuctionTime::get()),
+				});
+				ensure!(auction.auction_expiry > current_block_number, Error::<T>::NoOngoingAuction);
+				ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
+				match &auction.highest_bidder {
+					Some(old_bidder) if old_bidder == &signer => {
+						let additional = amount.saturating_sub(auction.collateral);
+						if additional > Zero::zero() {
+							T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, additional)?;
+						}
+					},
+					Some(old_bidder) => {
+						T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
+						T::NativeCurrency::release(
+							&HoldReason::RegionDepositReserve.into(),
+							old_bidder,
+							auction.collateral,
+							Precision::Exact,
+						)?;
+					},
+					None => {
+						T::NativeCurrency::hold(&HoldReason::RegionDepositReserve.into(), &signer, amount)?;
+					}
+				}
+				auction.highest_bidder = Some(signer.clone());
+				auction.collateral = amount;
+				Ok::<(), DispatchError>(())
+			})?;
+			Self::deposit_event(Event::ReplacementBidSuccessfullyPlaced { region_id, bidder: signer, new_leading_bid: amount });
+			Ok(())
+		}
+
 		#[pallet::call_index(10)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
 		pub fn add_regional_operator(
@@ -995,7 +919,7 @@ pub mod pallet {
 							let required_threshold = T::RegionThreshold::get();
 							let total_voting_amount = voting_result.yes_voting_power.checked_add(&voting_result.no_voting_power).ok_or(Error::<T>::ArithmeticOverflow)?;					
 							let yes_votes_percentage = Percent::from_rational(voting_result.yes_voting_power, total_voting_amount);
-							if yes_votes_percentage > required_threshold {
+							if yes_votes_percentage > required_threshold && voting_result.yes_voting_power > voting_result.no_voting_power {
 								match proposal.state {
 									ProposalState::MistrustVoting => {
 										proposal.state = ProposalState::DefensePeriod;

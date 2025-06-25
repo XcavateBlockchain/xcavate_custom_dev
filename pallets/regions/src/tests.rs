@@ -2,7 +2,7 @@ use crate::{mock::*, Error, Event};
 use frame_support::BoundedVec;
 use frame_support::{assert_noop, assert_ok, traits::{fungible::InspectHold, fungible::Inspect, OnFinalize, OnInitialize}};
 use crate::{
-	RegionDetails, LocationRegistration, HoldReason, TakeoverRequests, RegionProposals, RegionAuctions,
+	RegionDetails, LocationRegistration, HoldReason, RegionProposals, RegionAuctions,
 	OngoingRegionProposalVotes, VoteStats, LastRegionProposalBlock, UserRegionVote, RegionOperatorAccounts,
 	RegionOwnerProposals, OngoingRegionOwnerProposalVotes, UserRegionOwnerVote,
 };
@@ -374,166 +374,6 @@ fn adjust_listing_duration_fails() {
 	})
 }
 
-#[test]
-fn propose_region_takeover_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
-	})
-}
-
-#[test]
-fn propose_region_takeover_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_noop!(
-			Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0),
-			Error::<Test>::UserNotWhitelisted,
-		);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_noop!(
-			Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 1),
-			Error::<Test>::RegionUnknown,
-		);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_noop!(
-			Regions::propose_region_takeover(RuntimeOrigin::signed([8; 32].into()), 0),
-			Error::<Test>::AlreadyRegionOwner,
-		);
-		assert_noop!(
-			Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0),
-			Error::<Test>::TakeoverAlreadyPending,
-		);
-	})
-}
-
-#[test]
-fn handle_takeover_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
-		assert_ok!(Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Reject));
-		assert_eq!(TakeoverRequests::<Test>::get(0).is_none(), true);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [8; 32].into());
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 100_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 100_000);
-		assert_ok!(Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Accept));
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 100_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 100_000);
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 400_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 0);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [0; 32].into());
-		assert_eq!(TakeoverRequests::<Test>::get(0).is_none(), true);
-	})
-}
-
-#[test]
-fn handle_takeover_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_noop!(
-			Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 0, crate::TakeoverAction::Reject),
-			Error::<Test>::NoTakeoverRequest
-		);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_noop!(
-			Regions::handle_takeover(RuntimeOrigin::signed([8; 32].into()), 1, crate::TakeoverAction::Reject),
-			Error::<Test>::RegionUnknown
-		);
-		assert_noop!(
-			Regions::handle_takeover(RuntimeOrigin::signed([1; 32].into()), 0, crate::TakeoverAction::Reject),
-			Error::<Test>::NoPermission
-		);
-	})
-}
-
-#[test]
-fn cancel_takeover_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collection_id, 0);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
-		assert_ok!(Regions::cancel_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(TakeoverRequests::<Test>::get(0).is_none(), true);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-	})
-}
-
-#[test]
-fn cancel_takeover_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
-		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
-		new_region_helper();
-		assert_noop!(
-			Regions::cancel_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0),
-			Error::<Test>::NoTakeoverRequest
-		);
-		assert_ok!(Regions::propose_region_takeover(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(TakeoverRequests::<Test>::get(0).unwrap(), [1; 32].into());
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
-		assert_noop!(
-			Regions::cancel_region_takeover(RuntimeOrigin::signed([8; 32].into()), 0),
-			Error::<Test>::NoPermission
-		);
-		assert_eq!(Balances::free_balance(&([1; 32].into())), 50_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 100_000);
-		assert_eq!(Balances::free_balance(&([8; 32].into())), 300_000);
-		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
-	})
-}
-
 // create_new_location function
 #[test]
 fn create_new_location_works() {
@@ -733,12 +573,72 @@ fn remove_owner_proposal_passes() {
 		assert_eq!(Balances::total_issuance(), 1_045_000);
 		System::assert_last_event(Event::RegionalOperatorSlashed{ region_id: 0, operator: [8; 32].into(), amount: 10_000}.into());
 		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
-		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 261);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 361);
 		run_to_block(181);
 		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
 		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
 		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 181);
 		System::assert_last_event(Event::RegionOwnerChangeEnabled{ region_id: 0, next_change_allowed: 181}.into());
+	})
+}
+
+#[test]
+fn remove_owner_proposal_doesnt_pass() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		run_to_block(91);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
+		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 361);
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 600_000, no_voting_power: 0 }
+		);
+		run_to_block(121);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::DefensePeriod);
+		run_to_block(151);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::SlashVoting);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::No));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 400_000, no_voting_power: 200_000 }
+		);
+		run_to_block(181);		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
+		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 100_000);
+		assert_eq!(Balances::total_balance(&([8; 32].into())), 400_000);
+		assert_eq!(Balances::total_issuance(), 1_055_000);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
+		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(241);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(271);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).unwrap().state, crate::ProposalState::ReplacementVoting);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::No));
+		assert_eq!(
+			OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(), 
+			VoteStats { yes_voting_power: 200_000, no_voting_power: 390_000 }
+		);
+		run_to_block(301);
+		assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
+		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
+		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 361);
 	})
 }

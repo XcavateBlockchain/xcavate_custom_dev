@@ -160,7 +160,7 @@ parameter_types! {
 	pub const RegionThreshold: Percent = Percent::from_percent(75);
 	pub const RegionProposalCooldown: BlockNumber = 28;
 	pub const RegionOperatorVotingTime: BlockNumber = 30;
-	pub const RegionOwnerChangeTime: BlockNumber = 200;
+	pub const RegionOwnerChangeTime: BlockNumber = 300;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
 
