@@ -814,7 +814,7 @@ pub mod pallet {
 			);
 			let region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
-			ensure!(region_info.next_owner_change > current_block_number, Error::<T>::RegionOwnerCantBeChanged);
+			ensure!(region_info.next_owner_change < current_block_number, Error::<T>::RegionOwnerCantBeChanged);
 			
 			let mut new_auction = false;
 
@@ -993,16 +993,22 @@ pub mod pallet {
 		// Slashes the region owner.
 		fn slash_region_owner(region_id: RegionId) -> DispatchResult {
 			let mut proposal = RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-			let region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
+			let mut region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
 			let amount = <T as Config>::RegionSlashingAmount::get();
+
+			let region_owner = region_info.owner.clone();
 
 			let (imbalance, _remaining) = <T as pallet::Config>::NativeCurrency::slash(
 				&HoldReason::RegionDepositReserve.into(),
-				&region_info.owner,
+				&region_owner,
 				amount
 			);
 
 			T::Slash::on_unbalanced(imbalance);
+
+			region_info.collateral = region_info.collateral.saturating_sub(amount);
+
+			RegionDetails::<T>::insert(region_id, region_info);
 			
 			proposal.state = ProposalState::ReplacementVoting;
 			let vote_stats = VoteStats { yes_voting_power: Zero::zero(), no_voting_power: Zero::zero() };
@@ -1015,7 +1021,7 @@ pub mod pallet {
 				keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
 				Ok::<(), DispatchError>(())
 			})?;
-			Self::deposit_event(Event::RegionalOperatorSlashed { region_id, operator: region_info.owner, amount });
+			Self::deposit_event(Event::RegionalOperatorSlashed { region_id, operator: region_owner, amount });
 			Ok(())
 		}
 

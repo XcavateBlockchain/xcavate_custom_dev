@@ -4,7 +4,7 @@ use frame_support::{assert_noop, assert_ok, traits::{fungible::InspectHold, fung
 use crate::{
 	RegionDetails, LocationRegistration, HoldReason, RegionProposals, RegionAuctions,
 	OngoingRegionProposalVotes, VoteStats, LastRegionProposalBlock, UserRegionVote, RegionOperatorAccounts,
-	RegionOwnerProposals, OngoingRegionOwnerProposalVotes, UserRegionOwnerVote,
+	RegionOwnerProposals, OngoingRegionOwnerProposalVotes, UserRegionOwnerVote, RegionReplacementAuctions,
 };
 use sp_runtime::{Permill, TokenError, traits::BadOrigin};
 
@@ -640,5 +640,61 @@ fn remove_owner_proposal_doesnt_pass() {
 		assert_eq!(OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(), true);
 		assert_eq!(UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(), true);
 		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 361);
+	})
+}
+
+#[test]
+fn bid_on_region_replacement_after_proposal_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()));
+		new_region_helper();
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([8; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(121);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		run_to_block(151);
+		assert_ok!(Regions::vote_on_remove_owner_proposal(RuntimeOrigin::signed([0; 32].into()), 0, crate::Vote::Yes));
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 361);
+		run_to_block(182);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 181);
+		assert_eq!(RegionReplacementAuctions::<Test>::get(0).is_none(), true);
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [0; 32].into()));
+		assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(Regions::bid_on_region_replacement(RuntimeOrigin::signed([0; 32].into()), 0, 10_000));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 90_000);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 10_000);
+		assert_eq!(
+			RegionReplacementAuctions::<Test>::get(0).unwrap(), 
+			crate::RegionAuction {
+				highest_bidder: Some([0; 32].into()),
+				collateral: 10_000,
+				auction_expiry: 212,
+		});
+		run_to_block(200);
+		assert_ok!(Regions::bid_on_region_replacement(RuntimeOrigin::signed([1; 32].into()), 0, 35_000));
+		assert_eq!(
+			RegionReplacementAuctions::<Test>::get(0).unwrap(), 
+			crate::RegionAuction {
+				highest_bidder: Some([1; 32].into()),
+				collateral: 35_000,
+				auction_expiry: 212,
+		});
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 0);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 35_000);
+		assert_ok!(Regions::bid_on_region_replacement(RuntimeOrigin::signed([8; 32].into()), 0, 40_000));
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([1; 32].into())), 0);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 130_000);
+		assert_ok!(Regions::bid_on_region_replacement(RuntimeOrigin::signed([0; 32].into()), 0, 51_000));
+		run_to_block(213);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().owner, [0; 32].into());
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().collateral, 51_000);
+		assert_eq!(RegionDetails::<Test>::get(0).unwrap().next_owner_change, 512);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())), 0);
+		assert_eq!(Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())), 51_000);
+		assert_eq!(RegionReplacementAuctions::<Test>::get(0).is_none(), true);
 	})
 }
