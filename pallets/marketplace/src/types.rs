@@ -2,10 +2,10 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 
-use codec::{Decode, Encode, MaxEncodedLen, DecodeWithMemTracking};
-use frame_support::{DefaultNoBound, sp_runtime::RuntimeDebug};
-use scale_info::TypeInfo;
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::Permill;
+use frame_support::{sp_runtime::RuntimeDebug, DefaultNoBound};
+use scale_info::TypeInfo;
 
 /// Infos regarding the listing of a real estate object.
 #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -13,8 +13,8 @@ use frame_support::sp_runtime::Permill;
 pub struct RegionInfo<T: Config> {
     pub collection_id: <T as pallet_regions::Config>::NftCollectionId,
     pub listing_duration: BlockNumberFor<T>,
-	pub owner: AccountIdOf<T>,
-	pub tax: Permill,
+    pub owner: AccountIdOf<T>,
+    pub tax: Permill,
 }
 
 /// Infos regarding a listed nft of a real estate object on the marketplace.
@@ -83,19 +83,32 @@ pub struct OfferDetails<T: Config> {
     pub payment_assets: u32,
 }
 
-#[derive(Encode, Decode, DecodeWithMemTracking, CloneNoBound, PartialEqNoBound, EqNoBound, MaxEncodedLen, RuntimeDebugNoBound, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    CloneNoBound,
+    PartialEqNoBound,
+    EqNoBound,
+    MaxEncodedLen,
+    RuntimeDebugNoBound,
+    TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct PropertyLawyerDetails<T: Config> {
     pub real_estate_developer_lawyer: Option<AccountIdOf<T>>,
     pub spv_lawyer: Option<AccountIdOf<T>>,
     pub real_estate_developer_status: DocumentStatus,
     pub spv_status: DocumentStatus,
-    pub real_estate_developer_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub real_estate_developer_lawyer_costs:
+        BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
     pub spv_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
     pub second_attempt: bool,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, DefaultNoBound)]
+#[derive(
+    Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, DefaultNoBound,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct TokenOwnerDetails<T: Config> {
     pub token_amount: u32,
@@ -125,7 +138,17 @@ where
 
 /// Takeover enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Clone,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub enum TakeoverAction {
     Accept,
     Reject,
@@ -133,21 +156,51 @@ pub enum TakeoverAction {
 
 /// Offer enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Clone,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub enum Offer {
     Accept,
     Reject,
 }
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Clone,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub enum LegalProperty {
     RealEstateDeveloperSide,
     SpvSide,
 }
 
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Clone,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub enum DocumentStatus {
     Pending,
     Approved,

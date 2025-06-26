@@ -41,6 +41,7 @@ pub mod pallet {
         pub collection_id: <T as pallet::Config>::NftCollectionId,
         pub listing_duration: BlockNumberFor<T>,
         pub owner: T::AccountId,
+		pub collateral: T::Balance,
         pub tax: Permill,
 		pub next_owner_change: BlockNumberFor<T>,
     }
@@ -313,6 +314,16 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+		/// Stores the project keys and round types ending on a given block for region owner removal votings.
+	#[pallet::storage]
+	pub type ReplacementAuctionExpiring<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		BlockNumberFor<T>,
+		BoundedVec<RegionId, T::MaxProposalsForBlock>,
+		ValueQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -352,6 +363,8 @@ pub mod pallet {
 		RegionOwnerChangeEnabled { region_id: RegionId, next_change_allowed: BlockNumberFor<T> },
 		/// A bid for a region got placed.
 		ReplacementBidSuccessfullyPlaced { region_id: RegionId, bidder: T::AccountId, new_leading_bid: T::Balance },
+		/// The owner of a region has been changed.
+		RegionOwnerChanged { region_id: RegionId, new_owner: T::AccountId, next_owner_change: BlockNumberFor<T> },
 	}
 
 	#[pallet::error]
@@ -413,11 +426,18 @@ pub mod pallet {
 			let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
 			let ended_region_owner_votings = RegionOwnerRoundsExpiring::<T>::take(n);
-			// checks if there is a voting for an challenge ending in this block.
+			// checks if there is a voting for an proposal ending in this block.
 			ended_region_owner_votings.iter().for_each(|item| {
 				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 				let _ = UserRegionOwnerVote::<T>::clear_prefix(item, u32::MAX, None);
 				let _ = Self::finish_region_owner_proposal(*item);
+			});
+
+			let ended_replacement_auction = ReplacementAuctionExpiring::<T>::take(n);
+			// checks if there is a voting for an proposal ending in this block.
+			ended_replacement_auction.iter().for_each(|item| {
+				weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+				let _ = Self::finish_region_owner_replacement(*item, n);
 			});
 			weight
 		}
@@ -601,6 +621,7 @@ pub mod pallet {
 					collection_id,
 					listing_duration,
 					owner: region_owner.clone(),
+					collateral: auction.collateral,
 					tax,
 					next_owner_change,
 				};
@@ -795,11 +816,16 @@ pub mod pallet {
 			let current_block_number = <frame_system::Pallet<T>>::block_number();
 			ensure!(region_info.next_owner_change > current_block_number, Error::<T>::RegionOwnerCantBeChanged);
 			
+			let mut new_auction = false;
+
 			RegionReplacementAuctions::<T>::try_mutate(region_id, |maybe_auction| {
-				let auction = maybe_auction.get_or_insert_with(|| RegionAuction {
-					highest_bidder: None,
-					collateral: Zero::zero(),
-					auction_expiry: current_block_number.saturating_add(T::RegionAuctionTime::get()),
+				let auction = maybe_auction.get_or_insert_with(|| {
+					new_auction = true;
+					RegionAuction {
+						highest_bidder: None,
+						collateral: Zero::zero(),
+						auction_expiry: current_block_number.saturating_add(T::RegionAuctionTime::get()),
+					}
 				});
 				ensure!(auction.auction_expiry > current_block_number, Error::<T>::NoOngoingAuction);
 				ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
@@ -827,6 +853,17 @@ pub mod pallet {
 				auction.collateral = amount;
 				Ok::<(), DispatchError>(())
 			})?;
+
+			// Register expiry only if auction was newly created
+			if new_auction {
+				let expiry_block = 
+					current_block_number.saturating_add(T::RegionVotingTime::get());
+				ReplacementAuctionExpiring::<T>::try_mutate(expiry_block, |keys| {
+					keys.try_push(region_id).map_err(|_| Error::<T>::TooManyProposals)?;
+					Ok::<(), DispatchError>(())
+				})?;
+			}
+
 			Self::deposit_event(Event::ReplacementBidSuccessfullyPlaced { region_id, bidder: signer, new_leading_bid: amount });
 			Ok(())
 		}
@@ -990,6 +1027,26 @@ pub mod pallet {
 			region_info.next_owner_change = current_block_number;
 			RegionDetails::<T>::insert(region_id, region_info);
 			Self::deposit_event(Event::RegionOwnerChangeEnabled { region_id, next_change_allowed: current_block_number });
+			Ok(())
+		}
+
+		fn finish_region_owner_replacement(region_id: RegionId, current_block_number: BlockNumberFor<T>) -> DispatchResult {
+			let auction_info = RegionReplacementAuctions::<T>::take(region_id).ok_or(Error::<T>::NoAuction)?;
+			let mut region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
+			if let Some(new_owner) = auction_info.highest_bidder {
+				T::NativeCurrency::release(
+					&HoldReason::RegionDepositReserve.into(),
+					&region_info.owner,
+					region_info.collateral,
+					Precision::Exact,
+				)?;
+				let next_owner_change = current_block_number.saturating_add(T::RegionOwnerChangePeriod::get());
+				region_info.owner = new_owner.clone();
+				region_info.collateral = auction_info.collateral;
+				region_info.next_owner_change = next_owner_change;
+				RegionDetails::<T>::insert(region_id, region_info);
+				Self::deposit_event(Event::<T>::RegionOwnerChanged { region_id, new_owner, next_owner_change });
+			}
 			Ok(())
 		}
 

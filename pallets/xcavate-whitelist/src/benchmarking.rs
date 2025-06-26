@@ -10,27 +10,30 @@ use frame_system::RawOrigin;
 
 #[benchmarks]
 mod benchmarks {
-	use super::*;
+    use super::*;
 
-	#[benchmark]
-	fn add_to_whitelist() {
-		let caller: T::AccountId = whitelisted_caller();
-		#[extrinsic_call]
-		add_to_whitelist(RawOrigin::Root, caller.clone());
+    #[benchmark]
+    fn add_to_whitelist() {
+        let caller: T::AccountId = whitelisted_caller();
+        #[extrinsic_call]
+        add_to_whitelist(RawOrigin::Root, caller.clone());
 
-		assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), true);
-	}
+        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), true);
+    }
 
-	#[benchmark]
-	fn remove_from_whitelist() {
-		let caller: T::AccountId = whitelisted_caller();
-		assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), caller.clone()));
-		assert_eq!(Whitelist::<T>::whitelisted_accounts(caller.clone()), true);
-		#[extrinsic_call]
-		remove_from_whitelist(RawOrigin::Root, caller.clone());
+    #[benchmark]
+    fn remove_from_whitelist() {
+        let caller: T::AccountId = whitelisted_caller();
+        assert_ok!(Whitelist::<T>::add_to_whitelist(
+            RawOrigin::Root.into(),
+            caller.clone()
+        ));
+        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller.clone()), true);
+        #[extrinsic_call]
+        remove_from_whitelist(RawOrigin::Root, caller.clone());
 
-		assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), false);
-	}
+        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), false);
+    }
 
-	impl_benchmark_test_suite!(Whitelist, crate::mock::new_test_ext(), crate::mock::Test);
+    impl_benchmark_test_suite!(Whitelist, crate::mock::new_test_ext(), crate::mock::Test);
 }

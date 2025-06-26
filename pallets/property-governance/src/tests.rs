@@ -1,23 +1,23 @@
 use crate::{mock::*, Error, Event};
 use frame_support::{
-	assert_noop, assert_ok,
-	traits::{OnFinalize, OnInitialize, fungibles::{Inspect, InspectHold as FungiblesInspectHold}, fungible::InspectHold},
-	sp_runtime::{Percent, Permill},
+    assert_noop, assert_ok,
+    sp_runtime::{Percent, Permill},
+    traits::{
+        fungible::InspectHold,
+        fungibles::{Inspect, InspectHold as FungiblesInspectHold},
+        OnFinalize, OnInitialize,
+    },
 };
 
-use crate::{Proposals, Challenges, ChallengeRoundsExpiring, OngoingChallengeVotes, OngoingProposalVotes, SaleFunds,
-	OngoingSaleProposalVotes, SaleProposals, UserProposalVote, UserSaleProposalVote, PropertySale, SaleAuctions, Reserve,
+use crate::{
+    ChallengeRoundsExpiring, Challenges, OngoingChallengeVotes, OngoingProposalVotes,
+    OngoingSaleProposalVotes, PropertySale, Proposals, Reserve, SaleAuctions, SaleFunds,
+    SaleProposals, UserProposalVote, UserSaleProposalVote,
 };
 
-use pallet_property_management::{
-	LettingStorage, InvestorFunds, 
-	LettingInfo,
-};
+use pallet_property_management::{InvestorFunds, LettingInfo, LettingStorage};
 
-use pallet_marketplace::{
-	types::LegalProperty,
-	AssetIdDetails, PropertyOwner,
-};
+use pallet_marketplace::{types::LegalProperty, AssetIdDetails, PropertyOwner};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -26,2011 +26,3762 @@ macro_rules! bvec {
 }
 
 fn run_to_block(n: u64) {
-	while System::block_number() < n {
-		if System::block_number() > 0 {
-			PropertyGovernance::on_finalize(System::block_number());
-			System::on_finalize(System::block_number());
-		}
-		System::reset_events();
-		System::set_block_number(System::block_number() + 1);
-		System::on_initialize(System::block_number());
-		PropertyGovernance::on_initialize(System::block_number());
-	}
+    while System::block_number() < n {
+        if System::block_number() > 0 {
+            PropertyGovernance::on_finalize(System::block_number());
+            System::on_finalize(System::block_number());
+        }
+        System::reset_events();
+        System::set_block_number(System::block_number() + 1);
+        System::on_initialize(System::block_number());
+        PropertyGovernance::on_initialize(System::block_number());
+    }
 }
 
 fn new_region_helper() {
-	assert_ok!(Regions::add_regional_operator(RuntimeOrigin::root(), [6; 32].into()));
-	assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
-	assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 0, pallet_regions::Vote::Yes));
-	run_to_block(31);
-	assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 0, 100_000));
-	run_to_block(61);
-	assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 0, 30, Permill::from_percent(3)));
+    assert_ok!(Regions::add_regional_operator(
+        RuntimeOrigin::root(),
+        [6; 32].into()
+    ));
+    assert_ok!(Regions::propose_new_region(
+        RuntimeOrigin::signed([6; 32].into()),
+        bvec![10, 10]
+    ));
+    assert_ok!(Regions::vote_on_region_proposal(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        pallet_regions::Vote::Yes
+    ));
+    run_to_block(31);
+    assert_ok!(Regions::bid_on_region(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        100_000
+    ));
+    run_to_block(61);
+    assert_ok!(Regions::create_new_region(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        30,
+        Permill::from_percent(3)
+    ));
 }
 
 fn listing_process() {
-	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-	new_region_helper();
-	assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
-	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-	assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-	assert_ok!(Marketplace::list_object(
-		RuntimeOrigin::signed([0; 32].into()),
-		0,
-		bvec![10, 10],
-		10_000,
-		100,
-		bvec![22, 22],
-		false
-	));
+    assert_ok!(XcavateWhitelist::add_to_whitelist(
+        RuntimeOrigin::root(),
+        [6; 32].into()
+    ));
+    new_region_helper();
+    assert_ok!(Regions::create_new_location(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        bvec![10, 10]
+    ));
+    assert_ok!(XcavateWhitelist::add_to_whitelist(
+        RuntimeOrigin::root(),
+        [0; 32].into()
+    ));
+    assert_ok!(XcavateWhitelist::add_to_whitelist(
+        RuntimeOrigin::root(),
+        [1; 32].into()
+    ));
+    assert_ok!(Marketplace::list_object(
+        RuntimeOrigin::signed([0; 32].into()),
+        0,
+        bvec![10, 10],
+        10_000,
+        100,
+        bvec![22, 22],
+        false
+    ));
 }
 
 fn setting_letting_agent(agent: AccountId) {
-	assert_ok!(PropertyManagement::add_letting_agent(
-		RuntimeOrigin::signed([6; 32].into()),
-		0,
-		bvec![10, 10],
-		agent.clone(),
-	));
-	assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-		agent.clone()
-	)));
-	assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed(agent), 0));
+    assert_ok!(PropertyManagement::add_letting_agent(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        bvec![10, 10],
+        agent.clone(),
+    ));
+    assert_ok!(PropertyManagement::letting_agent_deposit(
+        RuntimeOrigin::signed(agent.clone())
+    ));
+    assert_ok!(PropertyManagement::set_letting_agent(
+        RuntimeOrigin::signed(agent),
+        0
+    ));
 }
 
 fn lawyer_process() {
-	assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 0, [10; 32].into()));
-	assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 0, [11; 32].into()));
-	assert_ok!(Marketplace::lawyer_claim_property(
-		RuntimeOrigin::signed([10; 32].into()),
-		0,
-		LegalProperty::RealEstateDeveloperSide,
-		4_000,
-	));
-	assert_ok!(Marketplace::lawyer_claim_property(
-		RuntimeOrigin::signed([11; 32].into()),
-		0,
-		LegalProperty::SpvSide,
-		4_000,
-	));
-	assert_ok!(Marketplace::lawyer_confirm_documents(
-		RuntimeOrigin::signed([10; 32].into()),
-		0,
-		true,
-	));
-	assert_ok!(Marketplace::lawyer_confirm_documents(
-		RuntimeOrigin::signed([11; 32].into()),
-		0,
-		true,
-	));	
+    assert_ok!(Marketplace::register_lawyer(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        [10; 32].into()
+    ));
+    assert_ok!(Marketplace::register_lawyer(
+        RuntimeOrigin::signed([6; 32].into()),
+        0,
+        [11; 32].into()
+    ));
+    assert_ok!(Marketplace::lawyer_claim_property(
+        RuntimeOrigin::signed([10; 32].into()),
+        0,
+        LegalProperty::RealEstateDeveloperSide,
+        4_000,
+    ));
+    assert_ok!(Marketplace::lawyer_claim_property(
+        RuntimeOrigin::signed([11; 32].into()),
+        0,
+        LegalProperty::SpvSide,
+        4_000,
+    ));
+    assert_ok!(Marketplace::lawyer_confirm_documents(
+        RuntimeOrigin::signed([10; 32].into()),
+        0,
+        true,
+    ));
+    assert_ok!(Marketplace::lawyer_confirm_documents(
+        RuntimeOrigin::signed([11; 32].into()),
+        0,
+        true,
+    ));
 }
 
 #[test]
 fn propose_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_eq!(Proposals::<Test>::get(1).unwrap().asset_id, 0);
-		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_eq!(Proposals::<Test>::get(1).unwrap().asset_id, 0);
+        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), true);
+    });
 }
 
 #[test]
 fn proposal_with_low_amount_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		setting_letting_agent([4; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			500,
-			bvec![10, 10]
-		));
-		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 500}.into());
-		assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), false);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        setting_letting_agent([4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            500,
+            bvec![10, 10]
+        ));
+        System::assert_last_event(
+            Event::ProposalExecuted {
+                asset_id: 0,
+                amount: 500,
+            }
+            .into(),
+        );
+        assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), false);
+    });
 }
 
 #[test]
 fn propose_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		assert_noop!(
-			PropertyGovernance::propose(
-				RuntimeOrigin::signed([2; 32].into()),
-				0,
-				1000,
-				bvec![10, 10]
-			),
-			Error::<Test>::NoLettingAgentFound
-		);
-		setting_letting_agent([0; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_noop!(
-			PropertyGovernance::propose(
-				RuntimeOrigin::signed([2; 32].into()),
-				0,
-				1000,
-				bvec![10, 10]
-			),
-			Error::<Test>::NoPermission
-		);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_noop!(
+            PropertyGovernance::propose(
+                RuntimeOrigin::signed([2; 32].into()),
+                0,
+                1000,
+                bvec![10, 10]
+            ),
+            Error::<Test>::NoLettingAgentFound
+        );
+        setting_letting_agent([0; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_noop!(
+            PropertyGovernance::propose(
+                RuntimeOrigin::signed([2; 32].into()),
+                0,
+                1000,
+                bvec![10, 10]
+            ),
+            Error::<Test>::NoPermission
+        );
+    });
 }
 
 #[test]
 fn challenge_against_letting_agent_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		setting_letting_agent([0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_eq!(Challenges::<Test>::get(1).is_some(), true);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::MistrustVoting);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(Challenges::<Test>::get(1).is_some(), true);
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::MistrustVoting
+        );
+    });
 }
-
 
 #[test]
 fn challenge_against_letting_agent_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		assert_noop!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		), Error::<Test>::NoLettingAgentFound);
-		setting_letting_agent([0; 32].into());
-		assert_noop!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([2; 32].into()),
-			0
-		), Error::<Test>::NoPermission);
-		assert_eq!(Challenges::<Test>::get(1).is_some(), false);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        assert_noop!(
+            PropertyGovernance::challenge_against_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0
+            ),
+            Error::<Test>::NoLettingAgentFound
+        );
+        setting_letting_agent([0; 32].into());
+        assert_noop!(
+            PropertyGovernance::challenge_against_letting_agent(
+                RuntimeOrigin::signed([2; 32].into()),
+                0
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_eq!(Challenges::<Test>::get(1).is_some(), false);
+    });
 }
 
 #[test]
 fn vote_on_proposal_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 40, 1984));
-		lawyer_process();
-		setting_letting_agent([0; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([3; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_eq!(OngoingProposalVotes::<Test>::get(1).unwrap().yes_voting_power, 10);
-		assert_eq!(OngoingProposalVotes::<Test>::get(1).unwrap().no_voting_power, 90);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            20,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([0; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([3; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_eq!(
+            OngoingProposalVotes::<Test>::get(1)
+                .unwrap()
+                .yes_voting_power,
+            10
+        );
+        assert_eq!(
+            OngoingProposalVotes::<Test>::get(1)
+                .unwrap()
+                .no_voting_power,
+            90
+        );
+    });
 }
 
 #[test]
 fn proposal_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		new_region_helper();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(Marketplace::list_object(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			bvec![10, 10],
-			10_000,
-			100,
-			bvec![22, 22],
-			false
-		));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		setting_letting_agent([0; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
-		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1_000);
-		run_to_block(91);
-		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 1000}.into());
-		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(OngoingProposalVotes::<Test>::get(1).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([0; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+        assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            1_000
+        );
+        run_to_block(91);
+        System::assert_last_event(
+            Event::ProposalExecuted {
+                asset_id: 0,
+                amount: 1000,
+            }
+            .into(),
+        );
+        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_none(), true);
+    });
 }
 
 #[test]
 fn proposal_pass_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		lawyer_process();
-		setting_letting_agent([4; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			10000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		run_to_block(91);
-		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 10000}.into());
-		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(InvestorFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 0);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        lawyer_process();
+        setting_letting_agent([4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            10000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        run_to_block(91);
+        System::assert_last_event(
+            Event::ProposalExecuted {
+                asset_id: 0,
+                amount: 10000,
+            }
+            .into(),
+        );
+        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(
+            InvestorFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
+            0
+        );
+    });
 }
 
 #[test]
 fn proposal_not_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		lawyer_process();
-		setting_letting_agent([4; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-		run_to_block(91);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		System::assert_last_event(Event::ProposalRejected{ proposal_id: 1}.into());
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        lawyer_process();
+        setting_letting_agent([4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            1000
+        );
+        run_to_block(91);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            1000
+        );
+        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        System::assert_last_event(Event::ProposalRejected { proposal_id: 1 }.into());
+    });
 }
 
 #[test]
 fn proposal_not_pass_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 40, 1984));
-		lawyer_process();
-		setting_letting_agent([4; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			10000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-		run_to_block(91);
-		System::assert_last_event(Event::ProposalThresHoldNotReached{ proposal_id: 1, required_threshold: Percent::from_percent(67)}.into());
-		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 1000);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            10000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            1000
+        );
+        run_to_block(91);
+        System::assert_last_event(
+            Event::ProposalThresHoldNotReached {
+                proposal_id: 1,
+                required_threshold: Percent::from_percent(67),
+            }
+            .into(),
+        );
+        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            1000
+        );
+    });
 }
 
 #[test]
 fn vote_on_proposal_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		setting_letting_agent([0; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_noop!(
-			PropertyGovernance::vote_on_proposal(
-				RuntimeOrigin::signed([1; 32].into()),
-				1,
-				crate::Vote::Yes
-			),
-			Error::<Test>::NotOngoing
-		);
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_noop!(
-			PropertyGovernance::vote_on_proposal(
-				RuntimeOrigin::signed([2; 32].into()),
-				1,
-				crate::Vote::Yes
-			),
-			Error::<Test>::NoPermission
-		);
-		run_to_block(91);
-		assert_noop!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		), Error::<Test>::NotOngoing);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([0; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_noop!(
+            PropertyGovernance::vote_on_proposal(
+                RuntimeOrigin::signed([1; 32].into()),
+                1,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NotOngoing
+        );
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_noop!(
+            PropertyGovernance::vote_on_proposal(
+                RuntimeOrigin::signed([2; 32].into()),
+                1,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NoPermission
+        );
+        run_to_block(91);
+        assert_noop!(
+            PropertyGovernance::vote_on_proposal(
+                RuntimeOrigin::signed([1; 32].into()),
+                1,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NotOngoing
+        );
+    });
 }
 
 #[test]
 fn vote_on_challenge_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 20, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 30, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 40, 1984));
-		lawyer_process();
-		setting_letting_agent([0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([3; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting).unwrap().yes_voting_power, 60);
-		assert_eq!(OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting).unwrap().no_voting_power, 40);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            20,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([3; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_eq!(
+            OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting)
+                .unwrap()
+                .yes_voting_power,
+            60
+        );
+        assert_eq!(
+            OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting)
+                .unwrap()
+                .no_voting_power,
+            40
+        );
+    });
 }
 
 #[test]
 fn challenge_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![10, 10],
-			[0; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
-		)));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![10, 10],
-			[1; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[1; 32].into()
-		)));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 70, 1984));
-		lawyer_process();
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
-		run_to_block(91);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(121);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 100);
-		assert_eq!(Balances::total_issuance(), 57_465_001);
-		run_to_block(151);
-		assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 0);
-		assert_eq!(Balances::total_issuance(), 57_464_901);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(
-			LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-				.unwrap()
-				.locations
-				.len(),
-			1
-		);
-		run_to_block(181);
-		assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
-		assert_eq!(
-			LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-				.unwrap()
-				.locations
-				.len(),
-			1
-		);
-		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [1; 32].into());
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10],
+            [0; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([0; 32].into())
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10],
+            [1; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([1; 32].into())
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            70,
+            1984
+        ));
+        lawyer_process();
+        assert_ok!(PropertyManagement::set_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+        run_to_block(91);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::DefensePeriod
+        );
+        run_to_block(121);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::SlashVoting
+        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 100);
+        assert_eq!(Balances::total_issuance(), 57_465_001);
+        run_to_block(151);
+        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 0);
+        assert_eq!(Balances::total_issuance(), 57_464_901);
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::ReplacementVoting
+        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .locations
+                .len(),
+            1
+        );
+        run_to_block(181);
+        assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .locations
+                .len(),
+            1
+        );
+        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+        assert_ok!(PropertyManagement::set_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [1; 32].into());
+    });
 }
 
 #[test]
 fn challenge_does_not_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		new_region_helper();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![10, 10],
-			[0; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
-		)));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![10, 10],
-			[1; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[1; 32].into()
-		)));
-		assert_ok!(Marketplace::list_object(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			bvec![10, 10],
-			4_000,
-			250,
-			bvec![22, 22],
-			false
-		));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 75, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 175, 1984));
-		lawyer_process();
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
-		run_to_block(91);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(121);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		run_to_block(151);
-		System::assert_last_event(Event::ChallengeThresHoldNotReached{ challenge_id: 1, required_threshold: Percent::from_percent(51), challenge_state: crate::ChallengeState::SlashVoting}.into());
-		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10],
+            [0; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([0; 32].into())
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10],
+            [1; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([1; 32].into())
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            bvec![10, 10],
+            4_000,
+            250,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            75,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            175,
+            1984
+        ));
+        lawyer_process();
+        assert_ok!(PropertyManagement::set_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+        run_to_block(91);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::DefensePeriod
+        );
+        run_to_block(121);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::SlashVoting
+        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        run_to_block(151);
+        System::assert_last_event(
+            Event::ChallengeThresHoldNotReached {
+                challenge_id: 1,
+                required_threshold: Percent::from_percent(51),
+                challenge_state: crate::ChallengeState::SlashVoting,
+            }
+            .into(),
+        );
+        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+    });
 }
-
 
 #[test]
 fn challenge_pass_only_one_agent() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![9, 10]));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![10, 10],
-			[0; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
-		)));
-		assert_ok!(PropertyManagement::add_letting_agent(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			bvec![9, 10],
-			[1; 32].into(),
-		));
-		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[1; 32].into()
-		)));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 70, 1984));
-		lawyer_process();
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
-		run_to_block(91);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::DefensePeriod);
-		run_to_block(121);
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::SlashVoting);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		run_to_block(151);
-		assert_eq!(Challenges::<Test>::get(1).unwrap().state, crate::ChallengeState::ReplacementVoting);
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([2; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-		run_to_block(181);
-		assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
-		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![9, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10],
+            [0; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([0; 32].into())
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![9, 10],
+            [1; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([1; 32].into())
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            70,
+            1984
+        ));
+        lawyer_process();
+        assert_ok!(PropertyManagement::set_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
+        run_to_block(91);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::DefensePeriod
+        );
+        run_to_block(121);
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::SlashVoting
+        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        run_to_block(151);
+        assert_eq!(
+            Challenges::<Test>::get(1).unwrap().state,
+            crate::ChallengeState::ReplacementVoting
+        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+        run_to_block(181);
+        assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
+        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+    });
 }
 
 #[test]
 fn challenge_not_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		assert_noop!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		), Error::<Test>::NoLettingAgentFound);
-		setting_letting_agent([0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::No
-		));
-		assert_eq!(Challenges::<Test>::get(1).is_some(), true);
-		run_to_block(91);
-		System::assert_last_event(Event::ChallengeRejected{ challenge_id: 1, challenge_state: crate::ChallengeState::MistrustVoting}.into());
-		assert_eq!(Challenges::<Test>::get(1).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        assert_noop!(
+            PropertyGovernance::challenge_against_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0
+            ),
+            Error::<Test>::NoLettingAgentFound
+        );
+        setting_letting_agent([0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_eq!(Challenges::<Test>::get(1).is_some(), true);
+        run_to_block(91);
+        System::assert_last_event(
+            Event::ChallengeRejected {
+                challenge_id: 1,
+                challenge_state: crate::ChallengeState::MistrustVoting,
+            }
+            .into(),
+        );
+        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+    });
 }
 
 #[test]
 fn vote_on_challenge_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		assert_noop!(
-			PropertyGovernance::vote_on_letting_agent_challenge(
-				RuntimeOrigin::signed([1; 32].into()),
-				1,
-				crate::Vote::Yes
-			),
-			Error::<Test>::NotOngoing
-		);
-		setting_letting_agent([0; 32].into());
-		assert_ok!(PropertyGovernance::challenge_against_letting_agent(
-			RuntimeOrigin::signed([1; 32].into()),
-			0
-		));
-		assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_noop!(
-			PropertyGovernance::vote_on_letting_agent_challenge(
-				RuntimeOrigin::signed([2; 32].into()),
-				1,
-				crate::Vote::Yes
-			),
-			Error::<Test>::NoPermission
-		);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        assert_noop!(
+            PropertyGovernance::vote_on_letting_agent_challenge(
+                RuntimeOrigin::signed([1; 32].into()),
+                1,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NotOngoing
+        );
+        setting_letting_agent([0; 32].into());
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_noop!(
+            PropertyGovernance::vote_on_letting_agent_challenge(
+                RuntimeOrigin::signed([2; 32].into()),
+                1,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NoPermission
+        );
+    });
 }
 
 #[test]
 fn different_proposals() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		new_region_helper();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		assert_ok!(Marketplace::list_object(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			bvec![10, 10],
-			5_000,
-			200,
-			bvec![22, 22],
-			false
-		));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 80, 1984));
-		lawyer_process();
-		setting_letting_agent([4; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			3000,
-			1984,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1000,
-			bvec![10, 10]
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			1,
-			crate::Vote::Yes
-		));
-		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
-		assert_eq!(UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(), true);
-		run_to_block(91);
-		assert_eq!(UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(), false);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
-		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			3000,
-			bvec![10, 10]
-		));
-		assert_eq!(Proposals::<Test>::get(2).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			2,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([2; 32].into()),
-			2,
-			crate::Vote::Yes
-		));
-		run_to_block(121);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			3000,
-			bvec![10, 10]
-		));
-		assert_eq!(Proposals::<Test>::get(3).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			3,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([2; 32].into()),
-			3,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([3; 32].into()),
-			3,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 3000);
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1700,
-			1984,
-		));
-		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			300,
-			1337,
-		));
-		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([4; 32].into()),
-			0,
-			1500,
-			bvec![10, 10]
-		));
-		assert_eq!(Proposals::<Test>::get(4).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([1; 32].into()),
-			4,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([2; 32].into()),
-			4,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_proposal(
-			RuntimeOrigin::signed([3; 32].into()),
-			4,
-			crate::Vote::No
-		));
-		run_to_block(121);
-		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 300);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 4700);
-		assert_eq!(ForeignAssets::balance(1337, &[4; 32].into()), 4700);
-		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 300);
-	});
-}  
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            bvec![10, 10],
+            5_000,
+            200,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            80,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            3000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(),
+            true
+        );
+        run_to_block(91);
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(),
+            false
+        );
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
+        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            3000,
+            bvec![10, 10]
+        ));
+        assert_eq!(Proposals::<Test>::get(2).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            2,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
+            crate::Vote::Yes
+        ));
+        run_to_block(121);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            3000,
+            bvec![10, 10]
+        ));
+        assert_eq!(Proposals::<Test>::get(3).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            3,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([3; 32].into()),
+            3,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1700,
+            1984,
+        ));
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            300,
+            1337,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            1500,
+            bvec![10, 10]
+        ));
+        assert_eq!(Proposals::<Test>::get(4).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            4,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            4,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([3; 32].into()),
+            4,
+            crate::Vote::No
+        ));
+        run_to_block(121);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 300);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            4700
+        );
+        assert_eq!(ForeignAssets::balance(1337, &[4; 32].into()), 4700);
+        assert_eq!(
+            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
+            300
+        );
+    });
+}
 
 #[test]
 fn propose_property_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
+    });
 }
 
 #[test]
 fn propose_property_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [6; 32].into()));
-		new_region_helper();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([6; 32].into()), 0, bvec![10, 10]));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::AssetNotFound);
-		assert_ok!(Marketplace::list_object(
-			RuntimeOrigin::signed([0; 32].into()),
-			0,
-			bvec![10, 10],
-			10_000,
-			100,
-			bvec![22, 22],
-			false
-		));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::SpvNotCreated);
-		lawyer_process();
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0), Error::<Test>::NoPermission);
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::PropertySaleProposalOngoing);
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_noop!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0), Error::<Test>::SaleOngoing);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
+            Error::<Test>::AssetNotFound
+        );
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
+            Error::<Test>::SpvNotCreated
+        );
+        lawyer_process();
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0),
+            Error::<Test>::NoPermission
+        );
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
+            Error::<Test>::PropertySaleProposalOngoing
+        );
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
+            Error::<Test>::SaleOngoing
+        );
+    });
 }
 
 #[test]
 fn vote_on_property_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 40, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 35, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 25, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 65);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 35);
-		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::Yes);
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 25);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 75);
-		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(), crate::Vote::No);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            25,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            65
+        );
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .no_voting_power,
+            35
+        );
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
+            crate::Vote::Yes
+        );
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            25
+        );
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .no_voting_power,
+            75
+        );
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
+            crate::Vote::No
+        );
+    });
 }
 
 #[test]
 fn vote_on_property_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 100, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_noop!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		), Error::<Test>::NotOngoing);
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_noop!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([6; 32].into()),
-			0,
-			crate::Vote::Yes
-		), Error::<Test>::NoPermission);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_noop!(
+            PropertyGovernance::vote_on_property_sale(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NotOngoing
+        );
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyGovernance::vote_on_property_sale(
+                RuntimeOrigin::signed([6; 32].into()),
+                0,
+                crate::Vote::Yes
+            ),
+            Error::<Test>::NoPermission
+        );
+    });
 }
 
 #[test]
 fn auction_starts() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 5, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
-		run_to_block(91);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, None);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            5,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            95
+        );
+        run_to_block(91);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            false
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, None);
+    });
 }
 
 #[test]
 fn proposal_does_not_pass() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 50, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 15, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 85);
-		run_to_block(91);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
-		System::assert_last_event(Event::PropertySaleProposalRejected{ asset_id: 0}.into());
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
-		assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            50,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            15,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            85
+        );
+        run_to_block(91);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
+        System::assert_last_event(Event::PropertySaleProposalRejected { asset_id: 0 }.into());
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            false
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
+    });
 }
 
 #[test]
 fn bid_on_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [5; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 5, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
-		run_to_block(91);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, None);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1984));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()), 1);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([4; 32].into()));
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 10);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 20, 1984));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()), 2);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([4; 32].into()));
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 20);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([5; 32].into()), 0, 2000, 1984));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[5; 32].into()), 200);
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()), 0);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([5; 32].into()));
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 2000);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 3000, 1984));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[5; 32].into()), 0);
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()), 300);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, Some([4; 32].into()));
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 3000);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, Some(Reserve{payment_asset: 1984, amount: 300}));
-		run_to_block(121);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().price, Some(3000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer, Some([4; 32].into()));
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [5; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            5,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            95
+        );
+        run_to_block(91);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().price, None);
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()),
+            1
+        );
+        assert_eq!(
+            SaleAuctions::<Test>::get(0).unwrap().highest_bidder,
+            Some([4; 32].into())
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 10);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            20,
+            1984
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()),
+            2
+        );
+        assert_eq!(
+            SaleAuctions::<Test>::get(0).unwrap().highest_bidder,
+            Some([4; 32].into())
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 20);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+            2000,
+            1984
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[5; 32].into()),
+            200
+        );
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()),
+            0
+        );
+        assert_eq!(
+            SaleAuctions::<Test>::get(0).unwrap().highest_bidder,
+            Some([5; 32].into())
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 2000);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            3000,
+            1984
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[5; 32].into()),
+            0
+        );
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[4; 32].into()),
+            300
+        );
+        assert_eq!(
+            SaleAuctions::<Test>::get(0).unwrap().highest_bidder,
+            Some([4; 32].into())
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 3000);
+        assert_eq!(
+            SaleAuctions::<Test>::get(0).unwrap().reserve,
+            Some(Reserve {
+                payment_asset: 1984,
+                amount: 300
+            })
+        );
+        run_to_block(121);
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().price, Some(3000));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer,
+            Some([4; 32].into())
+        );
+    });
 }
 
 #[test]
 fn bid_on_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [5; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 60, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 5, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 95);
-		assert_noop!(
-			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1984),
-			Error::<Test>::NoOngoingAuction,
-		);
-		run_to_block(91);
-		assert_noop!(
-			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 10, 1337),
-			Error::<Test>::UserNotWhitelisted,
-		);
-		assert_noop!(
-			PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1),
-			Error::<Test>::PaymentAssetNotSupported,
-		);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
-		assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [4; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [5; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            5,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            95
+        );
+        assert_noop!(
+            PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1984),
+            Error::<Test>::NoOngoingAuction,
+        );
+        run_to_block(91);
+        assert_noop!(
+            PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 10, 1337),
+            Error::<Test>::UserNotWhitelisted,
+        );
+        assert_noop!(
+            PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([4; 32].into()), 0, 10, 1),
+            Error::<Test>::PaymentAssetNotSupported,
+        );
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
+        assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
+    });
 }
 
 #[test]
 fn lawyer_claim_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer.unwrap(), [7; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().price.unwrap(), 300_000);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().reserve.unwrap(), Reserve { payment_asset: 1984, amount: 30_000 });
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(), [10; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer_costs, 1_000);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer_costs, 1_000);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer.unwrap(),
+            [7; 32].into()
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().price.unwrap(),
+            300_000
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().reserve.unwrap(),
+            Reserve {
+                payment_asset: 1984,
+                amount: 30_000
+            }
+        );
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(),
+            [10; 32].into()
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_lawyer_costs,
+            1_000
+        );
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer_costs,
+            1_000
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+    });
 }
 
 #[test]
 fn lawyer_claim_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
-		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 1, pallet_regions::Vote::Yes));
-		run_to_block(91);
-		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 1, 100_000));
-		run_to_block(121);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 1, 30, Permill::from_percent(3)));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
-		run_to_block(151);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(181);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000), Error::<Test>::NoPermission);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::LawyerJobTaken);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            pallet_regions::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            100_000
+        ));
+        run_to_block(121);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            30,
+            Permill::from_percent(3)
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NotForSale
+        );
+        run_to_block(151);
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                1,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::AssetNotFound
+        );
+        assert_ok!(Marketplace::register_lawyer(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            [12; 32].into()
+        ));
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([12; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NoPermissionInRegion
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::PriceNotSet
+        );
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(181);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                crate::LegalSale::BuyerSide,
+                1_000
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::LawyerJobTaken
+        );
+    });
 }
 
 #[test]
 fn lawyer_claim_sale_fails_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 40, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 25, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		assert_ok!(Regions::propose_new_region(RuntimeOrigin::signed([6; 32].into()), bvec![10, 10]));
-		assert_ok!(Regions::vote_on_region_proposal(RuntimeOrigin::signed([6; 32].into()), 1, pallet_regions::Vote::Yes));
-		run_to_block(91);
-		assert_ok!(Regions::bid_on_region(RuntimeOrigin::signed([6; 32].into()), 1, 100_000));
-		run_to_block(121);
-		assert_ok!(Regions::create_new_region(RuntimeOrigin::signed([6; 32].into()), 1, 30, Permill::from_percent(3)));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 75);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 25);
-		run_to_block(151);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([0; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermission);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 1, crate::LegalSale::SpvSide, 1_000), Error::<Test>::AssetNotFound);
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([6; 32].into()), 1, [12; 32].into()));
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([12; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NoPermissionInRegion);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::NotForSale);
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(182);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 1_000), Error::<Test>::PriceNotSet);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(212);
-		assert_noop!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::SpvSide, 5_000), Error::<Test>::CostsTooHigh);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            25,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            pallet_regions::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            100_000
+        ));
+        run_to_block(121);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            30,
+            Permill::from_percent(3)
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            75
+        );
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .no_voting_power,
+            25
+        );
+        run_to_block(151);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                1,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::AssetNotFound
+        );
+        assert_ok!(Marketplace::register_lawyer(
+            RuntimeOrigin::signed([6; 32].into()),
+            1,
+            [12; 32].into()
+        ));
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([12; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NoPermissionInRegion
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::NotForSale
+        );
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(182);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                1_000
+            ),
+            Error::<Test>::PriceNotSet
+        );
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(212);
+        assert_noop!(
+            PropertyGovernance::lawyer_claim_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalSale::SpvSide,
+                5_000
+            ),
+            Error::<Test>::CostsTooHigh
+        );
+    });
 }
 
 #[test]
 fn lawyer_confirm_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 2_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 2_500));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer_costs, 2_000);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer_costs, 2_500);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Pending);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Approved);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_status, crate::DocumentStatus::Approved);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            2_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            2_500
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer_costs,
+            2_000
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_lawyer_costs,
+            2_500
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Pending
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Approved
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_status,
+            crate::DocumentStatus::Approved
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
+    });
 }
 
 #[test]
 fn lawyer_confirm_sale_works_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 2_500));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 2_500));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Pending);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Approved);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().second_attempt, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, false));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Pending);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_status, crate::DocumentStatus::Pending);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().second_attempt, true);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_status, crate::DocumentStatus::Approved);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            2_500
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            2_500
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Pending
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Approved
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().second_attempt, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Pending
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_status,
+            crate::DocumentStatus::Pending
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().second_attempt, true);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_status,
+            crate::DocumentStatus::Approved
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
+    });
 }
 
 #[test]
 fn lawyer_confirm_sale_works_deny() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(), [10; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, false));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Rejected);
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 30_000);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, false));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 0);
-		assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(),
+            [10; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Rejected
+        );
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()),
+            30_000
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()),
+            0
+        );
+        assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+    });
 }
 
 #[test]
 fn lawyer_confirm_sale_works_deny_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(), [10; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, false));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_status, crate::DocumentStatus::Rejected);
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 30_000);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, false));
-		assert_eq!(AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()), 0);
-		assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().buyer_lawyer.unwrap(),
+            [10; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_status,
+            crate::DocumentStatus::Rejected
+        );
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()),
+            30_000
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(
+            AssetsHolder::total_balance_on_hold(1984, &[7; 32].into()),
+            0
+        );
+        assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+    });
 }
 
 #[test]
 fn lawyer_confirm_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().yes_voting_power, 90);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).unwrap().no_voting_power, 10);
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
-			Error::<Test>::NotForSale
-		);
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
-			Error::<Test>::NoPermission
-		);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true),
-			Error::<Test>::NoPermission
-		);
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 1, true),
-			Error::<Test>::NotForSale
-		);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, false),
-			Error::<Test>::SaleAlreadyConfirmed
-		);
-		assert_noop!(
-			PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true),
-			Error::<Test>::SaleAlreadyConfirmed
-		);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            90
+        );
+        assert_eq!(
+            OngoingSaleProposalVotes::<Test>::get(0)
+                .unwrap()
+                .no_voting_power,
+            10
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                true
+            ),
+            Error::<Test>::NotForSale
+        );
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                true
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                true
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                1,
+                true
+            ),
+            Error::<Test>::NotForSale
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                false
+            ),
+            Error::<Test>::SaleAlreadyConfirmed
+        );
+        assert_noop!(
+            PropertyGovernance::lawyer_confirm_sale(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                true
+            ),
+            Error::<Test>::SaleAlreadyConfirmed
+        );
+    });
 }
 
 #[test]
 fn finalize_sale_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
-		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
-		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 264_000);
-		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 1_000);
-		assert_eq!(ForeignAssets::balance(1337, &Marketplace::treasury_account_id()), 2_000);
-		assert_eq!(ForeignAssets::balance(1337, &[6; 32].into()), 2_000);
-		assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 731_000);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
+        assert_ok!(PropertyGovernance::finalize_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            1337
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
+            161_700
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
+            29_400
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)),
+            72_900
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)),
+            30_000
+        );
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            30_000
+        );
+        assert_eq!(
+            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
+            264_000
+        );
+        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 1_000);
+        assert_eq!(
+            ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
+            2_000
+        );
+        assert_eq!(ForeignAssets::balance(1337, &[6; 32].into()), 2_000);
+        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 731_000);
+    });
 }
 
 #[test]
 fn finalize_sale_works_2() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 3_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 3_000));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 161_700);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 29_400);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)), 72_900);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)), 30_000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
-		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 264_000);
-		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 3_000);
-		assert_eq!(ForeignAssets::balance(1337, &Marketplace::treasury_account_id()), 0);
-		assert_eq!(ForeignAssets::balance(1337, &[6; 32].into()), 0);
-		assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 733_000);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            3_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            3_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::finalize_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            1337
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
+            161_700
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
+            29_400
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)),
+            72_900
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)),
+            30_000
+        );
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            30_000
+        );
+        assert_eq!(
+            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
+            264_000
+        );
+        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 3_000);
+        assert_eq!(
+            ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
+            0
+        );
+        assert_eq!(ForeignAssets::balance(1337, &[6; 32].into()), 0);
+        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 733_000);
+    });
 }
 
 #[test]
 fn finalize_sale_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 55, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([3; 32].into()), 0, 35, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([3; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([5; 32].into()), 0, 1984),
-			Error::<Test>::NotForSale,
-		);
-		run_to_block(91);
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([4; 32].into()), 0, 1984),
-			Error::<Test>::NoPermission,
-		);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
-			Error::<Test>::SaleHasNotBeenApproved,
-		);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([11; 32].into()), 0, 1984),
-			Error::<Test>::NoPermission,
-		);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1),
-			Error::<Test>::PaymentAssetNotSupported,
-		);
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
-			Error::<Test>::NotEnoughFunds,
-		);
-		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
-		assert_noop!(
-			PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
-			Error::<Test>::AlreadyFinalized,
-		);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [3; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            55,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            35,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([5; 32].into()), 0, 1984),
+            Error::<Test>::NotForSale,
+        );
+        run_to_block(91);
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([4; 32].into()), 0, 1984),
+            Error::<Test>::NoPermission,
+        );
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
+            Error::<Test>::SaleHasNotBeenApproved,
+        );
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([11; 32].into()), 0, 1984),
+            Error::<Test>::NoPermission,
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1),
+            Error::<Test>::PaymentAssetNotSupported,
+        );
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
+            Error::<Test>::NotEnoughFunds,
+        );
+        assert_ok!(PropertyGovernance::finalize_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            1337
+        ));
+        assert_noop!(
+            PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
+            Error::<Test>::AlreadyFinalized,
+        );
+    });
 }
 
 #[test]
 fn claim_sale_funds_works() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 90, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		run_to_block(91);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 30_000);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 264_000);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 600);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)), 0);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 29_400);
-		assert_eq!(LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)), 0);
-		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984));
-		assert_eq!(LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)), 90);
-		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1337));
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 29_400);
-		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)), 0);
-		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_600);
-		assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 264_000);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)), 0);
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)), 0);
-		assert_eq!(LocalAssets::total_issuance(0), 100);
-		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([2; 32].into()), 0, 1984));
-		assert_eq!(SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)), 0);
-		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)), 0);
-		assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_075_400);
-		assert_eq!(Nfts::owner(0, 0).is_none(), true);
-		assert_eq!(AssetIdDetails::<Test>::get(0).is_none(), true);
-		assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);
-		assert_eq!(LocalAssets::total_issuance(0), 0);
-		assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            90,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::finalize_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            1337
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
+        assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            30_000
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
+            264_000
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
+            600
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
+            0
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)),
+            29_400
+        );
+        assert_eq!(
+            LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)),
+            0
+        );
+        assert_ok!(PropertyGovernance::claim_sale_funds(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            1984
+        ));
+        assert_eq!(
+            LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)),
+            90
+        );
+        assert_ok!(PropertyGovernance::claim_sale_funds(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            1337
+        ));
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            29_400
+        );
+        assert_eq!(
+            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
+            0
+        );
+        assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_600);
+        assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 264_000);
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
+            0
+        );
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
+            0
+        );
+        assert_eq!(LocalAssets::total_issuance(0), 100);
+        assert_ok!(PropertyGovernance::claim_sale_funds(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            1984
+        ));
+        assert_eq!(
+            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)),
+            0
+        );
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            0
+        );
+        assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_075_400);
+        assert_eq!(Nfts::owner(0, 0).is_none(), true);
+        assert_eq!(AssetIdDetails::<Test>::get(0).is_none(), true);
+        assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);
+        assert_eq!(LocalAssets::total_issuance(0), 0);
+        assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+    });
 }
 
 #[test]
 fn claim_sale_funds_fails() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
-		listing_process();
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
-		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [7; 32].into()));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 90, 1984));
-		assert_ok!(Marketplace::buy_property_token(RuntimeOrigin::signed([2; 32].into()), 0, 10, 1984));
-		lawyer_process();
-		setting_letting_agent([2; 32].into());
-		assert_ok!(PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([1; 32].into()),
-			0,
-			crate::Vote::Yes
-		));
-		assert_ok!(PropertyGovernance::vote_on_property_sale(
-			RuntimeOrigin::signed([2; 32].into()),
-			0,
-			crate::Vote::No
-		));
-		assert_noop!(PropertyGovernance::claim_sale_funds(
-			RuntimeOrigin::signed([1; 32].into()), 0, 1984),
-			Error::<Test>::NotForSale,
-		);
-		run_to_block(91);
-		assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
-		assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
-		assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-		assert_eq!(UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(), false);
-		assert_ok!(PropertyGovernance::bid_on_sale(RuntimeOrigin::signed([7; 32].into()), 0, 300_000, 1984));
-		run_to_block(121);
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([11; 32].into()), 0, crate::LegalSale::SpvSide, 1_000));
-		assert_ok!(PropertyGovernance::lawyer_claim_sale(RuntimeOrigin::signed([10; 32].into()), 0, crate::LegalSale::BuyerSide, 1_000));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(), [11; 32].into());
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([11; 32].into()), 0, true));
-		assert_ok!(PropertyGovernance::lawyer_confirm_sale(RuntimeOrigin::signed([10; 32].into()), 0, true));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
-		assert_noop!(PropertyGovernance::claim_sale_funds(
-			RuntimeOrigin::signed([1; 32].into()), 0, 1984),
-			Error::<Test>::SaleNotFinalized,
-		);
-		assert_ok!(PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1337));
-		assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-		assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
-		assert_noop!(PropertyGovernance::claim_sale_funds(
-			RuntimeOrigin::signed([6; 32].into()), 0, 1984),
-			Error::<Test>::NoFundsToClaim,
-		);
-		assert_ok!(PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984));
-		assert_noop!(PropertyGovernance::claim_sale_funds(
-			RuntimeOrigin::signed([1; 32].into()), 0, 1984),
-			Error::<Test>::NoFundsToClaim,
-		);
-	});
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        listing_process();
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [7; 32].into()
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            90,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        lawyer_process();
+        setting_letting_agent([2; 32].into());
+        assert_ok!(PropertyGovernance::propose_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_property_sale(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_noop!(
+            PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984),
+            Error::<Test>::NotForSale,
+        );
+        run_to_block(91);
+        assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
+        assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            false
+        );
+        assert_ok!(PropertyGovernance::bid_on_sale(
+            RuntimeOrigin::signed([7; 32].into()),
+            0,
+            300_000,
+            1984
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            crate::LegalSale::SpvSide,
+            1_000
+        ));
+        assert_ok!(PropertyGovernance::lawyer_claim_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalSale::BuyerSide,
+            1_000
+        ));
+        assert_eq!(
+            PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
+            [11; 32].into()
+        );
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, false);
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([11; 32].into()),
+            0,
+            true
+        ));
+        assert_ok!(PropertyGovernance::lawyer_confirm_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().lawyer_approved, true);
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, false);
+        assert_noop!(
+            PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984),
+            Error::<Test>::SaleNotFinalized,
+        );
+        assert_ok!(PropertyGovernance::finalize_sale(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            1337
+        ));
+        assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
+        assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_000);
+        assert_noop!(
+            PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([6; 32].into()), 0, 1984),
+            Error::<Test>::NoFundsToClaim,
+        );
+        assert_ok!(PropertyGovernance::claim_sale_funds(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            1984
+        ));
+        assert_noop!(
+            PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984),
+            Error::<Test>::NoFundsToClaim,
+        );
+    });
 }
