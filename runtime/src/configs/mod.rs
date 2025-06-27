@@ -707,6 +707,7 @@ parameter_types! {
     pub const MaxProposalForBlock: u32 = 100;
     pub const RegionSlashingAmount: Balance = 10 * UNIT;
     pub const RegionOwnerChangeTime: BlockNumber = 100;
+    pub const RegionOwnerNoticeTime: BlockNumber = 50;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -734,6 +735,7 @@ impl pallet_regions::Config for Runtime {
     type TreasuryId = TreasuryPalletId;
     type RegionOwnerChangePeriod = RegionOwnerChangeTime;
     type Slash = ();
+    type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
