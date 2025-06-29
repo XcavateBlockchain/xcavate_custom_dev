@@ -330,14 +330,14 @@ fn bid_on_region_works() {
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
             0,
-            1_000
+            10_000
         ));
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 199_000);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 190_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())),
-            1_000
+            10_000
         );
-        assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 1_000);
+        assert_eq!(RegionAuctions::<Test>::get(0).unwrap().collateral, 10_000);
         assert_eq!(
             RegionAuctions::<Test>::get(0)
                 .unwrap()
@@ -445,17 +445,21 @@ fn bid_on_region_fails() {
             Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 0),
             Error::<Test>::BidCannotBeZero,
         );
+        assert_noop!(
+            Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 5_000),
+            Error::<Test>::BidBelowMinimum,
+        );
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
             0,
-            1_000
+            10_000
         ));
         assert_noop!(
-            Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 500),
+            Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 0, 5_000),
             Error::<Test>::BidTooLow,
         );
         assert_noop!(
-            Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 1_000),
+            Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 0, 10_000),
             Error::<Test>::BidTooLow,
         );
         assert_noop!(
@@ -475,11 +479,11 @@ fn bid_on_region_fails() {
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
             1,
-            1_000
+            10_000
         ));
         System::assert_last_event(Event::RegionRejected { proposal_id: 1 }.into());
         assert_noop!(
-            Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 1, 1_000),
+            Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 1, 10_000),
             Error::<Test>::NoOngoingAuction,
         );
     })
@@ -543,7 +547,7 @@ fn create_new_region_works() {
         );
         run_to_block(61);
         assert_ok!(Regions::create_new_region(
-            RuntimeOrigin::signed([1; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             0,
             30,
             Permill::from_percent(3)
@@ -551,7 +555,7 @@ fn create_new_region_works() {
         assert_eq!(RegionAuctions::<Test>::get(0).is_none(), true);
         run_to_block(89);
         assert_ok!(Regions::create_new_region(
-            RuntimeOrigin::signed([1; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             1,
             30,
             Permill::from_percent(3)
@@ -572,15 +576,6 @@ fn create_new_region_works() {
 fn create_new_region_does_not_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_noop!(
-            Regions::create_new_region(
-                RuntimeOrigin::signed([7; 32].into()),
-                0,
-                30,
-                Permill::from_percent(3)
-            ),
-            Error::<Test>::UserNotRegionalOperator
-        );
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [7; 32].into()
@@ -631,6 +626,15 @@ fn create_new_region_does_not_works() {
             Error::<Test>::AuctionNotFinished
         );
         run_to_block(61);
+        assert_noop!(
+            Regions::create_new_region(
+                RuntimeOrigin::signed([7; 32].into()),
+                0,
+                30,
+                Permill::from_percent(3)
+            ),
+            Error::<Test>::NotRegionOwner
+        );
         assert_noop!(
             Regions::create_new_region(
                 RuntimeOrigin::signed([8; 32].into()),
@@ -797,17 +801,10 @@ fn create_new_location_works() {
             1,
             bvec![9, 10]
         ));
-        assert_eq!(Balances::free_balance(&([8; 32].into())), 170_000);
+        assert_eq!(Balances::free_balance(&([8; 32].into())), 197_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            200_000
-        );
-        assert_eq!(
-            Balances::balance_on_hold(
-                &HoldReason::LocationDepositReserve.into(),
-                &([8; 32].into())
-            ),
-            30_000
+            203_000
         );
         assert_eq!(
             LocationRegistration::<Test>::get::<u32, BoundedVec<u8, Postcode>>(0, bvec![10, 10]),
@@ -1218,7 +1215,7 @@ fn remove_owner_proposal_doesnt_pass() {
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(),
             VoteStats {
-                yes_voting_power: 600_000,
+                yes_voting_power: 599_000,
                 no_voting_power: 0
             }
         );
@@ -1246,7 +1243,7 @@ fn remove_owner_proposal_doesnt_pass() {
             OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(),
             VoteStats {
                 yes_voting_power: 400_000,
-                no_voting_power: 200_000
+                no_voting_power: 199_000
             }
         );
         run_to_block(181);
@@ -1264,7 +1261,7 @@ fn remove_owner_proposal_doesnt_pass() {
             100_000
         );
         assert_eq!(Balances::total_balance(&([8; 32].into())), 400_000);
-        assert_eq!(Balances::total_issuance(), 1_055_000);
+        assert_eq!(Balances::total_issuance(), 1_053_000);
         assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(),
@@ -1307,7 +1304,7 @@ fn remove_owner_proposal_doesnt_pass() {
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(),
             VoteStats {
-                yes_voting_power: 200_000,
+                yes_voting_power: 198_000,
                 no_voting_power: 390_000
             }
         );
@@ -1341,6 +1338,16 @@ fn bid_on_region_replacement_after_proposal_works() {
             [8; 32].into()
         ));
         new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            0,
+            bvec![11, 10]
+        ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [0; 32].into()
@@ -1392,21 +1399,21 @@ fn bid_on_region_replacement_after_proposal_works() {
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([0; 32].into()),
             0,
-            10_000
+            12_000
         ));
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            90_000
+            92_000
         );
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())),
-            10_000
+            12_000
         );
         assert_eq!(
             RegionReplacementAuctions::<Test>::get(0).unwrap(),
             crate::RegionAuction {
                 highest_bidder: Some([0; 32].into()),
-                collateral: 10_000,
+                collateral: 12_000,
                 auction_expiry: 212,
             }
         );
@@ -1443,7 +1450,7 @@ fn bid_on_region_replacement_after_proposal_works() {
         );
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            130_000
+            132_000
         );
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1597,6 +1604,16 @@ fn bid_on_region_replacement_after_time_fails() {
             Error::<Test>::RegionUnknown
         );
         new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            0,
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            0,
+            bvec![11, 10]
+        ));
         assert_eq!(
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
             361
@@ -1610,6 +1627,10 @@ fn bid_on_region_replacement_after_time_fails() {
         assert_noop!(
             Regions::bid_on_region_replacement(RuntimeOrigin::signed([2; 32].into()), 0, 10_000),
             Error::<Test>::UserNotRegionalOperator
+        );
+        assert_noop!(
+            Regions::bid_on_region_replacement(RuntimeOrigin::signed([1; 32].into()), 0, 11_500),
+            Error::<Test>::BidBelowMinimum
         );
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1706,12 +1727,12 @@ fn initiate_region_owner_resignation_fails() {
             361
         );
         run_to_block(300);
-		assert_noop!(
+        assert_noop!(
             Regions::initiate_region_owner_resignation(RuntimeOrigin::signed([8; 32].into()), 0),
             Error::<Test>::OwnerChangeTooEarly
         );
-		run_to_block(400);
-		assert_noop!(
+        run_to_block(400);
+        assert_noop!(
             Regions::initiate_region_owner_resignation(RuntimeOrigin::signed([8; 32].into()), 0),
             Error::<Test>::OwnerChangeTooEarly
         );

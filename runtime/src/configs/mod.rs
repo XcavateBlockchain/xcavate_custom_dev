@@ -708,6 +708,8 @@ parameter_types! {
     pub const RegionSlashingAmount: Balance = 10 * UNIT;
     pub const RegionOwnerChangeTime: BlockNumber = 100;
     pub const RegionOwnerNoticeTime: BlockNumber = 50;
+    pub const RegionOwnerDisputeDepositAmount: Balance = 1_000 * UNIT;
+    pub const MinimumRegionDepositAmount: Balance = 100_000 * UNIT;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -736,6 +738,8 @@ impl pallet_regions::Config for Runtime {
     type RegionOwnerChangePeriod = RegionOwnerChangeTime;
     type Slash = ();
     type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
+    type RegionOwnerDisputeDeposit = RegionOwnerDisputeDepositAmount;
+    type MinimumRegionDeposit = MinimumRegionDepositAmount;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

@@ -153,7 +153,7 @@ parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const Postcode: u32 = 10;
     pub const RegionDepositAmount: Balance = 100_000;
-    pub const LocationDepositAmount: Balance = 10_000;
+    pub const LocationDepositAmount: Balance = 1_000;
     pub const MaximumListingDuration: BlockNumber = 10_000;
     pub const RegionVotingTime: BlockNumber = 30;
     pub const RegionAuctionTime: BlockNumber = 30;
@@ -190,6 +190,8 @@ impl crate::Config for Test {
     type RegionOwnerChangePeriod = RegionOwnerChangeTime;
     type Slash = ();
     type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
+    type RegionOwnerDisputeDeposit = ConstU128<1_000>;
+    type MinimumRegionDeposit = ConstU128<10_000>;
 }
 
 // Build genesis storage according to the mock runtime.

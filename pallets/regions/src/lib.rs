@@ -43,6 +43,7 @@ pub mod pallet {
         pub collateral: T::Balance,
         pub tax: Permill,
         pub next_owner_change: BlockNumberFor<T>,
+        pub location_count: u32,
     }
 
     /// Infos regarding the proposal of a region
@@ -78,6 +79,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct RemoveRegionOwnerProposal<T: Config> {
         pub proposer: T::AccountId,
+        pub deposit: T::Balance,
         pub state: ProposalState,
     }
 
@@ -129,7 +131,7 @@ pub mod pallet {
         #[codec(index = 0)]
         RegionDepositReserve,
         #[codec(index = 1)]
-        LocationDepositReserve,
+        RegionalOperatorRemovalReserve,
     }
 
     #[pallet::config]
@@ -238,6 +240,14 @@ pub mod pallet {
         /// Delay after a region owner resigns before a new auction can begin.
         #[pallet::constant]
         type RegionOwnerNoticePeriod: Get<BlockNumberFor<Self>>;
+
+        /// Deposit amount for a remove regional operator proposal.
+        #[pallet::constant]
+        type RegionOwnerDisputeDeposit: Get<Self::Balance>;
+
+        /// Minimum deposit for a location.
+        #[pallet::constant]
+        type MinimumRegionDeposit: Get<Self::Balance>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -248,21 +258,22 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::storage]
-    pub type RegionOperatorAccounts<T: Config> =
+    pub(super) type RegionOperatorAccounts<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, (), OptionQuery>;
 
     #[pallet::storage]
-    pub type LastRegionProposalBlock<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+    pub(super) type LastRegionProposalBlock<T: Config> =
+        StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 
     #[pallet::storage]
-    pub type RegionProposalCount<T> = StorageValue<_, ProposalIndex, ValueQuery>;
+    pub(super) type RegionProposalCount<T> = StorageValue<_, ProposalIndex, ValueQuery>;
 
     #[pallet::storage]
-    pub type RegionProposals<T: Config> =
+    pub(super) type RegionProposals<T: Config> =
         StorageMap<_, Blake2_128Concat, ProposalIndex, RegionProposal<T>, OptionQuery>;
 
     #[pallet::storage]
-    pub type OngoingRegionProposalVotes<T: Config> =
+    pub(super) type OngoingRegionProposalVotes<T: Config> =
         StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats<T>, OptionQuery>;
 
     #[pallet::storage]
@@ -307,11 +318,11 @@ pub mod pallet {
 
     /// Mapping from Region ID to a proposal to remove the region owner.
     #[pallet::storage]
-    pub type RegionOwnerProposals<T: Config> =
+    pub(super) type RegionOwnerProposals<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, RemoveRegionOwnerProposal<T>, OptionQuery>;
 
     #[pallet::storage]
-    pub type OngoingRegionOwnerProposalVotes<T: Config> =
+    pub(super) type OngoingRegionOwnerProposalVotes<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
 
     #[pallet::storage]
@@ -327,7 +338,7 @@ pub mod pallet {
 
     /// Stores the project keys and round types ending on a given block for region owner removal votings.
     #[pallet::storage]
-    pub type RegionOwnerRoundsExpiring<T: Config> = StorageMap<
+    pub(super) type RegionOwnerRoundsExpiring<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         BlockNumberFor<T>,
@@ -337,7 +348,7 @@ pub mod pallet {
 
     /// Stores the project keys and round types ending on a given block for region owner removal votings.
     #[pallet::storage]
-    pub type ReplacementAuctionExpiring<T: Config> = StorageMap<
+    pub(super) type ReplacementAuctionExpiring<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         BlockNumberFor<T>,
@@ -456,8 +467,6 @@ pub mod pallet {
         RegionUnknown,
         /// No sufficient permission.
         NoPermission,
-        /// The proposer is already owner of this region.
-        AlreadyRegionOwner,
         /// The location is already registered.
         LocationRegistered,
         /// The proposal is not ongoing.
@@ -466,14 +475,14 @@ pub mod pallet {
         NoOngoingAuction,
         /// The bid is lower than the current highest bid.
         BidTooLow,
+        /// The bid is below the minimum.
+        BidBelowMinimum,
         /// The voting has not ended yet.
         VotingStillOngoing,
         /// No Auction found.
         NoAuction,
         /// Auction is still ongoing.
         AuctionNotFinished,
-        /// Noone bid on the region so there is no region owner.
-        NoNewRegionOwner,
         /// Cant propose a new regions since the cooldown is still active.
         RegionProposalCooldownActive,
         /// The proposa has already expired.
@@ -500,6 +509,7 @@ pub mod pallet {
         NotRegionOwner,
         /// Owner would change before resignation period would be over.
         OwnerChangeTooEarly,
+        MultiplyError,
     }
 
     #[pallet::hooks]
@@ -516,7 +526,7 @@ pub mod pallet {
             });
 
             let ended_replacement_auction = ReplacementAuctionExpiring::<T>::take(n);
-            // checks if there is a voting for an proposal ending in this block.
+            // checks if there is a voting for an auction ending in this block.
             ended_replacement_auction.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = Self::finish_region_owner_replacement(*item, n);
@@ -527,6 +537,14 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        /// Creates a proposal for a new region.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `data`: The Metadata of the proposal.
+        ///
+        /// Emits `RegionProposed` event when succesfful.
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn propose_new_region(
@@ -571,6 +589,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets a xcav holder vote on a proposal for a region.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the proposal.
+        /// - `vote`: Must be either a Yes vote or a No vote.
+        ///
+        /// Emits `VotedOnRegionProposal` event when succesfful.
         #[pallet::call_index(1)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn vote_on_region_proposal(
@@ -628,6 +655,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets a registered account bid on a region to become the regional operator.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the proposal.
+        /// - `amount`: The amount that the caller is willing to bid and to have locked.
+        ///
+        /// Emits `BidSuccessfullyPlaced` event when succesfful.
         #[pallet::call_index(2)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn bid_on_region(
@@ -662,32 +698,34 @@ pub mod pallet {
                     auction.auction_expiry > current_block_number,
                     Error::<T>::NoOngoingAuction
                 );
-                ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
                 match &auction.highest_bidder {
-                    Some(old_bidder) if old_bidder == &signer => {
-                        let additional = amount.saturating_sub(auction.collateral);
-                        if additional > Zero::zero() {
-                            T::NativeCurrency::hold(
-                                &HoldReason::RegionDepositReserve.into(),
-                                &signer,
-                                additional,
-                            )?;
-                        }
-                    }
                     Some(old_bidder) => {
-                        T::NativeCurrency::hold(
+                        ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
+                        if old_bidder == &signer {
+                            let additional = amount.saturating_sub(auction.collateral);
+                            if additional > Zero::zero() {
+                                T::NativeCurrency::hold(
+                                    &HoldReason::RegionDepositReserve.into(),
+                                    &signer,
+                                    additional,
+                                )?;
+                            }
+                        } else {
+                            T::NativeCurrency::hold(
                             &HoldReason::RegionDepositReserve.into(),
                             &signer,
                             amount,
-                        )?;
-                        T::NativeCurrency::release(
-                            &HoldReason::RegionDepositReserve.into(),
-                            old_bidder,
-                            auction.collateral,
-                            Precision::Exact,
-                        )?;
+                            )?;
+                            T::NativeCurrency::release(
+                                &HoldReason::RegionDepositReserve.into(),
+                                old_bidder,
+                                auction.collateral,
+                                Precision::Exact,
+                            )?;
+                        }
                     }
                     None => {
+                        ensure!(amount >= auction.collateral, Error::<T>::BidBelowMinimum);
                         T::NativeCurrency::hold(
                             &HoldReason::RegionDepositReserve.into(),
                             &signer,
@@ -713,6 +751,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
+        /// - `proposal_id`: Id of the proposal.
         /// - `listing_duration`: Duration of a listing in this region.
         /// - `tax`: Tax percentage for selling a property in this region.
         ///
@@ -726,15 +765,15 @@ pub mod pallet {
             tax: Permill,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            ensure!(
-                RegionOperatorAccounts::<T>::contains_key(&signer),
-                Error::<T>::UserNotRegionalOperator
-            );
             let auction = RegionAuctions::<T>::take(proposal_id).ok_or(Error::<T>::NoAuction)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 auction.auction_expiry <= current_block_number,
                 Error::<T>::AuctionNotFinished
+            );
+            ensure!(
+                auction.highest_bidder == Some(signer),
+                Error::<T>::NotRegionOwner
             );
 
             if let Some(region_owner) = auction.highest_bidder {
@@ -774,6 +813,7 @@ pub mod pallet {
                     collateral: auction.collateral,
                     tax,
                     next_owner_change,
+                    location_count: Default::default(),
                 };
                 RegionDetails::<T>::insert(current_region_id, region_info);
                 NextRegionId::<T>::put(next_region_id);
@@ -846,7 +886,7 @@ pub mod pallet {
         ///
         /// Parameters:
         /// - `region`: Region in where the tax should be changed.
-        /// - `tax`: New tax for a property sell in this region.
+        /// - `new_tax`: New tax for a property sell in this region.
         ///
         /// Emits `RegionTaxChanged` event when succesfful.
         #[pallet::call_index(5)]
@@ -876,14 +916,14 @@ pub mod pallet {
 
         /// Creates a new location for a region.
         ///
-        /// The origin must be the LocationOrigin.
+        /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
         /// - `region`: The region where the new location should be created.
         /// - `location`: The postcode of the new location.
         ///
         /// Emits `LocationCreated` event when succesfful.
-        #[pallet::call_index(9)]
+        #[pallet::call_index(6)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn create_new_location(
             origin: OriginFor<T>,
@@ -891,17 +931,34 @@ pub mod pallet {
             location: LocationId<T>,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-            ensure!(region_info.owner == signer, Error::<T>::NoPermission);
             ensure!(
                 !LocationRegistration::<T>::contains_key(region, &location),
                 Error::<T>::LocationRegistered
             );
-            T::NativeCurrency::hold(
-                &HoldReason::LocationDepositReserve.into(),
-                &signer,
-                T::LocationDeposit::get(),
-            )?;
+            let deposit_amount = T::LocationDeposit::get();
+
+            RegionDetails::<T>::try_mutate(region, |maybe_region| {
+                let region_info = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
+                ensure!(region_info.owner == signer, Error::<T>::NoPermission);
+
+                T::NativeCurrency::hold(
+                    &HoldReason::RegionDepositReserve.into(),
+                    &signer,
+                    deposit_amount,
+                )?;
+
+                region_info.collateral = region_info
+                    .collateral
+                    .checked_add(&deposit_amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                region_info.location_count = region_info
+                    .location_count
+                    .checked_add(1)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                Ok::<(), DispatchError>(())
+            })?;
+
             LocationRegistration::<T>::insert(region, &location, true);
             Self::deposit_event(Event::<T>::LocationCreated {
                 region_id: region,
@@ -910,7 +967,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(20)]
+        /// Creates proposal to remove a region owner.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `region_id`: The region where the region owner should be removed.
+        ///
+        /// Emits `RemoveRegionOwnerProposed` event when succesfful.
+        #[pallet::call_index(7)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn propose_remove_regional_operator(
             origin: OriginFor<T>,
@@ -929,11 +994,18 @@ pub mod pallet {
                 RegionOwnerProposals::<T>::get(region_id).is_none(),
                 Error::<T>::ProposalAlreadyOngoing
             );
+            let deposit_amount = T::RegionOwnerDisputeDeposit::get();
+            T::NativeCurrency::hold(
+                &HoldReason::RegionalOperatorRemovalReserve.into(),
+                &signer,
+                deposit_amount,
+            )?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::RegionOperatorVotingTime::get());
             let proposal = RemoveRegionOwnerProposal {
                 proposer: signer.clone(),
+                deposit: deposit_amount,
                 state: ProposalState::MistrustVoting,
             };
 
@@ -956,7 +1028,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(21)]
+        #[pallet::call_index(8)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn vote_on_remove_owner_proposal(
             origin: OriginFor<T>,
@@ -1005,7 +1077,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(22)]
+        #[pallet::call_index(9)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn bid_on_region_replacement(
             origin: OriginFor<T>,
@@ -1030,9 +1102,15 @@ pub mod pallet {
             RegionReplacementAuctions::<T>::try_mutate(region_id, |maybe_auction| {
                 let auction = maybe_auction.get_or_insert_with(|| {
                     new_auction = true;
+
+                    let mut minimum_deposit = T::MinimumRegionDeposit::get();
+                    let location_deposits = T::LocationDeposit::get()
+                        .saturating_mul(region_info.location_count.into());
+                    minimum_deposit = minimum_deposit.saturating_add(location_deposits);
+
                     RegionAuction {
                         highest_bidder: None,
-                        collateral: Zero::zero(),
+                        collateral: minimum_deposit,
                         auction_expiry: current_block_number
                             .saturating_add(T::RegionAuctionTime::get()),
                     }
@@ -1041,32 +1119,34 @@ pub mod pallet {
                     auction.auction_expiry > current_block_number,
                     Error::<T>::NoOngoingAuction
                 );
-                ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
                 match &auction.highest_bidder {
-                    Some(old_bidder) if old_bidder == &signer => {
-                        let additional = amount.saturating_sub(auction.collateral);
-                        if additional > Zero::zero() {
-                            T::NativeCurrency::hold(
-                                &HoldReason::RegionDepositReserve.into(),
-                                &signer,
-                                additional,
-                            )?;
-                        }
-                    }
                     Some(old_bidder) => {
-                        T::NativeCurrency::hold(
+                        ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
+                        if old_bidder == &signer {
+                            let additional = amount.saturating_sub(auction.collateral);
+                            if additional > Zero::zero() {
+                                T::NativeCurrency::hold(
+                                    &HoldReason::RegionDepositReserve.into(),
+                                    &signer,
+                                    additional,
+                                )?;
+                            }
+                        } else {
+                            T::NativeCurrency::hold(
                             &HoldReason::RegionDepositReserve.into(),
                             &signer,
                             amount,
-                        )?;
-                        T::NativeCurrency::release(
-                            &HoldReason::RegionDepositReserve.into(),
-                            old_bidder,
-                            auction.collateral,
-                            Precision::Exact,
-                        )?;
+                            )?;
+                            T::NativeCurrency::release(
+                                &HoldReason::RegionDepositReserve.into(),
+                                old_bidder,
+                                auction.collateral,
+                                Precision::Exact,
+                            )?;
+                        }
                     }
                     None => {
+                        ensure!(amount >= auction.collateral, Error::<T>::BidBelowMinimum);
                         T::NativeCurrency::hold(
                             &HoldReason::RegionDepositReserve.into(),
                             &signer,
@@ -1097,7 +1177,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(23)]
+        #[pallet::call_index(10)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn initiate_region_owner_resignation(
             origin: OriginFor<T>,
@@ -1128,7 +1208,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(10)]
+        #[pallet::call_index(11)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn add_regional_operator(
             origin: OriginFor<T>,
@@ -1144,7 +1224,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(11)]
+        #[pallet::call_index(12)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_regional_operator(
             origin: OriginFor<T>,
@@ -1189,7 +1269,7 @@ pub mod pallet {
             if yes_votes_percentage > required_threshold {
                 let auction = RegionAuction {
                     highest_bidder: None,
-                    collateral: Zero::zero(),
+                    collateral: T::MinimumRegionDeposit::get(),
                     auction_expiry: auction_expiry_block,
                 };
                 RegionAuctions::<T>::insert(proposal_id, auction);
@@ -1275,6 +1355,14 @@ pub mod pallet {
                                 }
                             } else {
                                 RegionOwnerProposals::<T>::remove(region_id);
+                                let (imbalance, _remaining) =
+                                    <T as pallet::Config>::NativeCurrency::slash(
+                                        &HoldReason::RegionalOperatorRemovalReserve.into(),
+                                        &proposal.proposer,
+                                        proposal.deposit,
+                                    );
+
+                                T::Slash::on_unbalanced(imbalance);
                                 Self::deposit_event(Event::RegionOwnerRemovalRejected {
                                     region_id,
                                     proposal_state: proposal.state,

@@ -273,6 +273,8 @@ impl pallet_regions::Config for Test {
     type RegionOwnerChangePeriod = RegionOwnerChangeTime;
     type Slash = ();
     type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
+    type RegionOwnerDisputeDeposit = ConstU128<1_000>;
+    type MinimumRegionDeposit = ConstU128<10_000>;
 }
 
 parameter_types! {
