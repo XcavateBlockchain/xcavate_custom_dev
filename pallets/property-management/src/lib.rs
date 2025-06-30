@@ -81,6 +81,7 @@ pub mod pallet {
         pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
         pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
         pub deposited: bool,
+        pub active_strikes: BoundedBTreeMap<u32, u8, T::MaxProperties>,
     }
 
     #[pallet::config]
@@ -277,6 +278,7 @@ pub mod pallet {
                 locations: Default::default(),
                 assigned_properties: Default::default(),
                 deposited: Default::default(),
+                active_strikes: Default::default(),
             };
             letting_info
                 .locations

@@ -326,7 +326,7 @@ impl pallet_property_management::Config for Test {
     type ForeignCurrency = ForeignAssets;
     type MarketplacePalletId = MarketplacePalletId;
     type AgentOrigin = EnsureRoot<Self::AccountId>;
-    type LettingAgentDeposit = ConstU128<100>;
+    type LettingAgentDeposit = ConstU128<1000>;
     type MaxProperties = MaxProperty;
     type MaxLettingAgents = MaxLettingAgent;
     type MaxLocations = MaxLocation;

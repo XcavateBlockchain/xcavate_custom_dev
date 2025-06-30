@@ -208,7 +208,7 @@ fn proposal_with_low_amount_works() {
             }
             .into(),
         );
-        assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
+        assert_eq!(Balances::free_balance(&([4; 32].into())), 4000);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
         assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), false);
     });
@@ -265,11 +265,7 @@ fn challenge_against_letting_agent_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(Challenges::<Test>::get(1).is_some(), true);
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::MistrustVoting
-        );
+        assert_eq!(Challenges::<Test>::get(0).is_some(), true);
     });
 }
 
@@ -300,7 +296,18 @@ fn challenge_against_letting_agent_fails() {
             ),
             Error::<Test>::NoPermission
         );
-        assert_eq!(Challenges::<Test>::get(1).is_some(), false);
+        assert_eq!(Challenges::<Test>::get(0).is_some(), false);
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyGovernance::challenge_against_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0
+            ),
+            Error::<Test>::ChallengeAlreadyOngoing
+        );
     });
 }
 
@@ -454,7 +461,7 @@ fn proposal_pass() {
             crate::Vote::Yes
         ));
         assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
         assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -750,32 +757,32 @@ fn vote_on_challenge_works() {
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([3; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
         assert_eq!(
-            OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting)
+            OngoingChallengeVotes::<Test>::get(0)
                 .unwrap()
                 .yes_voting_power,
             60
         );
         assert_eq!(
-            OngoingChallengeVotes::<Test>::get(1, crate::ChallengeState::MistrustVoting)
+            OngoingChallengeVotes::<Test>::get(0)
                 .unwrap()
                 .no_voting_power,
             40
@@ -832,62 +839,58 @@ fn challenge_pass() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
         run_to_block(91);
+        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &1u8);
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::DefensePeriod
-        );
-        run_to_block(121);
-        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::SlashVoting
-        );
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 100);
-        assert_eq!(Balances::total_issuance(), 57_465_001);
-        run_to_block(151);
-        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 0);
+        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 900);
         assert_eq!(Balances::total_issuance(), 57_464_901);
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::ReplacementVoting
-        );
+        run_to_block(121);
+        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &2u8);
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 800);
+        assert_eq!(Balances::total_issuance(), 57_464_801);
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
@@ -898,7 +901,9 @@ fn challenge_pass() {
                 .len(),
             1
         );
+        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &2u8);
         run_to_block(181);
+        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).is_none(), true);
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -907,7 +912,7 @@ fn challenge_pass() {
                 .len(),
             1
         );
-        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+        assert_eq!(Challenges::<Test>::get(0).is_none(), true);
         assert_ok!(PropertyManagement::set_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -915,7 +920,7 @@ fn challenge_pass() {
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [1; 32].into());
     });
 }
-
+ 
 #[test]
 fn challenge_does_not_pass() {
     new_test_ext().execute_with(|| {
@@ -991,45 +996,38 @@ fn challenge_does_not_pass() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
         run_to_block(91);
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::DefensePeriod
-        );
-        run_to_block(121);
-        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::SlashVoting
-        );
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        run_to_block(151);
+        run_to_block(121);
         System::assert_last_event(
             Event::ChallengeThresHoldNotReached {
-                challenge_id: 1,
+                asset_id: 0,
                 required_threshold: Percent::from_percent(51),
-                challenge_state: crate::ChallengeState::SlashVoting,
             }
             .into(),
         );
-        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+        assert_eq!(Challenges::<Test>::get(0).is_none(), true);
     });
 }
 
@@ -1087,59 +1085,53 @@ fn challenge_pass_only_one_agent() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(Challenges::<Test>::get(1).unwrap().asset_id, 0);
+        assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
         run_to_block(91);
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::DefensePeriod
-        );
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
         run_to_block(121);
-        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::SlashVoting
-        );
+        assert_ok!(PropertyGovernance::challenge_against_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
-            crate::Vote::Yes
-        ));
-        run_to_block(151);
-        assert_eq!(
-            Challenges::<Test>::get(1).unwrap().state,
-            crate::ChallengeState::ReplacementVoting
-        );
-        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-            RuntimeOrigin::signed([1; 32].into()),
-            1,
-            crate::Vote::Yes
-        ));
-        assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
-            RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         run_to_block(181);
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
-        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+        assert_eq!(Challenges::<Test>::get(0).is_none(), true);
     });
 }
 
@@ -1169,19 +1161,18 @@ fn challenge_not_pass() {
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
-        assert_eq!(Challenges::<Test>::get(1).is_some(), true);
+        assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         run_to_block(91);
         System::assert_last_event(
             Event::ChallengeRejected {
-                challenge_id: 1,
-                challenge_state: crate::ChallengeState::MistrustVoting,
+                asset_id: 0,
             }
             .into(),
         );
-        assert_eq!(Challenges::<Test>::get(1).is_none(), true);
+        assert_eq!(Challenges::<Test>::get(0).is_none(), true);
     });
 }
 
@@ -1200,7 +1191,7 @@ fn vote_on_challenge_fails() {
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([1; 32].into()),
-                1,
+                0,
                 crate::Vote::Yes
             ),
             Error::<Test>::NotOngoing
@@ -1212,13 +1203,13 @@ fn vote_on_challenge_fails() {
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([2; 32].into()),
-                1,
+                0,
                 crate::Vote::Yes
             ),
             Error::<Test>::NoPermission

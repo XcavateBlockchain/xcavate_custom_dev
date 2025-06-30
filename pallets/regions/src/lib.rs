@@ -41,6 +41,7 @@ pub mod pallet {
         pub listing_duration: BlockNumberFor<T>,
         pub owner: T::AccountId,
         pub collateral: T::Balance,
+        pub active_strikes: u8,
         pub tax: Permill,
         pub next_owner_change: BlockNumberFor<T>,
         pub location_count: u32,
@@ -80,7 +81,6 @@ pub mod pallet {
     pub struct RemoveRegionOwnerProposal<T: Config> {
         pub proposer: T::AccountId,
         pub deposit: T::Balance,
-        pub state: ProposalState,
     }
 
     /// Vote enum.
@@ -99,30 +99,6 @@ pub mod pallet {
     pub enum Vote {
         Yes,
         No,
-    }
-
-    /// ProposalState state of the region owner removal voting.
-    #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(
-        Encode,
-        Decode,
-        DecodeWithMemTracking,
-        Clone,
-        PartialEq,
-        Eq,
-        MaxEncodedLen,
-        RuntimeDebug,
-        TypeInfo,
-    )]
-    pub enum ProposalState {
-        /// Stage 1: Vote to express mistrust.
-        MistrustVoting,
-        /// Stage 2: Region owner defends (no voting).
-        DefensePeriod,
-        /// Stage 3: Vote to slash the region owner.
-        SlashVoting,
-        /// Stage 4: Vote to change the region owner.
-        ReplacementVoting,
     }
 
     #[pallet::composite_enum]
@@ -421,7 +397,6 @@ pub mod pallet {
         /// A proposal for removing the region owner got rejected.
         RegionOwnerRemovalRejected {
             region_id: RegionId,
-            proposal_state: ProposalState,
         },
         /// A regional operator has been slashed.
         RegionalOperatorSlashed {
@@ -510,6 +485,8 @@ pub mod pallet {
         /// Owner would change before resignation period would be over.
         OwnerChangeTooEarly,
         MultiplyError,
+        /// The proposal could not be found.
+        ProposalNotFound,
     }
 
     #[pallet::hooks]
@@ -811,6 +788,7 @@ pub mod pallet {
                     listing_duration,
                     owner: region_owner.clone(),
                     collateral: auction.collateral,
+                    active_strikes: Default::default(),
                     tax,
                     next_owner_change,
                     location_count: Default::default(),
@@ -1006,7 +984,6 @@ pub mod pallet {
             let proposal = RemoveRegionOwnerProposal {
                 proposer: signer.clone(),
                 deposit: deposit_amount,
-                state: ProposalState::MistrustVoting,
             };
 
             RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
@@ -1282,103 +1259,51 @@ pub mod pallet {
         }
 
         fn finish_region_owner_proposal(region_id: RegionId) -> DispatchResult {
-            if let Some(mut proposal) = RegionOwnerProposals::<T>::get(region_id) {
-                match proposal.state {
-                    ProposalState::DefensePeriod => {
-                        proposal.state = ProposalState::SlashVoting;
-                        RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
+            let proposal = RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
+            let voting_result = OngoingRegionOwnerProposalVotes::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
+                
+            let required_threshold = T::RegionThreshold::get();
+            let total_voting_amount = voting_result
+                .yes_voting_power
+                .checked_add(&voting_result.no_voting_power)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            let yes_votes_percentage = if total_voting_amount.is_zero() {
+                Percent::from_percent(0)
+            } else {
+                Percent::from_rational(voting_result.yes_voting_power, total_voting_amount)
+            };
 
-                        OngoingRegionOwnerProposalVotes::<T>::insert(
-                            region_id,
-                            VoteStats {
-                                yes_voting_power: Zero::zero(),
-                                no_voting_power: Zero::zero(),
-                            },
-                        );
-
-                        let current_block_number = <frame_system::Pallet<T>>::block_number();
-                        let expiry_block = current_block_number
-                            .saturating_add(<T as Config>::RegionOperatorVotingTime::get());
-                        RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-                            keys.try_push(region_id)
-                                .map_err(|_| Error::<T>::TooManyProposals)?;
-                            Ok::<(), DispatchError>(())
-                        })?;
-                    }
-                    ProposalState::MistrustVoting
-                    | ProposalState::SlashVoting
-                    | ProposalState::ReplacementVoting => {
-                        let voting_results = OngoingRegionOwnerProposalVotes::<T>::take(region_id);
-                        if let Some(voting_result) = voting_results {
-                            let required_threshold = T::RegionThreshold::get();
-                            let total_voting_amount = voting_result
-                                .yes_voting_power
-                                .checked_add(&voting_result.no_voting_power)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?;
-                            let yes_votes_percentage = Percent::from_rational(
-                                voting_result.yes_voting_power,
-                                total_voting_amount,
-                            );
-                            if yes_votes_percentage > required_threshold
-                                && voting_result.yes_voting_power > voting_result.no_voting_power
-                            {
-                                match proposal.state {
-                                    ProposalState::MistrustVoting => {
-                                        proposal.state = ProposalState::DefensePeriod;
-                                        RegionOwnerProposals::<T>::insert(
-                                            region_id,
-                                            proposal.clone(),
-                                        );
-                                        let current_block_number =
-                                            <frame_system::Pallet<T>>::block_number();
-                                        let expiry_block = current_block_number.saturating_add(
-                                            <T as Config>::RegionOperatorVotingTime::get(),
-                                        );
-                                        RegionOwnerRoundsExpiring::<T>::try_mutate(
-                                            expiry_block,
-                                            |keys| {
-                                                keys.try_push(region_id)
-                                                    .map_err(|_| Error::<T>::TooManyProposals)?;
-                                                Ok::<(), DispatchError>(())
-                                            },
-                                        )?;
-                                    }
-                                    ProposalState::SlashVoting => {
-                                        Self::slash_region_owner(region_id)?;
-                                    }
-                                    ProposalState::ReplacementVoting => {
-                                        Self::enable_region_owner_change(region_id)?;
-                                    }
-                                    _ => {
-                                        return Err(Error::<T>::InvalidState.into());
-                                    }
-                                }
-                            } else {
-                                RegionOwnerProposals::<T>::remove(region_id);
-                                let (imbalance, _remaining) =
-                                    <T as pallet::Config>::NativeCurrency::slash(
-                                        &HoldReason::RegionalOperatorRemovalReserve.into(),
-                                        &proposal.proposer,
-                                        proposal.deposit,
-                                    );
-
-                                T::Slash::on_unbalanced(imbalance);
-                                Self::deposit_event(Event::RegionOwnerRemovalRejected {
-                                    region_id,
-                                    proposal_state: proposal.state,
-                                });
-                            }
-                        }
-                    }
+            if yes_votes_percentage > required_threshold {
+                let region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
+                Self::slash_region_owner(region_id)?;
+                if region_info.active_strikes >= 3 {
+                    Self::enable_region_owner_change(region_id)?;
                 }
+                T::NativeCurrency::release(
+                    &HoldReason::RegionalOperatorRemovalReserve.into(),
+                    &proposal.proposer,
+                    proposal.deposit,
+                    Precision::Exact,
+                )?;
+            } else {
+                let (imbalance, _remaining) =
+                    <T as pallet::Config>::NativeCurrency::slash(
+                        &HoldReason::RegionalOperatorRemovalReserve.into(),
+                        &proposal.proposer,
+                        proposal.deposit,
+                    );
+
+                T::Slash::on_unbalanced(imbalance);
+                Self::deposit_event(Event::RegionOwnerRemovalRejected {
+                    region_id,
+                });
             }
+            
             Ok(())
         }
 
         // Slashes the region owner.
         fn slash_region_owner(region_id: RegionId) -> DispatchResult {
-            let mut proposal =
-                RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let mut region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
             let amount = <T as Config>::RegionSlashingAmount::get();
@@ -1394,24 +1319,9 @@ pub mod pallet {
             T::Slash::on_unbalanced(imbalance);
 
             region_info.collateral = region_info.collateral.saturating_sub(amount);
+            region_info.active_strikes = region_info.active_strikes.saturating_add(1);
 
             RegionDetails::<T>::insert(region_id, region_info);
-
-            proposal.state = ProposalState::ReplacementVoting;
-            let vote_stats = VoteStats {
-                yes_voting_power: Zero::zero(),
-                no_voting_power: Zero::zero(),
-            };
-            OngoingRegionOwnerProposalVotes::<T>::insert(region_id, vote_stats);
-            RegionOwnerProposals::<T>::insert(region_id, proposal.clone());
-            let current_block_number = <frame_system::Pallet<T>>::block_number();
-            let expiry_block =
-                current_block_number.saturating_add(<T as Config>::RegionOperatorVotingTime::get());
-            RegionOwnerRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
-                keys.try_push(region_id)
-                    .map_err(|_| Error::<T>::TooManyAuctions)?;
-                Ok::<(), DispatchError>(())
-            })?;
             Self::deposit_event(Event::RegionalOperatorSlashed {
                 region_id,
                 operator: region_owner,
@@ -1422,7 +1332,6 @@ pub mod pallet {
 
         /// Changes the regional operator of a given region.
         fn enable_region_owner_change(region_id: RegionId) -> DispatchResult {
-            let _ = RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let mut region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -1455,6 +1364,7 @@ pub mod pallet {
                 region_info.owner = new_owner.clone();
                 region_info.collateral = auction_info.collateral;
                 region_info.next_owner_change = next_owner_change;
+                region_info.active_strikes = Default::default();
                 RegionDetails::<T>::insert(region_id, region_info);
                 Self::deposit_event(Event::<T>::RegionOwnerChanged {
                     region_id,

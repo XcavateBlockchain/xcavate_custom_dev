@@ -1033,10 +1033,6 @@ fn vote_on_remove_owner_proposal_fails() {
             crate::Vote::Yes
         ));
         run_to_block(91);
-        assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::DefensePeriod
-        );
         assert_noop!(
             Regions::vote_on_remove_owner_proposal(
                 RuntimeOrigin::signed([0; 32].into()),
@@ -1069,6 +1065,10 @@ fn remove_owner_proposal_passes() {
             RuntimeOrigin::signed([0; 32].into()),
             0
         ));
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            1_000
+        );
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1080,10 +1080,6 @@ fn remove_owner_proposal_passes() {
             crate::Vote::Yes
         ));
         assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::MistrustVoting
-        );
-        assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).unwrap(),
             VoteStats {
                 yes_voting_power: 600_000,
@@ -1092,30 +1088,10 @@ fn remove_owner_proposal_passes() {
         );
         run_to_block(91);
         assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::DefensePeriod
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            0
         );
-        run_to_block(121);
-        assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::SlashVoting
-        );
-        assert_ok!(Regions::vote_on_remove_owner_proposal(
-            RuntimeOrigin::signed([0; 32].into()),
-            0,
-            crate::Vote::Yes
-        ));
-        assert_eq!(
-            Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            100_000
-        );
-        assert_eq!(Balances::total_balance(&([8; 32].into())), 400_000);
-        assert_eq!(Balances::total_issuance(), 1_055_000);
-        run_to_block(151);
-        assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::ReplacementVoting
-        );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 200_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
             90_000
@@ -1130,33 +1106,42 @@ fn remove_owner_proposal_passes() {
             }
             .into(),
         );
+        assert_eq!(
+            RegionDetails::<Test>::get(0).unwrap().active_strikes,
+            1
+        );
+        assert_ok!(Regions::propose_remove_regional_operator(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
             crate::Vote::Yes
         ));
+        run_to_block(121);
+        assert_ok!(Regions::propose_remove_regional_operator(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
+        assert_ok!(Regions::vote_on_remove_owner_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(151);
+        assert_eq!(
+            RegionDetails::<Test>::get(0).unwrap().active_strikes,
+            3
+        );
         assert_eq!(
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
-            361
-        );
-        run_to_block(181);
-        assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
-        assert_eq!(
-            OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(),
-            true
-        );
-        assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(),
-            true
-        );
-        assert_eq!(
-            RegionDetails::<Test>::get(0).unwrap().next_owner_change,
-            181
+            151
         );
         System::assert_last_event(
             Event::RegionOwnerChangeEnabled {
                 region_id: 0,
-                next_change_allowed: 181,
+                next_change_allowed: 151,
             }
             .into(),
         );
@@ -1184,7 +1169,17 @@ fn remove_owner_proposal_doesnt_pass() {
             RuntimeOrigin::signed([0; 32].into()),
             0
         ));
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            1_000
+        );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 200_000);
         run_to_block(91);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            0
+        );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 199_000);
         assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(),
@@ -1219,16 +1214,6 @@ fn remove_owner_proposal_doesnt_pass() {
                 no_voting_power: 0
             }
         );
-        run_to_block(121);
-        assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::DefensePeriod
-        );
-        run_to_block(151);
-        assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::SlashVoting
-        );
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1246,7 +1231,12 @@ fn remove_owner_proposal_doesnt_pass() {
                 no_voting_power: 199_000
             }
         );
-        run_to_block(181);
+        run_to_block(121);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            0
+        );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 198_000);
         assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(),
@@ -1280,17 +1270,16 @@ fn remove_owner_proposal_doesnt_pass() {
             0,
             crate::Vote::Yes
         ));
-        run_to_block(241);
-        assert_ok!(Regions::vote_on_remove_owner_proposal(
-            RuntimeOrigin::signed([0; 32].into()),
-            0,
-            crate::Vote::Yes
-        ));
-        run_to_block(271);
+        run_to_block(151);
         assert_eq!(
-            RegionOwnerProposals::<Test>::get(0).unwrap().state,
-            crate::ProposalState::ReplacementVoting
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            0
         );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 198_000);
+        assert_ok!(Regions::propose_remove_regional_operator(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1308,7 +1297,12 @@ fn remove_owner_proposal_doesnt_pass() {
                 no_voting_power: 390_000
             }
         );
-        run_to_block(301);
+        run_to_block(181);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionalOperatorRemovalReserve.into(), &([0; 32].into())),
+            0
+        );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 197_000);
         assert_eq!(RegionOwnerProposals::<Test>::get(0).is_none(), true);
         assert_eq!(
             OngoingRegionOwnerProposalVotes::<Test>::get(0).is_none(),
@@ -1317,6 +1311,10 @@ fn remove_owner_proposal_doesnt_pass() {
         assert_eq!(
             UserRegionOwnerVote::<Test>::get::<u32, AccountId>(0, [0; 32].into()).is_none(),
             true
+        );
+        assert_eq!(
+            RegionDetails::<Test>::get(0).unwrap().active_strikes,
+            1
         );
         assert_eq!(
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
@@ -1366,13 +1364,25 @@ fn bid_on_region_replacement_after_proposal_works() {
             0,
             crate::Vote::Yes
         ));
-        run_to_block(121);
+        run_to_block(91);
+        assert_ok!(Regions::propose_remove_regional_operator(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
             crate::Vote::Yes
         ));
-        run_to_block(151);
+        run_to_block(121);
+        assert_eq!(
+            RegionDetails::<Test>::get(0).unwrap().active_strikes,
+            2
+        );
+        assert_ok!(Regions::propose_remove_regional_operator(
+            RuntimeOrigin::signed([0; 32].into()),
+            0
+        ));
         assert_ok!(Regions::vote_on_remove_owner_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1382,11 +1392,12 @@ fn bid_on_region_replacement_after_proposal_works() {
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
             361
         );
-        run_to_block(182);
+        run_to_block(152);
         assert_eq!(
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
-            181
+            151
         );
+        assert_eq!(Balances::total_balance(&([0; 32].into())), 200_000);
         assert_eq!(RegionReplacementAuctions::<Test>::get(0).is_none(), true);
         assert_ok!(Regions::add_regional_operator(
             RuntimeOrigin::root(),
@@ -1403,7 +1414,7 @@ fn bid_on_region_replacement_after_proposal_works() {
         ));
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            92_000
+            72_000
         );
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())),
@@ -1414,10 +1425,10 @@ fn bid_on_region_replacement_after_proposal_works() {
             crate::RegionAuction {
                 highest_bidder: Some([0; 32].into()),
                 collateral: 12_000,
-                auction_expiry: 212,
+                auction_expiry: 182,
             }
         );
-        run_to_block(200);
+        run_to_block(170);
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -1428,7 +1439,7 @@ fn bid_on_region_replacement_after_proposal_works() {
             crate::RegionAuction {
                 highest_bidder: Some([1; 32].into()),
                 collateral: 35_000,
-                auction_expiry: 212,
+                auction_expiry: 182,
             }
         );
         assert_eq!(
@@ -1450,7 +1461,7 @@ fn bid_on_region_replacement_after_proposal_works() {
         );
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
-            132_000
+            112_000
         );
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1462,7 +1473,11 @@ fn bid_on_region_replacement_after_proposal_works() {
         assert_eq!(RegionDetails::<Test>::get(0).unwrap().collateral, 51_000);
         assert_eq!(
             RegionDetails::<Test>::get(0).unwrap().next_owner_change,
-            512
+            482
+        );
+        assert_eq!(
+            RegionDetails::<Test>::get(0).unwrap().active_strikes,
+            0
         );
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
