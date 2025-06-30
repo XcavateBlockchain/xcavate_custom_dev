@@ -299,8 +299,7 @@ pub mod pallet {
 
     /// Mapping of challenge index to the challenge info.
     #[pallet::storage]
-    pub(super) type Challenges<T> =
-        StorageMap<_, Blake2_128Concat, u32, Challenge<T>, OptionQuery>;
+    pub(super) type Challenges<T> = StorageMap<_, Blake2_128Concat, u32, Challenge<T>, OptionQuery>;
 
     /// Mapping of ongoing votes.
     #[pallet::storage]
@@ -338,13 +337,8 @@ pub mod pallet {
 
     /// Mapping of ongoing votes about challenges.
     #[pallet::storage]
-    pub(super) type OngoingChallengeVotes<T> = StorageMap<
-        _,
-        Blake2_128Concat,
-        u32,
-        VoteStats,
-        OptionQuery,
-    >;
+    pub(super) type OngoingChallengeVotes<T> =
+        StorageMap<_, Blake2_128Concat, u32, VoteStats, OptionQuery>;
 
     /// Mapping of a proposal id and account id to the vote of the user.
     #[pallet::storage]
@@ -456,20 +450,13 @@ pub mod pallet {
         /// The proposal has been executed.
         ProposalExecuted { asset_id: u32, amount: Balance },
         /// The agent got slashed.
-        AgentSlashed {
-            asset_id: u32,
-            amount: Balance,
-        },
+        AgentSlashed { asset_id: u32, amount: Balance },
         /// The agent has been changed.
-        AgentChanged {
-            asset_id: u32,
-        },
+        AgentChanged { asset_id: u32 },
         /// A proposal got rejected.
         ProposalRejected { proposal_id: ProposalIndex },
         /// A challenge has been rejected/
-        ChallengeRejected {
-            asset_id: u32,
-        },
+        ChallengeRejected { asset_id: u32 },
         /// The threshold could not be reached for a proposal.
         ProposalThresHoldNotReached {
             proposal_id: ProposalIndex,
@@ -534,6 +521,26 @@ pub mod pallet {
         SaleApproved { asset_id: u32 },
         /// A sale has been rejected.
         SaleRejected { asset_id: u32 },
+        /// Processing of a proposal failed.
+        ProposalProcessingFailed {
+            proposal_id: ProposalIndex,
+            error: DispatchResult,
+        },
+        /// Processing of a sale proposal failed.
+        SaleProposalProcessingFailed {
+            asset_id: u32,
+            error: DispatchResult,
+        },
+        /// Processing of a challenge failed.
+        ChallengeProcessingFailed {
+            asset_id: u32,
+            error: DispatchResult,
+        },
+        /// Processing of an auction failed.
+        AuctionProcessingFailed {
+            asset_id: u32,
+            error: DispatchResult,
+        },
     }
 
     #[pallet::error]
@@ -620,7 +627,12 @@ pub mod pallet {
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = UserProposalVote::<T>::clear_prefix(item, u32::MAX, None);
-                let _ = Self::finish_proposal(*item);
+                if let Err(e) = Self::finish_proposal(*item) {
+                    Self::deposit_event(Event::ProposalProcessingFailed {
+                        proposal_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
 
             let ended_votings = SaleProposalRoundsExpiring::<T>::take(n);
@@ -628,7 +640,12 @@ pub mod pallet {
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
-                let _ = Self::finish_sale_proposal(*item);
+                if let Err(e) = Self::finish_sale_proposal(*item) {
+                    Self::deposit_event(Event::SaleProposalProcessingFailed {
+                        asset_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
 
             let ended_votings = AuctionRoundsExpiring::<T>::take(n);
@@ -636,7 +653,12 @@ pub mod pallet {
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
-                let _ = Self::finish_auction(*item);
+                if let Err(e) = Self::finish_auction(*item) {
+                    Self::deposit_event(Event::AuctionProcessingFailed {
+                        asset_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
 
             let ended_challenge_votings = ChallengeRoundsExpiring::<T>::take(n);
@@ -644,7 +666,12 @@ pub mod pallet {
             ended_challenge_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = UserChallengeVote::<T>::clear_prefix(item, u32::MAX, None);
-                let _ = Self::finish_challenge(*item);
+                if let Err(e) = Self::finish_challenge(*item) {
+                    Self::deposit_event(Event::ChallengeProcessingFailed {
+                        asset_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
             weight
         }
@@ -694,7 +721,7 @@ pub mod pallet {
                 return Ok(());
             }
 
-            let proposal_id = ProposalCount::<T>::get().saturating_add(1);
+            let proposal_id = ProposalCount::<T>::get();
             let expiry_block =
                 current_block_number.saturating_add(<T as Config>::VotingTime::get());
             ProposalRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
@@ -706,10 +733,11 @@ pub mod pallet {
                 yes_voting_power: 0,
                 no_voting_power: 0,
             };
+            let next_proposal_id = proposal_id.saturating_add(1);
 
             Proposals::<T>::insert(proposal_id, proposal);
             OngoingProposalVotes::<T>::insert(proposal_id, vote_stats);
-            ProposalCount::<T>::put(proposal_id);
+            ProposalCount::<T>::put(next_proposal_id);
             Self::deposit_event(Event::Proposed {
                 proposal_id,
                 asset_id,
@@ -740,7 +768,10 @@ pub mod pallet {
                 pallet_property_management::LettingStorage::<T>::get(asset_id).is_some(),
                 Error::<T>::NoLettingAgentFound
             );
-            ensure!(Challenges::<T>::get(asset_id).is_none(), Error::<T>::ChallengeAlreadyOngoing);
+            ensure!(
+                Challenges::<T>::get(asset_id).is_none(),
+                Error::<T>::ChallengeAlreadyOngoing
+            );
 
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
@@ -844,42 +875,41 @@ pub mod pallet {
             vote: Vote,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            ensure!(Challenges::<T>::get(asset_id).is_some(), Error::<T>::NotOngoing);
+            ensure!(
+                Challenges::<T>::get(asset_id).is_some(),
+                Error::<T>::NotOngoing
+            );
             let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-            let voting_power =
-                pallet_marketplace::PropertyOwnerToken::<T>::get(asset_id, &signer);
-            OngoingChallengeVotes::<T>::try_mutate(
-                asset_id,
-                |maybe_current_vote| {
-                    let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                    let previous_vote_opt = UserChallengeVote::<T>::get(asset_id, &signer);
-                    if let Some(previous_vote) = previous_vote_opt {
-                        match previous_vote {
-                            Vote::Yes => {
-                                current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
-                            }
-                            Vote::No => {
-                                current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
-                            }
-                        }
-                    }
-
-                    match vote {
+            let voting_power = pallet_marketplace::PropertyOwnerToken::<T>::get(asset_id, &signer);
+            OngoingChallengeVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
+                let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
+                let previous_vote_opt = UserChallengeVote::<T>::get(asset_id, &signer);
+                if let Some(previous_vote) = previous_vote_opt {
+                    match previous_vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_sub(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_sub(voting_power)
                         }
                     }
-                    Ok::<(), DispatchError>(())
-                },
-            )?;
+                }
+
+                match vote {
+                    Vote::Yes => {
+                        current_vote.yes_voting_power =
+                            current_vote.yes_voting_power.saturating_add(voting_power)
+                    }
+                    Vote::No => {
+                        current_vote.no_voting_power =
+                            current_vote.no_voting_power.saturating_add(voting_power)
+                    }
+                }
+                Ok::<(), DispatchError>(())
+            })?;
             UserChallengeVote::<T>::insert(asset_id, &signer, vote.clone());
             Self::deposit_event(Event::VotedOnChallenge {
                 asset_id,
@@ -1487,21 +1517,14 @@ pub mod pallet {
 
             <T as pallet::Config>::Slash::on_unbalanced(imbalance);
 
-            Self::deposit_event(Event::AgentSlashed {
-                asset_id,
-                amount,
-            });
+            Self::deposit_event(Event::AgentSlashed { asset_id, amount });
             Ok(())
         }
 
         /// Changes the letting agent of a given real estate object.
         fn change_letting_agent(asset_id: u32) -> DispatchResult {
-            let _ = pallet_property_management::Pallet::<T>::remove_bad_letting_agent(
-                asset_id,
-            );
-            Self::deposit_event(Event::AgentChanged {
-                asset_id,
-            });
+            let _ = pallet_property_management::Pallet::<T>::remove_bad_letting_agent(asset_id);
+            Self::deposit_event(Event::AgentChanged { asset_id });
             Ok(())
         }
 
@@ -1593,61 +1616,56 @@ pub mod pallet {
         }
 
         fn finish_challenge(asset_id: u32) -> DispatchResult {
-            if Challenges::<T>::take(asset_id).is_some() {
-                let voting_results =
-                    <OngoingChallengeVotes<T>>::take(asset_id);
-                if let Some(voting_result) = voting_results {
-                    let asset_details =
-                        pallet_marketplace::AssetIdDetails::<T>::get(asset_id)
-                            .ok_or(Error::<T>::AssetNotFound)?;
-                    ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
-                    let yes_votes_percentage = Percent::from_rational(
-                        voting_result.yes_voting_power,
-                        asset_details.token_amount,
-                    );
-                    let no_votes_percentage = Percent::from_rational(
-                        voting_result.no_voting_power,
-                        asset_details.token_amount,
-                    );
-                    let required_threshold = <T as Config>::Threshold::get();
-                    if yes_votes_percentage > no_votes_percentage
-                        && required_threshold
-                            < yes_votes_percentage.saturating_add(no_votes_percentage)
-                    {
-                        let letting_agent =
-                            pallet_property_management::LettingStorage::<T>::get(asset_id)
-                                .ok_or(Error::<T>::NoLettingAgentFound)?;
-                        let mut letting_info = pallet_property_management::LettingInfo::<T>::get(letting_agent.clone())
-                            .ok_or(Error::<T>::NoLettingAgentFound)?;
-                        Self::slash_letting_agent(asset_id, letting_agent.clone())?;
-                        let active_strikes = letting_info.active_strikes.get(&asset_id).copied().unwrap_or(0).saturating_add(1);
-                                
-                        if let Some(entry) = letting_info.active_strikes.get_mut(&asset_id) {
-                            *entry = active_strikes;
-                        } else {
-                            letting_info
-                                .active_strikes
-                                .try_insert(asset_id, active_strikes)
-                                .map_err(|_| Error::<T>::TooManyAssignedProperties)?;
-                        }
+            let _challenge = Challenges::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let voting_result =
+                OngoingChallengeVotes::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let asset_details = pallet_marketplace::AssetIdDetails::<T>::get(asset_id)
+                .ok_or(Error::<T>::AssetNotFound)?;
+            ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
+            let yes_votes_percentage =
+                Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);
+            let no_votes_percentage =
+                Percent::from_rational(voting_result.no_voting_power, asset_details.token_amount);
+            let required_threshold = <T as Config>::Threshold::get();
+            if yes_votes_percentage > no_votes_percentage
+                && required_threshold < yes_votes_percentage.saturating_add(no_votes_percentage)
+            {
+                let letting_agent = pallet_property_management::LettingStorage::<T>::get(asset_id)
+                    .ok_or(Error::<T>::NoLettingAgentFound)?;
+                let mut letting_info =
+                    pallet_property_management::LettingInfo::<T>::get(letting_agent.clone())
+                        .ok_or(Error::<T>::NoLettingAgentFound)?;
+                Self::slash_letting_agent(asset_id, letting_agent.clone())?;
+                let active_strikes = letting_info
+                    .active_strikes
+                    .get(&asset_id)
+                    .copied()
+                    .unwrap_or(0)
+                    .saturating_add(1);
 
-                        if active_strikes >= 3 {
-                            let _ = Self::change_letting_agent(asset_id);
-                            letting_info.active_strikes.remove(&asset_id);
-                        }
-                        pallet_property_management::LettingInfo::<T>::insert(letting_agent, letting_info);                              
-                    } else if yes_votes_percentage <= no_votes_percentage {
-                        Self::deposit_event(Event::ChallengeRejected {
-                            asset_id,
-                        });
-                    } else {
-                        Self::deposit_event(Event::ChallengeThresHoldNotReached {
-                            asset_id,
-                            required_threshold,
-                        });
-                    }
-                }             
+                if let Some(entry) = letting_info.active_strikes.get_mut(&asset_id) {
+                    *entry = active_strikes;
+                } else {
+                    letting_info
+                        .active_strikes
+                        .try_insert(asset_id, active_strikes)
+                        .map_err(|_| Error::<T>::TooManyAssignedProperties)?;
+                }
+
+                if active_strikes >= 3 {
+                    let _ = Self::change_letting_agent(asset_id);
+                    letting_info.active_strikes.remove(&asset_id);
+                }
+                pallet_property_management::LettingInfo::<T>::insert(letting_agent, letting_info);
+            } else if yes_votes_percentage <= no_votes_percentage {
+                Self::deposit_event(Event::ChallengeRejected { asset_id });
+            } else {
+                Self::deposit_event(Event::ChallengeThresHoldNotReached {
+                    asset_id,
+                    required_threshold,
+                });
             }
+
             Ok(())
         }
 

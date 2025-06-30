@@ -395,9 +395,7 @@ pub mod pallet {
             vote: Vote,
         },
         /// A proposal for removing the region owner got rejected.
-        RegionOwnerRemovalRejected {
-            region_id: RegionId,
-        },
+        RegionOwnerRemovalRejected { region_id: RegionId },
         /// A regional operator has been slashed.
         RegionalOperatorSlashed {
             region_id: RegionId,
@@ -426,6 +424,16 @@ pub mod pallet {
             region_id: RegionId,
             region_owner: T::AccountId,
             next_owner_change: BlockNumberFor<T>,
+        },
+        /// Processing of a proposal failed.
+        RegionOwnerProposalFailed {
+            asset_id: u32,
+            error: DispatchResult,
+        },
+        /// Processing of a region owner replacement failed.
+        RegionOwnerReplacementFailed {
+            asset_id: u32,
+            error: DispatchResult,
         },
     }
 
@@ -474,8 +482,6 @@ pub mod pallet {
         ProposalAlreadyOngoing,
         /// There are already too many proposals in the ending block.
         TooManyProposals,
-        /// There was an unexpected issue with the state of a proposal.
-        InvalidState,
         /// Region owner cant be changed at the moment.
         RegionOwnerCantBeChanged,
         /// There are already too many auctions in the ending block.
@@ -484,7 +490,6 @@ pub mod pallet {
         NotRegionOwner,
         /// Owner would change before resignation period would be over.
         OwnerChangeTooEarly,
-        MultiplyError,
         /// The proposal could not be found.
         ProposalNotFound,
     }
@@ -499,14 +504,24 @@ pub mod pallet {
             ended_region_owner_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
                 let _ = UserRegionOwnerVote::<T>::clear_prefix(item, u32::MAX, None);
-                let _ = Self::finish_region_owner_proposal(*item);
+                if let Err(e) = Self::finish_region_owner_proposal(*item) {
+                    Self::deposit_event(Event::RegionOwnerProposalFailed {
+                        asset_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
 
             let ended_replacement_auction = ReplacementAuctionExpiring::<T>::take(n);
             // checks if there is a voting for an auction ending in this block.
             ended_replacement_auction.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
-                let _ = Self::finish_region_owner_replacement(*item, n);
+                if let Err(e) = Self::finish_region_owner_replacement(*item, n) {
+                    Self::deposit_event(Event::RegionOwnerReplacementFailed {
+                        asset_id: *item,
+                        error: Err(e),
+                    });
+                };
             });
             weight
         }
@@ -689,9 +704,9 @@ pub mod pallet {
                             }
                         } else {
                             T::NativeCurrency::hold(
-                            &HoldReason::RegionDepositReserve.into(),
-                            &signer,
-                            amount,
+                                &HoldReason::RegionDepositReserve.into(),
+                                &signer,
+                                amount,
                             )?;
                             T::NativeCurrency::release(
                                 &HoldReason::RegionDepositReserve.into(),
@@ -1005,6 +1020,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Vote on proposal to remove a region owner.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `region_id`: The region where the region owner should be removed.
+        /// - `vote`: Must be either a Yes vote or a No vote.
+        ///
+        /// Emits `VotedOnRegionOwnerProposal` event when succesfful.
         #[pallet::call_index(8)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn vote_on_remove_owner_proposal(
@@ -1054,6 +1078,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets a registered account bid on a region to become the new regional operator.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `region_id`: The region where the region owner should be removed.
+        /// - `amount`: The amount that the caller is willing to bid and to have locked.
+        ///
+        /// Emits `ReplacementBidSuccessfullyPlaced` event when succesfful.
         #[pallet::call_index(9)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn bid_on_region_replacement(
@@ -1081,8 +1114,8 @@ pub mod pallet {
                     new_auction = true;
 
                     let mut minimum_deposit = T::MinimumRegionDeposit::get();
-                    let location_deposits = T::LocationDeposit::get()
-                        .saturating_mul(region_info.location_count.into());
+                    let location_deposits =
+                        T::LocationDeposit::get().saturating_mul(region_info.location_count.into());
                     minimum_deposit = minimum_deposit.saturating_add(location_deposits);
 
                     RegionAuction {
@@ -1110,9 +1143,9 @@ pub mod pallet {
                             }
                         } else {
                             T::NativeCurrency::hold(
-                            &HoldReason::RegionDepositReserve.into(),
-                            &signer,
-                            amount,
+                                &HoldReason::RegionDepositReserve.into(),
+                                &signer,
+                                amount,
                             )?;
                             T::NativeCurrency::release(
                                 &HoldReason::RegionDepositReserve.into(),
@@ -1141,7 +1174,7 @@ pub mod pallet {
                 let expiry_block = current_block_number.saturating_add(T::RegionVotingTime::get());
                 ReplacementAuctionExpiring::<T>::try_mutate(expiry_block, |keys| {
                     keys.try_push(region_id)
-                        .map_err(|_| Error::<T>::TooManyProposals)?;
+                        .map_err(|_| Error::<T>::TooManyAuctions)?;
                     Ok::<(), DispatchError>(())
                 })?;
             }
@@ -1154,6 +1187,14 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets a regional operator resign.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `region_id`: The region where the region wants to resign.
+        ///
+        /// Emits `RegionOwnerResignationInitiated` event when succesfful.
         #[pallet::call_index(10)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn initiate_region_owner_resignation(
@@ -1185,6 +1226,14 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Adds an account to the regional operator.
+        ///
+        /// The origin must be the sudo.
+        ///
+        /// Parameters:
+        /// - `new_operator`: The address of the new account added as regional operator.
+        ///
+        /// Emits `NewRegionOperatorAdded` event when succesfful.
         #[pallet::call_index(11)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn add_regional_operator(
@@ -1201,6 +1250,14 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Removes an account from the regional operator.
+        ///
+        /// The origin must be the sudo.
+        ///
+        /// Parameters:
+        /// - `regional_operator`: The address of the account that should be removed.
+        ///
+        /// Emits `RegionOperatorRemoved` event when succesfful.
         #[pallet::call_index(12)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_regional_operator(
@@ -1226,6 +1283,7 @@ pub mod pallet {
             T::TreasuryId::get().into_account_truncating()
         }
 
+        /// Process a proposal for a new region.
         fn finalize_region_proposal(
             proposal_id: ProposalIndex,
             current_block_number: BlockNumberFor<T>,
@@ -1258,10 +1316,13 @@ pub mod pallet {
             }
         }
 
+        /// Processes a proposal for removing a regional operator.
         fn finish_region_owner_proposal(region_id: RegionId) -> DispatchResult {
-            let proposal = RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
-            let voting_result = OngoingRegionOwnerProposalVotes::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
-                
+            let proposal =
+                RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
+            let voting_result = OngoingRegionOwnerProposalVotes::<T>::take(region_id)
+                .ok_or(Error::<T>::ProposalNotFound)?;
+
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_result
                 .yes_voting_power
@@ -1274,9 +1335,8 @@ pub mod pallet {
             };
 
             if yes_votes_percentage > required_threshold {
-                let region_info = RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
-                Self::slash_region_owner(region_id)?;
-                if region_info.active_strikes >= 3 {
+                let updated_strikes = Self::slash_region_owner(region_id)?;
+                if updated_strikes >= 3 {
                     Self::enable_region_owner_change(region_id)?;
                 }
                 T::NativeCurrency::release(
@@ -1286,24 +1346,21 @@ pub mod pallet {
                     Precision::Exact,
                 )?;
             } else {
-                let (imbalance, _remaining) =
-                    <T as pallet::Config>::NativeCurrency::slash(
-                        &HoldReason::RegionalOperatorRemovalReserve.into(),
-                        &proposal.proposer,
-                        proposal.deposit,
-                    );
+                let (imbalance, _remaining) = <T as pallet::Config>::NativeCurrency::slash(
+                    &HoldReason::RegionalOperatorRemovalReserve.into(),
+                    &proposal.proposer,
+                    proposal.deposit,
+                );
 
                 T::Slash::on_unbalanced(imbalance);
-                Self::deposit_event(Event::RegionOwnerRemovalRejected {
-                    region_id,
-                });
+                Self::deposit_event(Event::RegionOwnerRemovalRejected { region_id });
             }
-            
+
             Ok(())
         }
 
         // Slashes the region owner.
-        fn slash_region_owner(region_id: RegionId) -> DispatchResult {
+        fn slash_region_owner(region_id: RegionId) -> Result<u8, DispatchError> {
             let mut region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
             let amount = <T as Config>::RegionSlashingAmount::get();
@@ -1321,16 +1378,18 @@ pub mod pallet {
             region_info.collateral = region_info.collateral.saturating_sub(amount);
             region_info.active_strikes = region_info.active_strikes.saturating_add(1);
 
+            let updated_strikes = region_info.active_strikes;
+
             RegionDetails::<T>::insert(region_id, region_info);
             Self::deposit_event(Event::RegionalOperatorSlashed {
                 region_id,
                 operator: region_owner,
                 amount,
             });
-            Ok(())
+            Ok(updated_strikes)
         }
 
-        /// Changes the regional operator of a given region.
+        /// Enable changing the regional operator of a given region.
         fn enable_region_owner_change(region_id: RegionId) -> DispatchResult {
             let mut region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
@@ -1344,6 +1403,7 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Change the regional operator of a given region.
         fn finish_region_owner_replacement(
             region_id: RegionId,
             current_block_number: BlockNumberFor<T>,

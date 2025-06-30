@@ -167,8 +167,8 @@ fn propose_works() {
             1000,
             bvec![10, 10]
         ));
-        assert_eq!(Proposals::<Test>::get(1).unwrap().asset_id, 0);
-        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).unwrap().asset_id, 0);
+        assert_eq!(OngoingProposalVotes::<Test>::get(0).is_some(), true);
     });
 }
 
@@ -210,7 +210,7 @@ fn proposal_with_low_amount_works() {
         );
         assert_eq!(Balances::free_balance(&([4; 32].into())), 4000);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
-        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_some(), false);
+        assert_eq!(OngoingProposalVotes::<Test>::get(0).is_some(), false);
     });
 }
 
@@ -365,32 +365,32 @@ fn vote_on_proposal_works() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
         assert_eq!(
-            OngoingProposalVotes::<Test>::get(1)
+            OngoingProposalVotes::<Test>::get(0)
                 .unwrap()
                 .yes_voting_power,
             10
         );
         assert_eq!(
-            OngoingProposalVotes::<Test>::get(1)
+            OngoingProposalVotes::<Test>::get(0)
                 .unwrap()
                 .no_voting_power,
             90
@@ -457,10 +457,10 @@ fn proposal_pass() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
         assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
         assert_eq!(
@@ -475,8 +475,8 @@ fn proposal_pass() {
             }
             .into(),
         );
-        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-        assert_eq!(OngoingProposalVotes::<Test>::get(1).is_none(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_none(), true);
+        assert_eq!(OngoingProposalVotes::<Test>::get(0).is_none(), true);
     });
 }
 
@@ -506,15 +506,15 @@ fn proposal_pass_2() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         run_to_block(91);
         System::assert_last_event(
             Event::ProposalExecuted {
@@ -523,7 +523,7 @@ fn proposal_pass_2() {
             }
             .into(),
         );
-        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_none(), true);
         assert_eq!(
             InvestorFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
             0
@@ -563,10 +563,10 @@ fn proposal_not_pass() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::No
         ));
-        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
         assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
         assert_eq!(
@@ -579,8 +579,8 @@ fn proposal_not_pass() {
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             1000
         );
-        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-        System::assert_last_event(Event::ProposalRejected { proposal_id: 1 }.into());
+        assert_eq!(Proposals::<Test>::get(0).is_none(), true);
+        System::assert_last_event(Event::ProposalRejected { proposal_id: 0 }.into());
     });
 }
 
@@ -626,11 +626,11 @@ fn proposal_not_pass_2() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-        assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).unwrap().amount, 10000);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -639,12 +639,12 @@ fn proposal_not_pass_2() {
         run_to_block(91);
         System::assert_last_event(
             Event::ProposalThresHoldNotReached {
-                proposal_id: 1,
+                proposal_id: 0,
                 required_threshold: Percent::from_percent(67),
             }
             .into(),
         );
-        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_none(), true);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -670,7 +670,7 @@ fn vote_on_proposal_fails() {
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([1; 32].into()),
-                1,
+                0,
                 crate::Vote::Yes
             ),
             Error::<Test>::NotOngoing
@@ -689,13 +689,13 @@ fn vote_on_proposal_fails() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([2; 32].into()),
-                1,
+                0,
                 crate::Vote::Yes
             ),
             Error::<Test>::NoPermission
@@ -704,7 +704,7 @@ fn vote_on_proposal_fails() {
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([1; 32].into()),
-                1,
+                0,
                 crate::Vote::Yes
             ),
             Error::<Test>::NotOngoing
@@ -857,7 +857,14 @@ fn challenge_pass() {
         ));
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(91).len(), 1);
         run_to_block(91);
-        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &1u8);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_strikes
+                .get(&0u32)
+                .unwrap(),
+            &1u8
+        );
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -876,7 +883,14 @@ fn challenge_pass() {
         assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 900);
         assert_eq!(Balances::total_issuance(), 57_464_901);
         run_to_block(121);
-        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &2u8);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_strikes
+                .get(&0u32)
+                .unwrap(),
+            &2u8
+        );
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -901,9 +915,23 @@ fn challenge_pass() {
                 .len(),
             1
         );
-        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).unwrap(), &2u8);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_strikes
+                .get(&0u32)
+                .unwrap(),
+            &2u8
+        );
         run_to_block(181);
-        assert_eq!(LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap().active_strikes.get(&0u32).is_none(), true);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_strikes
+                .get(&0u32)
+                .is_none(),
+            true
+        );
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -920,7 +948,7 @@ fn challenge_pass() {
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [1; 32].into());
     });
 }
- 
+
 #[test]
 fn challenge_does_not_pass() {
     new_test_ext().execute_with(|| {
@@ -1166,12 +1194,7 @@ fn challenge_not_pass() {
         ));
         assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         run_to_block(91);
-        System::assert_last_event(
-            Event::ChallengeRejected {
-                asset_id: 0,
-            }
-            .into(),
-        );
+        System::assert_last_event(Event::ChallengeRejected { asset_id: 0 }.into());
         assert_eq!(Challenges::<Test>::get(0).is_none(), true);
     });
 }
@@ -1295,22 +1318,22 @@ fn different_proposals() {
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes
         ));
-        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             3000
         );
         assert_eq!(
-            UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(),
+            UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
             true
         );
         run_to_block(91);
         assert_eq!(
-            UserProposalVote::<Test>::get::<u32, AccountId>(1, [1; 32].into()).is_some(),
+            UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
             false
         );
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
@@ -1318,7 +1341,30 @@ fn different_proposals() {
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             3000
         );
-        assert_eq!(Proposals::<Test>::get(1).is_none(), true);
+        assert_eq!(Proposals::<Test>::get(0).is_none(), true);
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0,
+            3000,
+            bvec![10, 10]
+        ));
+        assert_eq!(Proposals::<Test>::get(1).is_some(), true);
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        run_to_block(121);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([4; 32].into()),
             0,
@@ -1334,34 +1380,11 @@ fn different_proposals() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             2,
-            crate::Vote::Yes
-        ));
-        run_to_block(121);
-        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-        assert_eq!(
-            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
-            3000
-        );
-        assert_ok!(PropertyGovernance::propose(
-            RuntimeOrigin::signed([4; 32].into()),
-            0,
-            3000,
-            bvec![10, 10]
-        ));
-        assert_eq!(Proposals::<Test>::get(3).is_some(), true);
-        assert_ok!(PropertyGovernance::vote_on_proposal(
-            RuntimeOrigin::signed([1; 32].into()),
-            3,
-            crate::Vote::Yes
-        ));
-        assert_ok!(PropertyGovernance::vote_on_proposal(
-            RuntimeOrigin::signed([2; 32].into()),
-            3,
             crate::Vote::No
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
-            3,
+            2,
             crate::Vote::Yes
         ));
         run_to_block(91);
@@ -1388,20 +1411,20 @@ fn different_proposals() {
             1500,
             bvec![10, 10]
         ));
-        assert_eq!(Proposals::<Test>::get(4).is_some(), true);
+        assert_eq!(Proposals::<Test>::get(3).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            4,
+            3,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
-            4,
+            3,
             crate::Vote::Yes
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
-            4,
+            3,
             crate::Vote::No
         ));
         run_to_block(121);
