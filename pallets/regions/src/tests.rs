@@ -3,7 +3,7 @@ use crate::{
     HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
     OngoingRegionProposalVotes, RegionAuctions, RegionDetails, RegionOperatorAccounts,
     RegionOwnerProposals, RegionProposals, RegionReplacementAuctions, UserRegionOwnerVote,
-    UserRegionVote, VoteStats,
+    UserRegionVote, VoteStats, ProposedRegionIds,
 };
 use frame_support::BoundedVec;
 use frame_support::{
@@ -161,6 +161,45 @@ fn propose_new_region_works() {
                 no_voting_power: 0
             }
         );
+        assert_eq!(ProposedRegionIds::<Test>::get(3).is_some(), true);
+    })
+}
+
+#[test]
+fn propose_new_region_works_after_rejected() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            crate::RegionIdentifier::England,
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            crate::Vote::No
+        ));
+        assert_eq!(ProposedRegionIds::<Test>::get(1).is_some(), true);
+        run_to_block(31);
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            100_000
+        ));
+        assert_eq!(ProposedRegionIds::<Test>::get(1).is_some(), false);
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            crate::RegionIdentifier::England,
+            bvec![10, 10]
+        ));
     })
 }
 
@@ -187,6 +226,41 @@ fn propose_new_region_fails() {
         assert_noop!(
             Regions::propose_new_region(RuntimeOrigin::signed([0; 32].into()), crate::RegionIdentifier::France, bvec![10, 10]),
             Error::<Test>::RegionProposalCooldownActive
+        );
+        run_to_block(29);
+        assert_noop!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()), crate::RegionIdentifier::Japan, bvec![10, 10]), 
+            Error::<Test>::RegionProposalAlreadyExists
+        );
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            crate::Vote::Yes
+        ));
+        run_to_block(31);
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            120_000
+        ));
+        assert_noop!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()), crate::RegionIdentifier::Japan, bvec![10, 10]), 
+            Error::<Test>::RegionProposalAlreadyExists
+        );
+        run_to_block(61);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            30,
+            Permill::from_percent(3)
+        ));
+        assert_noop!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()), crate::RegionIdentifier::Japan, bvec![10, 10]), 
+            Error::<Test>::RegionAlreadyCreated
         );
     })
 }

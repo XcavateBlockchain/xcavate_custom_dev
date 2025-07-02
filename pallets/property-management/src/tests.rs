@@ -12,6 +12,8 @@ use sp_runtime::{Permill, TokenError};
 
 use pallet_marketplace::types::LegalProperty;
 
+use pallet_regions::RegionIdentifier;
+
 macro_rules! bvec {
 	($( $x:tt )*) => {
 		vec![$( $x )*].try_into().unwrap()
@@ -38,23 +40,24 @@ fn new_region_helper() {
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([6; 32].into()),
+        RegionIdentifier::Japan,
         bvec![10, 10]
     ));
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([6; 32].into()),
-        0,
+        3,
         pallet_regions::Vote::Yes
     ));
     run_to_block(31);
     assert_ok!(Regions::bid_on_region(
         RuntimeOrigin::signed([6; 32].into()),
-        0,
+        3,
         100_000
     ));
     run_to_block(61);
     assert_ok!(Regions::create_new_region(
         RuntimeOrigin::signed([6; 32].into()),
-        0,
+        3,
         30,
         Permill::from_percent(3)
     ));
@@ -71,12 +74,12 @@ fn add_letting_agent_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -115,7 +118,7 @@ fn add_letting_agent_fails() {
         assert_noop!(
             PropertyManagement::add_letting_agent(
                 RuntimeOrigin::signed([6; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 [0; 32].into(),
             ),
@@ -123,12 +126,12 @@ fn add_letting_agent_fails() {
         );
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -139,7 +142,7 @@ fn add_letting_agent_fails() {
         assert_noop!(
             PropertyManagement::add_letting_agent(
                 RuntimeOrigin::signed([6; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 [0; 32].into(),
             ),
@@ -159,12 +162,12 @@ fn let_letting_agent_deposit() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -198,12 +201,12 @@ fn let_letting_agent_deposit_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -222,7 +225,7 @@ fn let_letting_agent_deposit_fails() {
         for x in 1..100 {
             assert_ok!(PropertyManagement::add_letting_agent(
                 RuntimeOrigin::signed([6; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 [x; 32].into(),
             ));
@@ -233,7 +236,7 @@ fn let_letting_agent_deposit_fails() {
         }
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [100; 32].into(),
         ));
@@ -252,12 +255,12 @@ fn let_letting_agent_deposit_not_enough_funds() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [5; 32].into(),
         ));
@@ -279,17 +282,17 @@ fn add_letting_agent_to_location_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![9, 10]
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![9, 10],
             [0; 32].into(),
         ));
@@ -334,17 +337,17 @@ fn add_letting_agent_to_location_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![9, 10]
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -401,7 +404,7 @@ fn set_letting_agent_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -414,7 +417,7 @@ fn set_letting_agent_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -429,7 +432,7 @@ fn set_letting_agent_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             1_000,
             100,
@@ -444,7 +447,7 @@ fn set_letting_agent_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             1_000,
             100,
@@ -459,19 +462,19 @@ fn set_letting_agent_works() {
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [2; 32].into(),
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [3; 32].into(),
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [4; 32].into(),
         ));
@@ -498,7 +501,7 @@ fn set_letting_agent_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             1_000,
             100,
@@ -557,29 +560,30 @@ fn set_letting_agent_fails() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
+            RegionIdentifier::Japan,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             pallet_regions::Vote::Yes
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             100_000
         ));
         run_to_block(61);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             30,
             Permill::from_percent(3)
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -588,7 +592,7 @@ fn set_letting_agent_fails() {
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [0; 32].into(),
         ));
@@ -602,7 +606,7 @@ fn set_letting_agent_fails() {
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             100,
             100,
@@ -626,7 +630,7 @@ fn set_letting_agent_fails() {
         for x in 1..100 {
             assert_ok!(Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 1_000,
                 100,
@@ -657,7 +661,7 @@ fn set_letting_agent_fails() {
         }
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -688,7 +692,7 @@ fn set_letting_agent_no_letting_agent() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -701,7 +705,7 @@ fn set_letting_agent_no_letting_agent() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -732,7 +736,7 @@ fn distribute_income_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -753,17 +757,17 @@ fn distribute_income_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             9_000,
             100,
@@ -812,7 +816,7 @@ fn distribute_income_works() {
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [4; 32].into(),
         ));
@@ -856,7 +860,7 @@ fn distribute_income_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -869,7 +873,7 @@ fn distribute_income_fails() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -897,7 +901,7 @@ fn distribute_income_fails() {
         );
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [4; 32].into(),
         ));
@@ -949,7 +953,7 @@ fn withdraw_funds_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -962,17 +966,17 @@ fn withdraw_funds_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             9_000,
             100,
@@ -1009,7 +1013,7 @@ fn withdraw_funds_works() {
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [4; 32].into(),
         ));
@@ -1087,7 +1091,7 @@ fn withdraw_funds_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1100,17 +1104,17 @@ fn withdraw_funds_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             900,
             1000,
@@ -1148,7 +1152,7 @@ fn withdraw_funds_fails() {
         assert_eq!(LocalAssets::total_supply(0), 1000);
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             [4; 32].into(),
         ));

@@ -55,6 +55,7 @@ pub mod pallet {
         pub data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
         pub created_at: BlockNumberFor<T>,
         pub proposal_expiry: BlockNumberFor<T>,
+        pub deposit: T::Balance,
     }
 
     /// Voting stats.
@@ -141,6 +142,8 @@ pub mod pallet {
         RegionDepositReserve,
         #[codec(index = 1)]
         RegionalOperatorRemovalReserve,
+        #[codec(index = 2)]
+        RegionProposalReserve,
     }
 
     #[pallet::config]
@@ -253,6 +256,10 @@ pub mod pallet {
         /// Minimum deposit for a location.
         #[pallet::constant]
         type MinimumRegionDeposit: Get<Self::Balance>;
+
+        /// Deposit for a region proposal.
+        #[pallet::constant]
+        type RegionProposalDeposit: Get<Self::Balance>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -593,12 +600,19 @@ pub mod pallet {
                     Error::<T>::RegionProposalCooldownActive
                 );
             }
+            let deposit_amount = T::RegionProposalDeposit::get();
+            T::NativeCurrency::hold(
+                &HoldReason::RegionProposalReserve.into(),
+                &signer,
+                deposit_amount,
+            )?;
             let expiry_block =
                 current_block_number.saturating_add(<T as Config>::RegionVotingTime::get());
-            let sale_proposal = RegionProposal {
+            let proposal = RegionProposal {
                 proposer: signer.clone(),
                 created_at: current_block_number,
                 proposal_expiry: expiry_block,
+                deposit: deposit_amount,
                 data,
             };
             let vote_stats = VoteStats {
@@ -606,7 +620,7 @@ pub mod pallet {
                 no_voting_power: Zero::zero(),
             };
             ProposedRegionIds::<T>::insert(region_id, ());
-            RegionProposals::<T>::insert(region_id, sale_proposal);
+            RegionProposals::<T>::insert(region_id, proposal);
             OngoingRegionProposalVotes::<T>::insert(region_id, vote_stats);
             LastRegionProposalBlock::<T>::put(current_block_number);
             Self::deposit_event(Event::RegionProposed {
@@ -679,7 +693,7 @@ pub mod pallet {
             };
             UserRegionVote::<T>::insert(region_id, &signer, vote_record);
             Self::deposit_event(Event::VotedOnRegionProposal {
-                region_id: region_id,
+                region_id,
                 voter: signer,
                 vote,
             });
@@ -1325,7 +1339,7 @@ pub mod pallet {
         ) -> Result<bool, DispatchError> {
             let voting_results =
                 <OngoingRegionProposalVotes<T>>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-            let _ = <RegionProposals<T>>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
+            let proposal = <RegionProposals<T>>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let _ = UserRegionVote::<T>::clear_prefix(region_id, u32::MAX, None);
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results
@@ -1337,6 +1351,12 @@ pub mod pallet {
             let auction_expiry_block =
                 current_block_number.saturating_add(T::RegionAuctionTime::get());
             if yes_votes_percentage > required_threshold {
+                T::NativeCurrency::release(
+                    &HoldReason::RegionProposalReserve.into(),
+                    &proposal.proposer,
+                    proposal.deposit,
+                    Precision::Exact,
+                )?;
                 let auction = RegionAuction {
                     highest_bidder: None,
                     collateral: T::MinimumRegionDeposit::get(),
@@ -1346,6 +1366,13 @@ pub mod pallet {
                 Self::deposit_event(Event::RegionAuctionStarted { region_id });
                 Ok(true)
             } else {
+                let (imbalance, _remaining) = <T as pallet::Config>::NativeCurrency::slash(
+                    &HoldReason::RegionProposalReserve.into(),
+                    &proposal.proposer,
+                    proposal.deposit,
+                );
+
+                T::Slash::on_unbalanced(imbalance);
                 ProposedRegionIds::<T>::remove(region_id);
                 Self::deposit_event(Event::RegionRejected { region_id });
                 Ok(false)
