@@ -152,7 +152,6 @@ impl pallet_xcavate_whitelist::Config for Test {
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const Postcode: u32 = 10;
-    pub const RegionDepositAmount: Balance = 100_000;
     pub const LocationDepositAmount: Balance = 1_000;
     pub const MaximumListingDuration: BlockNumber = 10_000;
     pub const RegionVotingTime: BlockNumber = 30;
@@ -173,7 +172,6 @@ impl crate::Config for Test {
     type Nfts = Nfts;
     type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
     type NftId = <Self as pallet_nfts::Config>::ItemId;
-    type RegionDeposit = RegionDepositAmount;
     type PalletId = MarketplacePalletId;
     type MaxListingDuration = MaximumListingDuration;
     type PostcodeLimit = Postcode;

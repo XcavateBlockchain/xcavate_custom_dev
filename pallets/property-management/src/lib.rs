@@ -77,7 +77,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct LettingAgentInfo<T: Config> {
         pub account: AccountIdOf<T>,
-        pub region: u32,
+        pub region: u16,
         pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
         pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
         pub deposited: bool,
@@ -174,7 +174,7 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// A new letting agent got set.
-        LettingAgentAdded { region: u32, who: T::AccountId },
+        LettingAgentAdded { region: u16, who: T::AccountId },
         /// A letting agent deposited the necessary funds.
         Deposited { who: T::AccountId },
         /// A letting agent has been added to a location.
@@ -256,7 +256,7 @@ pub mod pallet {
         #[pallet::weight(<T as pallet::Config>::WeightInfo::add_letting_agent())]
         pub fn add_letting_agent(
             origin: OriginFor<T>,
-            region: u32,
+            region: u16,
             location: LocationId<T>,
             letting_agent: AccountIdOf<T>,
         ) -> DispatchResult {

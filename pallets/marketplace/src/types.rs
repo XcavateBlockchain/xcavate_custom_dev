@@ -65,7 +65,7 @@ pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
 pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
     pub collection_id: NftCollectionId,
     pub item_id: NftId,
-    pub region: u32,
+    pub region: RegionId,
     pub location: LocationId<T>,
     pub price: <T as pallet::Config>::Balance,
     pub token_amount: u32,

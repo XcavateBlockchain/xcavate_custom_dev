@@ -696,17 +696,16 @@ impl pallet_property_governance::Config for Runtime {
 
 parameter_types! {
     pub const Postcode: u32 = 10;
-    pub const RegionDepositAmount: Balance = 100_000 * UNIT;
     pub const LocationDepositAmount: Balance = 10_000 * UNIT;
     pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
-    pub const RegionVotingTime: BlockNumber = 20;
-    pub const RegionAuctionTime: BlockNumber = 20;
+    pub const RegionVotingTime: BlockNumber = 40;
+    pub const RegionAuctionTime: BlockNumber = 40;
     pub const RegionOperatorVotingTime: BlockNumber = 30;
     pub const RegionThreshold: Percent = Percent::from_percent(75);
-    pub const RegionProposalCooldown: BlockNumber = 28 * DAYS;
+    pub const RegionProposalCooldown: BlockNumber = 100;
     pub const MaxProposalForBlock: u32 = 100;
     pub const RegionSlashingAmount: Balance = 10 * UNIT;
-    pub const RegionOwnerChangeTime: BlockNumber = 100;
+    pub const RegionOwnerChangeTime: BlockNumber = 400;
     pub const RegionOwnerNoticeTime: BlockNumber = 50;
     pub const RegionOwnerDisputeDepositAmount: Balance = 1_000 * UNIT;
     pub const MinimumRegionDepositAmount: Balance = 100_000 * UNIT;
@@ -721,7 +720,6 @@ impl pallet_regions::Config for Runtime {
     type Nfts = Nfts;
     type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
     type NftId = <Self as pallet_nfts::Config>::ItemId;
-    type RegionDeposit = RegionDepositAmount;
     type PalletId = MarketplacePalletId;
     type MaxListingDuration = MaximumListingDuration;
     type PostcodeLimit = Postcode;

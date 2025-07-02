@@ -228,7 +228,7 @@ pub mod pallet {
     pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
     pub type FractionalizeCollectionId<T> = <T as Config>::FractionalizeCollectionId;
     pub type FractionalizeItemId<T> = <T as Config>::FractionalizeItemId;
-    pub type RegionId = u32;
+    pub type RegionId = u16;
     pub type ListingId = u32;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 

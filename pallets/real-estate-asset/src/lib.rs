@@ -46,7 +46,7 @@ pub mod pallet {
 			BlockNumberFor<Self>, <Self as pallet_nfts::Config>::CollectionId>>;
 	}
 
-	pub type RegionId = u32;
+	pub type RegionId = u16;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);

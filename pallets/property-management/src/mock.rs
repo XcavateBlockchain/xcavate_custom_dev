@@ -233,7 +233,6 @@ impl pallet_xcavate_whitelist::Config for Test {
 
 parameter_types! {
     pub const Postcode: u32 = 10;
-    pub const RegionDepositAmount: Balance = 100_000;
     pub const LocationDepositAmount: Balance = 10_000;
     pub const MaximumListingDuration: u64 = 10_000;
     pub const RegionVotingTime: BlockNumber = 30;
@@ -253,7 +252,6 @@ impl pallet_regions::Config for Test {
     type Nfts = Nfts;
     type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
     type NftId = <Self as pallet_nfts::Config>::ItemId;
-    type RegionDeposit = RegionDepositAmount;
     type PalletId = MarketplacePalletId;
     type MaxListingDuration = MaximumListingDuration;
     type PostcodeLimit = Postcode;

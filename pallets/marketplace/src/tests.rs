@@ -11,7 +11,7 @@ use frame_support::{
         OnInitialize,
     },
 };
-use pallet_regions::RegionDetails;
+use pallet_regions::{RegionDetails, RegionIdentifier};
 use sp_runtime::{Permill, TokenError};
 
 macro_rules! bvec {
@@ -40,23 +40,24 @@ fn new_region_helper() {
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([8; 32].into()),
+        RegionIdentifier::Japan,
         bvec![10, 10]
     ));
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([8; 32].into()),
-        0,
+        3,
         pallet_regions::Vote::Yes
     ));
     run_to_block(31);
     assert_ok!(Regions::bid_on_region(
         RuntimeOrigin::signed([8; 32].into()),
-        0,
+        3,
         100_000
     ));
     run_to_block(61);
     assert_ok!(Regions::create_new_region(
         RuntimeOrigin::signed([8; 32].into()),
-        0,
+        3,
         30,
         Permill::from_percent(3)
     ));
@@ -71,10 +72,10 @@ fn adjust_listing_duration_works() {
             [8; 32].into()
         ));
         new_region_helper();
-        assert_eq!(RegionDetails::<Test>::get(0).unwrap().listing_duration, 30);
+        assert_eq!(RegionDetails::<Test>::get(3).unwrap().listing_duration, 30);
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -87,7 +88,7 @@ fn adjust_listing_duration_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -96,12 +97,12 @@ fn adjust_listing_duration_works() {
         ));
         assert_ok!(Regions::adjust_listing_duration(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             50,
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -146,7 +147,7 @@ fn register_lawyer_works() {
         );
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [0; 32].into()
         ));
         assert_eq!(
@@ -161,7 +162,7 @@ fn register_lawyer_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()),
+            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
             Error::<Test>::RegionUnknown
         );
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -171,37 +172,38 @@ fn register_lawyer_fails() {
         new_region_helper();
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [0; 32].into()
         ));
         assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [0; 32].into()),
+            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
             Error::<Test>::LawyerAlreadyRegistered
         );
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::France,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             pallet_regions::Vote::Yes
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             100_000
         ));
         run_to_block(121);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             30,
             Permill::from_percent(3)
         ));
         assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 1, [0; 32].into()),
+            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 2, [0; 32].into()),
             Error::<Test>::LawyerAlreadyRegistered
         );
     })
@@ -219,7 +221,7 @@ fn list_object_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -228,7 +230,7 @@ fn list_object_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -267,7 +269,7 @@ fn list_object_fails() {
         assert_noop!(
             Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 10_000,
                 100,
@@ -280,7 +282,7 @@ fn list_object_fails() {
         assert_noop!(
             Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 10_000,
                 100,
@@ -291,13 +293,13 @@ fn list_object_fails() {
         );
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_noop!(
             Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 10_000,
                 251,
@@ -309,7 +311,7 @@ fn list_object_fails() {
         assert_noop!(
             Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 10_000,
                 99,
@@ -321,7 +323,7 @@ fn list_object_fails() {
         assert_noop!(
             Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
-                0,
+                3,
                 bvec![10, 10],
                 10_000,
                 0,
@@ -345,7 +347,7 @@ fn buy_property_token_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -358,7 +360,7 @@ fn buy_property_token_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([14; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000_000_000_000_000,
             100,
@@ -404,7 +406,7 @@ fn buy_property_token_works_developer_covers_fees() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -417,7 +419,7 @@ fn buy_property_token_works_developer_covers_fees() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -488,7 +490,7 @@ fn buy_property_token_doesnt_work_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -501,7 +503,7 @@ fn buy_property_token_doesnt_work_2() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -535,7 +537,7 @@ fn buy_property_token_fails_insufficient_balance() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -548,7 +550,7 @@ fn buy_property_token_fails_insufficient_balance() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([14; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000_000_000_000_000,
             100,
@@ -578,7 +580,7 @@ fn listing_and_selling_multiple_objects() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -599,17 +601,17 @@ fn listing_and_selling_multiple_objects() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([15; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -618,7 +620,7 @@ fn listing_and_selling_multiple_objects() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([2; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -627,7 +629,7 @@ fn listing_and_selling_multiple_objects() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -699,7 +701,7 @@ fn listing_and_selling_multiple_objects() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([15; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -744,7 +746,7 @@ fn claim_property_works1() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -757,17 +759,17 @@ fn claim_property_works1() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -816,7 +818,7 @@ fn claim_property_works2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -833,17 +835,17 @@ fn claim_property_works2() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             200,
@@ -930,7 +932,7 @@ fn claim_property_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -943,17 +945,17 @@ fn claim_property_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1023,34 +1025,35 @@ fn claim_property_fails() {
         assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::France,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             pallet_regions::Vote::Yes
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             100_000
         ));
         run_to_block(121);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             30,
             Permill::from_percent(3)
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             bvec![20, 10]
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            1,
+            2,
             bvec![20, 10],
             1_000,
             100,
@@ -1087,7 +1090,7 @@ fn remove_from_case_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1100,22 +1103,22 @@ fn remove_from_case_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [12; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1190,7 +1193,7 @@ fn remove_from_case_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1203,7 +1206,7 @@ fn remove_from_case_fails() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1222,7 +1225,7 @@ fn remove_from_case_fails() {
         );
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_noop!(
@@ -1259,7 +1262,7 @@ fn distributes_nfts_and_funds() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1272,17 +1275,17 @@ fn distributes_nfts_and_funds() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1397,7 +1400,7 @@ fn distributes_nfts_and_funds_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1410,17 +1413,17 @@ fn distributes_nfts_and_funds_2() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1511,11 +1514,12 @@ fn distributes_nfts_and_funds_3() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::Japan,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             pallet_regions::Vote::Yes
         ));
         run_to_block(31);
@@ -1525,19 +1529,19 @@ fn distributes_nfts_and_funds_3() {
         ));
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             100_000
         ));
         run_to_block(61);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             30,
             Permill::from_parts(32_500)
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1550,17 +1554,17 @@ fn distributes_nfts_and_funds_3() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1691,7 +1695,7 @@ fn reject_contract_and_refund() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1704,17 +1708,17 @@ fn reject_contract_and_refund() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -1876,7 +1880,7 @@ fn reject_contract_and_refund_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1897,17 +1901,17 @@ fn reject_contract_and_refund_2() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2042,7 +2046,7 @@ fn second_attempt_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2055,17 +2059,17 @@ fn second_attempt_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2163,15 +2167,15 @@ fn lawyer_confirm_documents_fails() {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [8; 32].into()));
 		new_region_helper();
-		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]));
+		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 3, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [10; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [11; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 0, [12; 32].into()));
+		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [10; 32].into()));
+		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [11; 32].into()));
+		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [12; 32].into()));
 		assert_ok!(Marketplace::list_object(
 			RuntimeOrigin::signed([0; 32].into()),
-			0,
+			3,
 			bvec![10, 10],
 			10_000,
 			100,
@@ -2228,7 +2232,7 @@ fn relist_a_nft() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2241,17 +2245,17 @@ fn relist_a_nft() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2346,7 +2350,7 @@ fn relist_a_nft_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2359,17 +2363,17 @@ fn relist_a_nft_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2436,7 +2440,7 @@ fn buy_relisted_token_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2457,17 +2461,17 @@ fn buy_relisted_token_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2579,7 +2583,7 @@ fn buy_relisted_token_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2596,17 +2600,17 @@ fn buy_relisted_token_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2677,7 +2681,7 @@ fn make_offer_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2694,17 +2698,17 @@ fn make_offer_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2783,7 +2787,7 @@ fn make_offer_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2804,17 +2808,17 @@ fn make_offer_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -2919,7 +2923,7 @@ fn handle_offer_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -2940,17 +2944,17 @@ fn handle_offer_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3085,7 +3089,7 @@ fn handle_offer_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3102,17 +3106,17 @@ fn handle_offer_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3201,7 +3205,7 @@ fn cancel_offer_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3218,17 +3222,17 @@ fn cancel_offer_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3317,7 +3321,7 @@ fn cancel_offer_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3334,17 +3338,17 @@ fn cancel_offer_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3429,7 +3433,7 @@ fn upgrade_price_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3442,17 +3446,17 @@ fn upgrade_price_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3513,7 +3517,7 @@ fn upgrade_price_fails_if_not_owner() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3530,17 +3534,17 @@ fn upgrade_price_fails_if_not_owner() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3600,7 +3604,7 @@ fn upgrade_object_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3609,7 +3613,7 @@ fn upgrade_object_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3639,7 +3643,7 @@ fn upgrade_object_and_distribute_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3656,17 +3660,17 @@ fn upgrade_object_and_distribute_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3737,7 +3741,7 @@ fn upgrade_single_nft_from_listed_object_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3746,7 +3750,7 @@ fn upgrade_single_nft_from_listed_object_fails() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3771,7 +3775,7 @@ fn upgrade_object_for_relisted_nft_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3780,17 +3784,17 @@ fn upgrade_object_for_relisted_nft_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3849,7 +3853,7 @@ fn upgrade_object_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3866,7 +3870,7 @@ fn upgrade_object_fails() {
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3885,7 +3889,7 @@ fn upgrade_object_fails() {
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -3912,7 +3916,7 @@ fn delist_single_token_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -3929,17 +3933,17 @@ fn delist_single_token_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4031,7 +4035,7 @@ fn delist_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4048,17 +4052,17 @@ fn delist_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4121,61 +4125,63 @@ fn listing_objects_in_different_regions() {
         new_region_helper();
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::France,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             pallet_regions::Vote::Yes
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             100_000
         ));
         run_to_block(121);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             30,
             Permill::from_percent(3)
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::India,
             bvec![10, 10]
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
-            2,
+            4,
             pallet_regions::Vote::Yes
         ));
         run_to_block(151);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
-            2,
+            4,
             100_000
         ));
         run_to_block(181);
         assert_ok!(Regions::create_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            2,
+            4,
             30,
             Permill::from_percent(3)
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
-            bvec![10, 10]
-        ));
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([8; 32].into()),
-            1,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
             2,
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            4,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4192,46 +4198,37 @@ fn listing_objects_in_different_regions() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             [12; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            1,
+            2,
             [13; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            2,
+            4,
             [14; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            2,
+            4,
             [15; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
-            bvec![10, 10],
-            10_000,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            1,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4241,6 +4238,15 @@ fn listing_objects_in_different_regions() {
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
             2,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            4,
             bvec![10, 10],
             10_000,
             100,
@@ -4333,7 +4339,7 @@ fn cancel_property_purchase_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4350,7 +4356,7 @@ fn cancel_property_purchase_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4433,7 +4439,7 @@ fn cancel_property_purchase_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4454,7 +4460,7 @@ fn cancel_property_purchase_fails() {
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4501,7 +4507,7 @@ fn cancel_property_purchase_fails_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4518,7 +4524,7 @@ fn cancel_property_purchase_fails_2() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4556,7 +4562,7 @@ fn withdraw_expired_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4569,7 +4575,7 @@ fn withdraw_expired_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4634,7 +4640,7 @@ fn withdraw_expired_works_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4655,7 +4661,7 @@ fn withdraw_expired_works_2() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             1_000,
             100,
@@ -4783,7 +4789,7 @@ fn withdraw_expired_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4800,7 +4806,7 @@ fn withdraw_expired_fails() {
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4836,7 +4842,7 @@ fn withdraw_expired_fails_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4849,7 +4855,7 @@ fn withdraw_expired_fails_2() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -4881,7 +4887,7 @@ fn send_property_token_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -4910,17 +4916,17 @@ fn send_property_token_works() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -5016,7 +5022,7 @@ fn send_property_token_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -5038,7 +5044,7 @@ fn send_property_token_fails() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -5083,12 +5089,12 @@ fn send_property_token_fails() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
@@ -5136,7 +5142,7 @@ fn send_property_token_fails_if_relist() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -5165,17 +5171,17 @@ fn send_property_token_fails_if_relist() {
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [10; 32].into()
         ));
         assert_ok!(Marketplace::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             [11; 32].into()
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -5251,7 +5257,7 @@ fn withdraw_deposit_unsold_works() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -5260,7 +5266,7 @@ fn withdraw_deposit_unsold_works() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -5296,7 +5302,7 @@ fn withdraw_deposit_unsold_fails() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -5309,7 +5315,7 @@ fn withdraw_deposit_unsold_fails() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
@@ -5354,7 +5360,7 @@ fn withdraw_deposit_unsold_fails_2() {
         new_region_helper();
         assert_ok!(Regions::create_new_location(
             RuntimeOrigin::signed([8; 32].into()),
-            0,
+            3,
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -5367,7 +5373,7 @@ fn withdraw_deposit_unsold_fails_2() {
         ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
-            0,
+            3,
             bvec![10, 10],
             10_000,
             100,
