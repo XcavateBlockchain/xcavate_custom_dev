@@ -40,8 +40,7 @@ fn new_region_helper() {
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([6; 32].into()),
-        RegionIdentifier::Japan,
-        bvec![10, 10]
+        RegionIdentifier::Japan
     ));
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([6; 32].into()),
@@ -560,8 +559,7 @@ fn set_letting_agent_fails() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
-            RegionIdentifier::Japan,
-            bvec![10, 10]
+            RegionIdentifier::Japan
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),

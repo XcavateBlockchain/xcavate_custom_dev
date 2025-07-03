@@ -710,6 +710,7 @@ parameter_types! {
     pub const RegionOwnerDisputeDepositAmount: Balance = 1_000 * UNIT;
     pub const MinimumRegionDepositAmount: Balance = 100_000 * UNIT;
     pub const RegionProposalDepositAmount: Balance = 5_000 * UNIT;
+    pub const MinimumVotingPower: Balance = 100 * UNIT;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -740,6 +741,7 @@ impl pallet_regions::Config for Runtime {
     type RegionOwnerDisputeDeposit = RegionOwnerDisputeDepositAmount;
     type MinimumRegionDeposit = MinimumRegionDepositAmount;
     type RegionProposalDeposit = RegionProposalDepositAmount;
+    type MinimumVotingAmount = MinimumVotingPower;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

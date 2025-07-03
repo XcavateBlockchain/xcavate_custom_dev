@@ -47,8 +47,7 @@ fn new_region_helper() {
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([6; 32].into()),
-        RegionIdentifier::Japan,
-        bvec![10, 10]
+        RegionIdentifier::Japan
     ));
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([6; 32].into()),
@@ -2209,8 +2208,7 @@ fn lawyer_claim_sale_fails() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([6; 32].into()),
-            RegionIdentifier::India,
-            bvec![10, 10]
+            RegionIdentifier::India
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([6; 32].into()),
@@ -2378,8 +2376,7 @@ fn lawyer_claim_sale_fails_2() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([6; 32].into()),
-            RegionIdentifier::France,
-            bvec![10, 10]
+            RegionIdentifier::France
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([6; 32].into()),

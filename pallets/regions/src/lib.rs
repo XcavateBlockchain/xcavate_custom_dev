@@ -14,9 +14,11 @@ use frame_support::{
     pallet_prelude::*,
     sp_runtime::{traits::Zero, Percent, Saturating},
     traits::{
-        fungible::{BalancedHold, Credit, Inspect, MutateHold},
+        fungible::{BalancedHold, Credit, Inspect, Mutate, MutateHold},
         nonfungibles_v2::{Create, Transfer},
-        tokens::{fungible, imbalance::OnUnbalanced, nonfungibles_v2, Balance, Precision},
+        tokens::{
+            fungible, imbalance::OnUnbalanced, nonfungibles_v2, Balance, Precision, Preservation,
+        },
     },
     PalletId,
 };
@@ -52,7 +54,6 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct RegionProposal<T: Config> {
         pub proposer: T::AccountId,
-        pub data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
         pub created_at: BlockNumberFor<T>,
         pub proposal_expiry: BlockNumberFor<T>,
         pub deposit: T::Balance,
@@ -260,35 +261,44 @@ pub mod pallet {
         /// Deposit for a region proposal.
         #[pallet::constant]
         type RegionProposalDeposit: Get<Self::Balance>;
+
+        /// Minimum voting amount.
+        #[pallet::constant]
+        type MinimumVotingAmount: Get<Self::Balance>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
     pub type RegionId = u16;
-    pub type ProposalIndex = u32;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
+    /// Accounts that are registered as regional operators.
     #[pallet::storage]
     pub(super) type RegionOperatorAccounts<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, (), OptionQuery>;
 
+    /// Block number of the last region proposal made.
     #[pallet::storage]
     pub(super) type LastRegionProposalBlock<T: Config> =
         StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 
+    /// Currently proposed region IDs.
     #[pallet::storage]
     pub(super) type ProposedRegionIds<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, (), OptionQuery>;
 
+    /// Active region proposals by region ID.
     #[pallet::storage]
     pub(super) type RegionProposals<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, RegionProposal<T>, OptionQuery>;
 
+    /// Voting statistics for ongoing proposals by region ID.
     #[pallet::storage]
     pub(super) type OngoingRegionProposalVotes<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
 
+    /// User votes on region proposals.
     #[pallet::storage]
     pub(super) type UserRegionVote<T: Config> = StorageDoubleMap<
         _,
@@ -300,10 +310,12 @@ pub mod pallet {
         OptionQuery,
     >;
 
+    /// Active region auctions.
     #[pallet::storage]
     pub(super) type RegionAuctions<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, RegionAuction<T>, OptionQuery>;
 
+    /// Replacement auctions for regions.
     #[pallet::storage]
     pub(super) type RegionReplacementAuctions<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, RegionAuction<T>, OptionQuery>;
@@ -391,11 +403,11 @@ pub mod pallet {
         NoRegionCreated { region_id: RegionId },
         /// Listing duration of a region changed.
         ListingDurationChanged {
-            region: RegionId,
+            region_id: RegionId,
             listing_duration: BlockNumberFor<T>,
         },
         /// Tax of a region changed.
-        RegionTaxChanged { region: RegionId, new_tax: Permill },
+        RegionTaxChanged { region_id: RegionId, new_tax: Permill },
         /// New location has been created.
         LocationCreated {
             region_id: RegionId,
@@ -404,12 +416,13 @@ pub mod pallet {
         /// An auction for a region has started.
         RegionAuctionStarted { region_id: RegionId },
         /// A region got rejected.
-        RegionRejected { region_id: RegionId },
+        RegionRejected { region_id: RegionId, slashed: T::Balance },
         /// A bid for a region got placed.
         BidSuccessfullyPlaced {
             region_id: RegionId,
             bidder: T::AccountId,
             new_leading_bid: T::Balance,
+            previous_bidder: Option<T::AccountId>,
         },
         /// A new regional operator has been added.
         NewRegionOperatorAdded { new_operator: T::AccountId },
@@ -522,13 +535,17 @@ pub mod pallet {
         /// Caller is not the region owner.
         NotRegionOwner,
         /// Owner would change before resignation period would be over.
-        OwnerChangeTooEarly,
+        OwnerChangeAlreadyScheduled,
         /// The proposal could not be found.
         ProposalNotFound,
         /// The region has already been created.
         RegionAlreadyCreated,
         /// This region has an ongoing proposal.
         RegionProposalAlreadyExists,
+        /// The caller does not have enough token to vote.
+        NotEnoughTokenToVote,
+        /// The auction does not have an winning bidder.
+        RegionHasNoWinningBidder,
     }
 
     #[pallet::hooks]
@@ -571,7 +588,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `data`: The Metadata of the proposal.
+        /// - `region_identifier`: The id of the region the caller is proposing.
         ///
         /// Emits `RegionProposed` event when succesfful.
         #[pallet::call_index(0)]
@@ -579,7 +596,6 @@ pub mod pallet {
         pub fn propose_new_region(
             origin: OriginFor<T>,
             region_identifier: RegionIdentifier,
-            data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -589,8 +605,14 @@ pub mod pallet {
 
             let region_id = region_identifier.into_u16();
 
-            ensure!(!ProposedRegionIds::<T>::contains_key(region_id), Error::<T>::RegionProposalAlreadyExists);
-            ensure!(!RegionDetails::<T>::contains_key(region_id), Error::<T>::RegionAlreadyCreated);
+            ensure!(
+                !ProposedRegionIds::<T>::contains_key(region_id),
+                Error::<T>::RegionProposalAlreadyExists
+            );
+            ensure!(
+                !RegionDetails::<T>::contains_key(region_id),
+                Error::<T>::RegionAlreadyCreated
+            );
 
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             if let Some(last_proposal_block) = LastRegionProposalBlock::<T>::get() {
@@ -613,7 +635,6 @@ pub mod pallet {
                 created_at: current_block_number,
                 proposal_expiry: expiry_block,
                 deposit: deposit_amount,
-                data,
             };
             let vote_stats = VoteStats {
                 yes_voting_power: Zero::zero(),
@@ -635,7 +656,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `proposal_id`: Id of the proposal.
+        /// - `region_id`: Id of the region.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
         /// Emits `VotedOnRegionProposal` event when succesfful.
@@ -658,19 +679,22 @@ pub mod pallet {
                 region_proposal.proposal_expiry > current_block_number,
                 Error::<T>::ProposalExpired
             );
-            let voting_power = T::NativeCurrency::total_balance(&signer);
+            let voting_power = T::NativeCurrency::balance(&signer);
+            ensure!(voting_power >= T::MinimumVotingAmount::get(), Error::<T>::NotEnoughTokenToVote);
             OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserRegionVote::<T>::get(region_id, &signer);
                 if let Some(previous_vote) = previous_vote_opt {
                     match previous_vote.vote {
                         Vote::Yes => {
-                            current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(previous_vote.power)
+                            current_vote.yes_voting_power = current_vote
+                                .yes_voting_power
+                                .saturating_sub(previous_vote.power)
                         }
                         Vote::No => {
-                            current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(previous_vote.power)
+                            current_vote.no_voting_power = current_vote
+                                .no_voting_power
+                                .saturating_sub(previous_vote.power)
                         }
                     }
                 }
@@ -689,7 +713,7 @@ pub mod pallet {
             })?;
             let vote_record = VoteRecord {
                 vote: vote.clone(),
-                power: voting_power
+                power: voting_power,
             };
             UserRegionVote::<T>::insert(region_id, &signer, vote_record);
             Self::deposit_event(Event::VotedOnRegionProposal {
@@ -705,7 +729,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `proposal_id`: Id of the proposal.
+        /// - `region_id`: Id of the region.
         /// - `amount`: The amount that the caller is willing to bid and to have locked.
         ///
         /// Emits `BidSuccessfullyPlaced` event when succesfful.
@@ -739,11 +763,12 @@ pub mod pallet {
             RegionAuctions::<T>::try_mutate(region_id, |maybe_auction| -> DispatchResult {
                 let auction = maybe_auction.as_mut().ok_or(Error::<T>::NoOngoingAuction)?;
                 let current_block_number = <frame_system::Pallet<T>>::block_number();
+                let previous_highest_bidder = auction.highest_bidder.clone();
                 ensure!(
                     auction.auction_expiry > current_block_number,
                     Error::<T>::NoOngoingAuction
                 );
-                match &auction.highest_bidder {
+                match &previous_highest_bidder {
                     Some(old_bidder) => {
                         ensure!(amount > auction.collateral, Error::<T>::BidTooLow);
                         if old_bidder == &signer {
@@ -780,13 +805,14 @@ pub mod pallet {
                 }
                 auction.highest_bidder = Some(signer.clone());
                 auction.collateral = amount;
+                Self::deposit_event(Event::BidSuccessfullyPlaced {
+                    region_id,
+                    bidder: signer,
+                    new_leading_bid: amount,
+                    previous_bidder: previous_highest_bidder,
+                });
                 Ok::<(), DispatchError>(())
             })?;
-            Self::deposit_event(Event::BidSuccessfullyPlaced {
-                region_id,
-                bidder: signer,
-                new_leading_bid: amount,
-            });
             Ok(())
         }
 
@@ -796,7 +822,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `proposal_id`: Id of the proposal.
+        /// - `region_id`: Id of the region.
         /// - `listing_duration`: Duration of a listing in this region.
         /// - `tax`: Tax percentage for selling a property in this region.
         ///
@@ -810,23 +836,19 @@ pub mod pallet {
             tax: Permill,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let auction = RegionAuctions::<T>::take(region_id).ok_or(Error::<T>::NoAuction)?;
+            let auction = RegionAuctions::<T>::get(region_id).ok_or(Error::<T>::NoAuction)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 auction.auction_expiry <= current_block_number,
                 Error::<T>::AuctionNotFinished
             );
 
-            let region_owner = auction
-                .highest_bidder
-                .ok_or(Error::<T>::NotRegionOwner)?;
+            let region_owner = auction.highest_bidder.ok_or(Error::<T>::RegionHasNoWinningBidder)?;
 
             ensure!(region_owner == signer, Error::<T>::NotRegionOwner);
 
             if auction.collateral.is_zero() {
-                Self::deposit_event(Event::<T>::NoRegionCreated {
-                    region_id,
-                });
+                Self::deposit_event(Event::<T>::NoRegionCreated { region_id });
                 return Ok(());
             }
             ensure!(
@@ -859,6 +881,7 @@ pub mod pallet {
                 location_count: Default::default(),
             };
             RegionDetails::<T>::insert(region_id, region_info);
+            RegionAuctions::<T>::get(region_id);
             ProposedRegionIds::<T>::remove(region_id);
 
             Self::deposit_event(Event::<T>::RegionCreated {
@@ -877,7 +900,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `region`: Region in where the listing duration should be changed.
+        /// - `region_id`: Region in where the listing duration should be changed.
         /// - `listing_duration`: New duration of a listing in this region.
         ///
         /// Emits `ListingDurationChanged` event when succesfful.
@@ -885,7 +908,7 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn adjust_listing_duration(
             origin: OriginFor<T>,
-            region: RegionId,
+            region_id: RegionId,
             listing_duration: BlockNumberFor<T>,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -893,26 +916,25 @@ pub mod pallet {
                 pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
                 Error::<T>::UserNotWhitelisted
             );
+            ensure!(
+                !listing_duration.is_zero(),
+                Error::<T>::ListingDurationCantBeZero
+            );
+            ensure!(
+                listing_duration <= T::MaxListingDuration::get(),
+                Error::<T>::ListingDurationTooHigh
+            );
 
-            RegionDetails::<T>::try_mutate(region, |maybe_region| {
+            RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
                 ensure!(signer == region.owner, Error::<T>::NoPermission);
-
-                ensure!(
-                    !listing_duration.is_zero(),
-                    Error::<T>::ListingDurationCantBeZero
-                );
-                ensure!(
-                    listing_duration <= T::MaxListingDuration::get(),
-                    Error::<T>::ListingDurationTooHigh
-                );
 
                 region.listing_duration = listing_duration;
                 Ok::<(), DispatchError>(())
             })?;
 
             Self::deposit_event(Event::<T>::ListingDurationChanged {
-                region,
+                region_id,
                 listing_duration,
             });
             Ok(())
@@ -923,7 +945,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `region`: Region in where the tax should be changed.
+        /// - `region_id`: Region in where the tax should be changed.
         /// - `new_tax`: New tax for a property sell in this region.
         ///
         /// Emits `RegionTaxChanged` event when succesfful.
@@ -931,7 +953,7 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn adjust_region_tax(
             origin: OriginFor<T>,
-            region: RegionId,
+            region_id: RegionId,
             new_tax: Permill,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -940,7 +962,7 @@ pub mod pallet {
                 Error::<T>::UserNotWhitelisted
             );
 
-            RegionDetails::<T>::try_mutate(region, |maybe_region| {
+            RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
                 ensure!(region.owner == signer, Error::<T>::NoPermission);
 
@@ -948,7 +970,7 @@ pub mod pallet {
                 Ok::<(), DispatchError>(())
             })?;
 
-            Self::deposit_event(Event::<T>::RegionTaxChanged { region, new_tax });
+            Self::deposit_event(Event::<T>::RegionTaxChanged { region_id, new_tax });
             Ok(())
         }
 
@@ -957,7 +979,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `region`: The region where the new location should be created.
+        /// - `region_id`: The region where the new location should be created.
         /// - `location`: The postcode of the new location.
         ///
         /// Emits `LocationCreated` event when succesfful.
@@ -965,25 +987,19 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn create_new_location(
             origin: OriginFor<T>,
-            region: RegionId,
+            region_id: RegionId,
             location: LocationId<T>,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                !LocationRegistration::<T>::contains_key(region, &location),
+                !LocationRegistration::<T>::contains_key(region_id, &location),
                 Error::<T>::LocationRegistered
             );
             let deposit_amount = T::LocationDeposit::get();
 
-            RegionDetails::<T>::try_mutate(region, |maybe_region| {
+            RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region_info = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
                 ensure!(region_info.owner == signer, Error::<T>::NoPermission);
-
-                T::NativeCurrency::hold(
-                    &HoldReason::RegionDepositReserve.into(),
-                    &signer,
-                    deposit_amount,
-                )?;
 
                 region_info.collateral = region_info
                     .collateral
@@ -994,12 +1010,18 @@ pub mod pallet {
                     .checked_add(1)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
 
+                T::NativeCurrency::hold(
+                    &HoldReason::RegionDepositReserve.into(),
+                    &signer,
+                    deposit_amount,
+                )?;
+
                 Ok::<(), DispatchError>(())
             })?;
 
-            LocationRegistration::<T>::insert(region, &location, true);
+            LocationRegistration::<T>::insert(region_id, &location, true);
             Self::deposit_event(Event::<T>::LocationCreated {
-                region_id: region,
+                region_id,
                 location_id: location,
             });
             Ok(())
@@ -1025,7 +1047,7 @@ pub mod pallet {
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
-                RegionDetails::<T>::get(region_id).is_some(),
+                RegionDetails::<T>::contains_key(region_id),
                 Error::<T>::RegionUnknown
             );
             ensure!(
@@ -1086,19 +1108,22 @@ pub mod pallet {
                 pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
                 Error::<T>::UserNotWhitelisted
             );
-            let voting_power = T::NativeCurrency::total_balance(&signer);
+            let voting_power = T::NativeCurrency::balance(&signer);
+            ensure!(voting_power >= T::MinimumVotingAmount::get(), Error::<T>::NotEnoughTokenToVote);
             OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserRegionOwnerVote::<T>::get(region_id, &signer);
                 if let Some(previous_vote) = previous_vote_opt {
                     match previous_vote.vote {
                         Vote::Yes => {
-                            current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(previous_vote.power)
+                            current_vote.yes_voting_power = current_vote
+                                .yes_voting_power
+                                .saturating_sub(previous_vote.power)
                         }
                         Vote::No => {
-                            current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(previous_vote.power)
+                            current_vote.no_voting_power = current_vote
+                                .no_voting_power
+                                .saturating_sub(previous_vote.power)
                         }
                     }
                 }
@@ -1116,7 +1141,7 @@ pub mod pallet {
             })?;
             let vote_record = VoteRecord {
                 vote: vote.clone(),
-                power: voting_power
+                power: voting_power,
             };
             UserRegionOwnerVote::<T>::insert(region_id, &signer, vote_record);
             Self::deposit_event(Event::VotedOnRegionOwnerProposal {
@@ -1261,7 +1286,7 @@ pub mod pallet {
                     current_block_number.saturating_add(T::RegionOwnerNoticePeriod::get());
                 ensure!(
                     region_info.next_owner_change > next_owner_change,
-                    Error::<T>::OwnerChangeTooEarly
+                    Error::<T>::OwnerChangeAlreadyScheduled
                 );
                 region_info.next_owner_change = next_owner_change;
 
@@ -1357,6 +1382,15 @@ pub mod pallet {
                     proposal.deposit,
                     Precision::Exact,
                 )?;
+                let treasury_account = Self::treasury_account_id();
+                if T::NativeCurrency::balance(&treasury_account) >= proposal.deposit {
+                    T::NativeCurrency::transfer(
+                        &treasury_account,
+                        &proposal.proposer,
+                        proposal.deposit,
+                        Preservation::Expendable,
+                    )?;
+                }
                 let auction = RegionAuction {
                     highest_bidder: None,
                     collateral: T::MinimumRegionDeposit::get(),
@@ -1374,7 +1408,7 @@ pub mod pallet {
 
                 T::Slash::on_unbalanced(imbalance);
                 ProposedRegionIds::<T>::remove(region_id);
-                Self::deposit_event(Event::RegionRejected { region_id });
+                Self::deposit_event(Event::RegionRejected { region_id, slashed: proposal.deposit });
                 Ok(false)
             }
         }

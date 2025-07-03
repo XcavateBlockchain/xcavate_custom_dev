@@ -262,6 +262,8 @@ impl pallet_regions::Config for Test {
     type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
     type RegionOwnerDisputeDeposit = ConstU128<1_000>;
     type MinimumRegionDeposit = ConstU128<10_000>;
+    type RegionProposalDeposit = ConstU128<5_000>;
+    type MinimumVotingAmount = ConstU128<100>;
 }
 
 parameter_types! {

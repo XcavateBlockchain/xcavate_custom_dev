@@ -40,8 +40,7 @@ fn new_region_helper() {
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([8; 32].into()),
-        RegionIdentifier::Japan,
-        bvec![10, 10]
+        RegionIdentifier::Japan
     ));
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([8; 32].into()),
@@ -181,8 +180,7 @@ fn register_lawyer_fails() {
         );
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::France,
-            bvec![10, 10]
+            RegionIdentifier::France
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
@@ -1025,8 +1023,7 @@ fn claim_property_fails() {
         assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::France,
-            bvec![10, 10]
+            RegionIdentifier::France
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
@@ -1514,8 +1511,7 @@ fn distributes_nfts_and_funds_3() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::Japan,
-            bvec![10, 10]
+            RegionIdentifier::Japan
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
@@ -4125,8 +4121,7 @@ fn listing_objects_in_different_regions() {
         new_region_helper();
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::France,
-            bvec![10, 10]
+            RegionIdentifier::France
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
@@ -4148,8 +4143,7 @@ fn listing_objects_in_different_regions() {
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::India,
-            bvec![10, 10]
+            RegionIdentifier::India
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),

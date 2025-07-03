@@ -190,6 +190,8 @@ impl crate::Config for Test {
     type RegionOwnerNoticePeriod = RegionOwnerNoticeTime;
     type RegionOwnerDisputeDeposit = ConstU128<1_000>;
     type MinimumRegionDeposit = ConstU128<10_000>;
+    type RegionProposalDeposit = ConstU128<5_000>;
+    type MinimumVotingAmount = ConstU128<100>;
 }
 
 // Build genesis storage according to the mock runtime.

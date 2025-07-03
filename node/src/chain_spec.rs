@@ -1,6 +1,6 @@
 use cumulus_primitives_core::ParaId;
 use parachain_template_runtime as runtime;
-use runtime::{AccountId, AuraId, Signature, EXISTENTIAL_DEPOSIT, Balance, UNIT};
+use runtime::{AccountId, AuraId, Balance, Signature, EXISTENTIAL_DEPOSIT, UNIT};
 use sc_chain_spec::{ChainSpecExtension, ChainSpecGroup};
 use sc_service::ChainType;
 use serde::{Deserialize, Serialize};
@@ -189,36 +189,36 @@ fn testnet_genesis(
 }
 
 pub fn get_endowed_accounts_with_balance() -> Vec<(AccountId, u128)> {
-	let accounts: Vec<AccountId> = vec![
-		get_account_id_from_seed::<sr25519::Public>("Alice"),
-		get_account_id_from_seed::<sr25519::Public>("Bob"),
-		get_account_id_from_seed::<sr25519::Public>("Charlie"),
-		get_account_id_from_seed::<sr25519::Public>("Dave"),
-		get_account_id_from_seed::<sr25519::Public>("Eve"),
-		get_account_id_from_seed::<sr25519::Public>("Ferdie"),
-		get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
-		get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
-		get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
-		get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
-	];
+    let accounts: Vec<AccountId> = vec![
+        get_account_id_from_seed::<sr25519::Public>("Alice"),
+        get_account_id_from_seed::<sr25519::Public>("Bob"),
+        get_account_id_from_seed::<sr25519::Public>("Charlie"),
+        get_account_id_from_seed::<sr25519::Public>("Dave"),
+        get_account_id_from_seed::<sr25519::Public>("Eve"),
+        get_account_id_from_seed::<sr25519::Public>("Ferdie"),
+        get_account_id_from_seed::<sr25519::Public>("Alice//stash"),
+        get_account_id_from_seed::<sr25519::Public>("Bob//stash"),
+        get_account_id_from_seed::<sr25519::Public>("Charlie//stash"),
+        get_account_id_from_seed::<sr25519::Public>("Dave//stash"),
+    ];
 
-	const ENDOWMENT: Balance = 1_000_000 * UNIT;
-	let accounts_with_balance: Vec<(AccountId, u128)> =
-		accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect();
-	let json_data = &include_bytes!("../../seed/balances.json")[..];
-	let additional_accounts_with_balance: Vec<(AccountId, u128)> =
-		serde_json::from_slice(json_data).unwrap_or_default();
+    const ENDOWMENT: Balance = 1_000_000 * UNIT;
+    let accounts_with_balance: Vec<(AccountId, u128)> =
+        accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect();
+    let json_data = &include_bytes!("../../seed/balances.json")[..];
+    let additional_accounts_with_balance: Vec<(AccountId, u128)> =
+        serde_json::from_slice(json_data).unwrap_or_default();
 
-	let mut accounts = additional_accounts_with_balance.clone();
+    let mut accounts = additional_accounts_with_balance.clone();
 
-	accounts_with_balance.iter().for_each(|tup1| {
-		for tup2 in additional_accounts_with_balance.iter() {
-			if tup1.0 == tup2.0 {
-				return;
-			}
-		}
-		accounts.push(tup1.to_owned());
-	});
+    accounts_with_balance.iter().for_each(|tup1| {
+        for tup2 in additional_accounts_with_balance.iter() {
+            if tup1.0 == tup2.0 {
+                return;
+            }
+        }
+        accounts.push(tup1.to_owned());
+    });
 
-	accounts
+    accounts
 }
