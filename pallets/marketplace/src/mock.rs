@@ -46,7 +46,6 @@ frame_support::construct_runtime!(
         AssetsHolder: pallet_assets_holder::<Instance2>,
         Regions: pallet_regions,
         RealEstateAsset: pallet_real_estate_asset,
-
     }
 );
 
@@ -314,6 +313,7 @@ impl pallet_marketplace::Config for Test {
     type ListingDeposit = ConstU128<10>;
     type MarketplaceFeePercentage = ConstU128<1>;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type PropertyToken = RealEstateAsset;
 }
 
 // Build genesis storage according to the mock runtime.

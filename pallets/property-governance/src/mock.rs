@@ -324,6 +324,7 @@ impl pallet_marketplace::Config for Test {
     type ListingDeposit = ConstU128<10>;
     type MarketplaceFeePercentage = ConstU128<1>;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type PropertyToken = RealEstateAsset;
 }
 
 parameter_types! {
@@ -346,6 +347,7 @@ impl pallet_property_management::Config for Test {
     type MaxLettingAgents = MaxLettingAgent;
     type MaxLocations = MaxLocation;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type PropertyToken = RealEstateAsset;
 }
 
 parameter_types! {
@@ -383,6 +385,7 @@ impl pallet_property_governance::Config for Test {
     type Slash = ();
     type AcceptedAssets = AcceptedPaymentAssets;
     type TreasuryId = TreasuryPalletId;
+    type PropertyToken = RealEstateAsset;
 }
 
 // Build genesis storage according to the mock runtime.

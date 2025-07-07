@@ -66,10 +66,10 @@ use super::{
     weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
     AccountId, Assets, AssetsHolder, Aura, Balance, Balances, Block, BlockNumber,
     CollatorSelection, ConsensusHook, Hash, MessageQueue, Nfts, Nonce, OriginCaller, PalletInfo,
-    ParachainSystem, RealEstateAssets, Runtime, RuntimeCall, RuntimeEvent, RuntimeFreezeReason,
-    RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys, System, WeightToFee,
-    XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS, EXISTENTIAL_DEPOSIT, HOURS, MAXIMUM_BLOCK_WEIGHT,
-    MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, UNIT, VERSION,
+    ParachainSystem, RealEstateAsset, RealEstateAssets, Runtime, RuntimeCall, RuntimeEvent,
+    RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
+    System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS, EXISTENTIAL_DEPOSIT, HOURS,
+    MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, UNIT, VERSION,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use pallet_nfts::PalletFeatures;
@@ -616,6 +616,7 @@ impl pallet_marketplace::Config for Runtime {
     type ListingDeposit = ListingDepositAmount;
     type MarketplaceFeePercentage = MarketplaceFeePercent;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type PropertyToken = RealEstateAsset;
 }
 
 parameter_types! {
@@ -653,6 +654,7 @@ impl pallet_property_management::Config for Runtime {
     type MaxLettingAgents = MaxLettingAgent;
     type MaxLocations = MaxLocation;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type PropertyToken = RealEstateAsset;
 }
 
 parameter_types! {
@@ -692,6 +694,7 @@ impl pallet_property_governance::Config for Runtime {
     type Slash = ();
     type AcceptedAssets = AcceptedPaymentAssets;
     type TreasuryId = TreasuryPalletId;
+    type PropertyToken = RealEstateAsset;
 }
 
 parameter_types! {

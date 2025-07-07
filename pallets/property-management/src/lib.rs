@@ -27,6 +27,8 @@ use frame_support::sp_runtime::traits::{AccountIdConversion, Zero};
 
 use codec::Codec;
 
+use pallet_real_estate_asset::traits::PropertyTokenTrait;
+
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
@@ -147,6 +149,8 @@ pub mod pallet {
 
         #[pallet::constant]
         type AcceptedAssets: Get<[u32; 2]>;
+
+        type PropertyToken: PropertyTokenTrait<Self>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -383,7 +387,7 @@ pub mod pallet {
         pub fn set_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id).is_some(),
+                T::PropertyToken::get_property_asset_info(asset_id).is_some(),
                 Error::<T>::NoObjectFound
             );
             ensure!(
@@ -447,14 +451,13 @@ pub mod pallet {
             )
             .map_err(|_| Error::<T>::NotEnoughFunds)?;
 
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
-            let property_info = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
+            let owner_list = T::PropertyToken::get_property_owner(asset_id);
+            let property_info = T::PropertyToken::get_property_asset_info(asset_id)
                 .ok_or(Error::<T>::NoObjectFound)?;
 
             let total_token = property_info.token_amount;
             for owner in owner_list {
-                let token_amount =
-                    pallet_real_estate_asset::Pallet::<T>::get_token_balance(asset_id, &owner);
+                let token_amount = T::PropertyToken::get_token_balance(asset_id, &owner);
                 let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
                     .checked_mul(amount)
                     .ok_or(Error::<T>::MultiplyError)?

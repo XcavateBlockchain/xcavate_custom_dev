@@ -1,9 +1,9 @@
 use crate::{mock::*, Error, Event};
 use crate::{
     HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
-    OngoingRegionProposalVotes, ProposedRegionIds, RegionAuctions, RegionDetails,
+    OngoingRegionProposalVotes, ProposedRegionIds, RealEstateLawyer, RegionAuctions, RegionDetails,
     RegionOperatorAccounts, RegionOwnerProposals, RegionProposals, RegionReplacementAuctions,
-    UserRegionOwnerVote, UserRegionVote, VoteStats, RealEstateLawyer,
+    UserRegionOwnerVote, UserRegionVote, VoteStats,
 };
 use frame_support::BoundedVec;
 use frame_support::{

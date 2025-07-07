@@ -1389,8 +1389,7 @@ pub mod pallet {
             lawyer: T::AccountId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let region_info =
-                RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+            let region_info = RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
             ensure!(region_info.owner == signer, Error::<T>::NoPermission);
             ensure!(
                 RealEstateLawyer::<T>::get(&lawyer).is_none(),

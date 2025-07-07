@@ -28,6 +28,8 @@ use codec::{Codec, DecodeWithMemTracking};
 
 use primitives::MarketplaceHoldReason;
 
+use pallet_real_estate_asset::traits::PropertyTokenTrait;
+
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
 
@@ -286,6 +288,8 @@ pub mod pallet {
         /// The Trasury's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
         type TreasuryId: Get<PalletId>;
+
+        type PropertyToken: PropertyTokenTrait<Self>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -769,7 +773,7 @@ pub mod pallet {
             asset_id: u32,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
+            let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             ensure!(
                 pallet_property_management::LettingStorage::<T>::get(asset_id).is_some(),
@@ -824,10 +828,11 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(proposal.asset_id);
+            let owner_list =
+                <T as pallet::Config>::PropertyToken::get_property_owner(proposal.asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             let voting_power =
-                pallet_real_estate_asset::Pallet::<T>::get_token_balance(proposal.asset_id, &signer);
+                <T as pallet::Config>::PropertyToken::get_token_balance(proposal.asset_id, &signer);
             OngoingProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserProposalVote::<T>::get(proposal_id, &signer);
@@ -886,9 +891,10 @@ pub mod pallet {
                 Challenges::<T>::get(asset_id).is_some(),
                 Error::<T>::NotOngoing
             );
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
+            let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-            let voting_power = pallet_real_estate_asset::Pallet::<T>::get_token_balance(asset_id, &signer);
+            let voting_power =
+                <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             OngoingChallengeVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserChallengeVote::<T>::get(asset_id, &signer);
@@ -939,8 +945,9 @@ pub mod pallet {
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let asset_details = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
-                .ok_or(Error::<T>::AssetNotFound)?;
+            let asset_details =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::AssetNotFound)?;
             ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
 
             ensure!(
@@ -951,7 +958,7 @@ pub mod pallet {
                 SaleProposals::<T>::get(asset_id).is_none(),
                 Error::<T>::PropertySaleProposalOngoing
             );
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
+            let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let sale_proposal = PropertySaleProposal {
@@ -1000,9 +1007,10 @@ pub mod pallet {
                 SaleProposals::<T>::get(asset_id).is_some(),
                 Error::<T>::NotOngoing
             );
-            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
+            let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
-            let voting_power = pallet_real_estate_asset::Pallet::<T>::get_token_balance(asset_id, &signer);
+            let voting_power =
+                <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             OngoingSaleProposalVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserSaleProposalVote::<T>::get(asset_id, &signer);
@@ -1126,8 +1134,9 @@ pub mod pallet {
             let signer = ensure_signed(origin)?;
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
                 .ok_or(Error::<T>::NoPermission)?;
-            let asset_info = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
-                .ok_or(Error::<T>::AssetNotFound)?;
+            let asset_info =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::AssetNotFound)?;
             ensure!(
                 lawyer_region == asset_info.region,
                 Error::<T>::NoPermissionInRegion
@@ -1309,8 +1318,7 @@ pub mod pallet {
                 );
                 ensure!(!sale_info.finalized, Error::<T>::AlreadyFinalized);
                 ensure!(
-                    <T as pallet::Config>::AcceptedAssets::get()
-                        .contains(&payment_asset),
+                    <T as pallet::Config>::AcceptedAssets::get().contains(&payment_asset),
                     Error::<T>::PaymentAssetNotSupported
                 );
 
@@ -1324,9 +1332,10 @@ pub mod pallet {
                 let property_account = Self::property_account_id(asset_id);
                 let treasury_account = Self::treasury_account_id();
 
-                let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
-                let property_info = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
-                    .ok_or(Error::<T>::NoObjectFound)?;
+                let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
+                let property_info =
+                    <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                        .ok_or(Error::<T>::NoObjectFound)?;
                 let region_info = pallet_regions::RegionDetails::<T>::get(property_info.region)
                     .ok_or(Error::<T>::RegionUnknown)?;
 
@@ -1388,7 +1397,7 @@ pub mod pallet {
                 // Store the shares of the token holder
                 for owner in owner_list {
                     let property_token_amount =
-                        pallet_real_estate_asset::Pallet::<T>::get_token_balance(asset_id, &owner);
+                        <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &owner);
 
                     let owner_share = (property_token_amount as u128)
                         .checked_mul(net_amount)
@@ -1476,7 +1485,7 @@ pub mod pallet {
             let property_account = Self::property_account_id(asset_id);
             Self::transfer_funds(&property_account, &signer, amount, payment_asset)?;
             let property_token_amount =
-                pallet_real_estate_asset::Pallet::<T>::take_property_token(asset_id, &signer);
+                <T as pallet::Config>::PropertyToken::take_property_token(asset_id, &signer);
             <T as pallet::Config>::LocalCurrency::transfer(
                 asset_id,
                 &signer,
@@ -1489,8 +1498,8 @@ pub mod pallet {
                 .checked_sub(property_token_amount)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
             if property_sale_info.property_token_amount == 0 {
-                pallet_real_estate_asset::Pallet::<T>::burn_property_token(asset_id)?;
-                pallet_real_estate_asset::Pallet::<T>::remove_token_owner_list(asset_id)?;                
+                <T as pallet::Config>::PropertyToken::burn_property_token(asset_id)?;
+                <T as pallet::Config>::PropertyToken::remove_token_owner_list(asset_id)?;
             } else {
                 PropertySale::<T>::insert(asset_id, property_sale_info);
             }
@@ -1552,7 +1561,9 @@ pub mod pallet {
                             <T as Config>::Threshold::get()
                         };
                     let asset_details =
-                        pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(proposal.asset_id);
+                        <T as pallet::Config>::PropertyToken::get_property_asset_info(
+                            proposal.asset_id,
+                        );
                     if let Some(asset_details) = asset_details {
                         ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
                         let yes_votes_percentage = Percent::from_rational(
@@ -1587,7 +1598,8 @@ pub mod pallet {
             let voting_results = <OngoingSaleProposalVotes<T>>::take(asset_id);
             let _ = <SaleProposals<T>>::take(asset_id);
             if let Some(voting_result) = voting_results {
-                let asset_details = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id);
+                let asset_details =
+                    <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id);
                 if let Some(asset_details) = asset_details {
                     ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
                     let yes_votes_percentage = Percent::from_rational(
@@ -1631,8 +1643,9 @@ pub mod pallet {
             let _challenge = Challenges::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
             let voting_result =
                 OngoingChallengeVotes::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
-            let asset_details = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
-                .ok_or(Error::<T>::AssetNotFound)?;
+            let asset_details =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::AssetNotFound)?;
             ensure!(asset_details.token_amount > 0, Error::<T>::ZeroTokenAmount);
             let yes_votes_percentage =
                 Percent::from_rational(voting_result.yes_voting_power, asset_details.token_amount);

@@ -1,18 +1,20 @@
 use crate::{mock::*, Error, Event, *};
 use crate::{
-    ListedToken, OngoingObjectListing, OngoingOffers,
-    PropertyLawyer, RefundToken, TokenBuyer,
+    ListedToken, OngoingObjectListing, OngoingOffers, PropertyLawyer, RefundToken, TokenBuyer,
     TokenListings, TokenOwner,
 };
 use frame_support::{
     assert_noop, assert_ok,
     traits::{
-        fungible::InspectHold, fungibles::InspectHold as FungiblesInspectHold, OnFinalize,
-        OnInitialize, fungibles::Inspect, fungible::Inspect as FungibleInspect,
+        fungible::Inspect as FungibleInspect, fungible::InspectHold, fungibles::Inspect,
+        fungibles::InspectHold as FungiblesInspectHold, OnFinalize, OnInitialize,
     },
 };
+use pallet_real_estate_asset::{
+    Error as RealEstateAssetError, NextAssetId, NextNftId, PropertyAssetInfo, PropertyOwner,
+    PropertyOwnerToken,
+};
 use pallet_regions::{RegionDetails, RegionIdentifier};
-use pallet_real_estate_asset::{PropertyAssetInfo, PropertyOwner, PropertyOwnerToken, NextNftId, NextAssetId, Error as RealEstateAssetError};
 use sp_runtime::{Permill, TokenError};
 
 macro_rules! bvec {
