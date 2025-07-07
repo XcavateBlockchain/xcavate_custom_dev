@@ -3,7 +3,7 @@ use crate::{
     HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
     OngoingRegionProposalVotes, ProposedRegionIds, RegionAuctions, RegionDetails,
     RegionOperatorAccounts, RegionOwnerProposals, RegionProposals, RegionReplacementAuctions,
-    UserRegionOwnerVote, UserRegionVote, VoteStats,
+    UserRegionOwnerVote, UserRegionVote, VoteStats, RealEstateLawyer,
 };
 use frame_support::BoundedVec;
 use frame_support::{
@@ -708,7 +708,13 @@ fn bid_on_region_fails() {
             2,
             10_000
         ));
-        System::assert_last_event(Event::RegionRejected { region_id: 2, slashed: 5_000 }.into());
+        System::assert_last_event(
+            Event::RegionRejected {
+                region_id: 2,
+                slashed: 5_000,
+            }
+            .into(),
+        );
         assert_noop!(
             Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 2, 10_000),
             Error::<Test>::NoOngoingAuction,
@@ -2004,6 +2010,91 @@ fn initiate_region_owner_resignation_fails() {
         assert_noop!(
             Regions::initiate_region_owner_resignation(RuntimeOrigin::signed([8; 32].into()), 3),
             Error::<Test>::OwnerChangeAlreadyScheduled
+        );
+    })
+}
+
+// register_lawyer function
+#[test]
+fn register_lawyer_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(),
+            true
+        );
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [0; 32].into()
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_some(),
+            true
+        );
+    })
+}
+
+#[test]
+fn register_lawyer_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
+            Error::<Test>::RegionUnknown
+        );
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [0; 32].into()
+        ));
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
+            Error::<Test>::LawyerAlreadyRegistered
+        );
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            crate::RegionIdentifier::France
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            100_000
+        ));
+        run_to_block(121);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            30,
+            Permill::from_percent(3)
+        ));
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 2, [0; 32].into()),
+            Error::<Test>::LawyerAlreadyRegistered
         );
     })
 }

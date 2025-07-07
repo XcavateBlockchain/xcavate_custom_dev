@@ -1,17 +1,18 @@
 use crate::{mock::*, Error, Event, *};
 use crate::{
-    AssetIdDetails, ListedToken, NextAssetId, NextNftId, OngoingObjectListing, OngoingOffers,
-    PropertyLawyer, PropertyOwner, PropertyOwnerToken, RealEstateLawyer, RefundToken, TokenBuyer,
+    ListedToken, OngoingObjectListing, OngoingOffers,
+    PropertyLawyer, RefundToken, TokenBuyer,
     TokenListings, TokenOwner,
 };
 use frame_support::{
     assert_noop, assert_ok,
     traits::{
         fungible::InspectHold, fungibles::InspectHold as FungiblesInspectHold, OnFinalize,
-        OnInitialize,
+        OnInitialize, fungibles::Inspect, fungible::Inspect as FungibleInspect,
     },
 };
 use pallet_regions::{RegionDetails, RegionIdentifier};
+use pallet_real_estate_asset::{PropertyAssetInfo, PropertyOwner, PropertyOwnerToken, NextNftId, NextAssetId, Error as RealEstateAssetError};
 use sp_runtime::{Permill, TokenError};
 
 macro_rules! bvec {
@@ -130,83 +131,6 @@ fn adjust_listing_duration_works() {
     })
 }
 
-// register_lawyer function
-#[test]
-fn register_lawyer_works() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        new_region_helper();
-        assert_eq!(
-            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(),
-            true
-        );
-        assert_ok!(Marketplace::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            [0; 32].into()
-        ));
-        assert_eq!(
-            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_some(),
-            true
-        );
-    })
-}
-
-#[test]
-fn register_lawyer_fails() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
-            Error::<Test>::RegionUnknown
-        );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        new_region_helper();
-        assert_ok!(Marketplace::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            [0; 32].into()
-        ));
-        assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
-            Error::<Test>::LawyerAlreadyRegistered
-        );
-        assert_ok!(Regions::propose_new_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::France
-        ));
-        assert_ok!(Regions::vote_on_region_proposal(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            pallet_regions::Vote::Yes
-        ));
-        run_to_block(91);
-        assert_ok!(Regions::bid_on_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            100_000
-        ));
-        run_to_block(121);
-        assert_ok!(Regions::create_new_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            30,
-            Permill::from_percent(3)
-        ));
-        assert_noop!(
-            Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 2, [0; 32].into()),
-            Error::<Test>::LawyerAlreadyRegistered
-        );
-    })
-}
-
 // list_object function
 #[test]
 fn list_object_works() {
@@ -244,7 +168,7 @@ fn list_object_works() {
         assert_eq!(NextNftId::<Test>::get(1), 0);
         assert_eq!(NextAssetId::<Test>::get(), 1);
         assert_eq!(OngoingObjectListing::<Test>::get(0).is_some(), true);
-        assert_eq!(AssetIdDetails::<Test>::get(0).is_some(), true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).is_some(), true);
         assert_eq!(
             Nfts::owner(0, 0).unwrap(),
             Marketplace::property_account_id(0)
@@ -597,12 +521,12 @@ fn listing_and_selling_multiple_objects() {
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -755,12 +679,12 @@ fn claim_property_works1() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -831,12 +755,12 @@ fn claim_property_works2() {
             RuntimeOrigin::root(),
             [9; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -941,12 +865,12 @@ fn claim_property_fails() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -1098,17 +1022,17 @@ fn remove_from_case_works() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [12; 32].into()
@@ -1220,7 +1144,7 @@ fn remove_from_case_fails() {
             Marketplace::remove_from_case(RuntimeOrigin::signed([10; 32].into()), 0,),
             Error::<Test>::NoPermission
         );
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
@@ -1270,12 +1194,12 @@ fn distributes_nfts_and_funds() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -1375,7 +1299,7 @@ fn distributes_nfts_and_funds() {
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_084_000);
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 12_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(ListedToken::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
@@ -1408,12 +1332,12 @@ fn distributes_nfts_and_funds_2() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -1490,7 +1414,7 @@ fn distributes_nfts_and_funds_2() {
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 460_000);
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 34_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 4_000);
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(ListedToken::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
@@ -1548,12 +1472,12 @@ fn distributes_nfts_and_funds_3() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -1669,7 +1593,7 @@ fn distributes_nfts_and_funds_3() {
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_096_000);
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 13_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(ListedToken::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
@@ -1702,12 +1626,12 @@ fn reject_contract_and_refund() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -1843,7 +1767,7 @@ fn reject_contract_and_refund() {
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_496_000);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
-        assert_eq!(AssetIdDetails::<Test>::get(0).is_none(), true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
         assert_eq!(ListedToken::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
@@ -1861,7 +1785,7 @@ fn reject_contract_and_refund() {
         );
         assert_eq!(Balances::balance(&(Marketplace::property_account_id(0))), 0);
         assert_eq!(Nfts::owner(0, 0), None);
-        assert_eq!(AssetIdDetails::<Test>::get(0), None);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0), None);
     })
 }
 
@@ -1895,12 +1819,12 @@ fn reject_contract_and_refund_2() {
             RuntimeOrigin::root(),
             [7; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2053,12 +1977,12 @@ fn second_attempt_works() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2146,7 +2070,7 @@ fn second_attempt_works() {
         );
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_490_000);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
-        assert_eq!(AssetIdDetails::<Test>::get(0).is_none(), true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
         assert_eq!(ListedToken::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
@@ -2166,9 +2090,9 @@ fn lawyer_confirm_documents_fails() {
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 3, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [10; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [11; 32].into()));
-		assert_ok!(Marketplace::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [12; 32].into()));
+		assert_ok!(Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [10; 32].into()));
+		assert_ok!(Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [11; 32].into()));
+		assert_ok!(Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [12; 32].into()));
 		assert_ok!(Marketplace::list_object(
 			RuntimeOrigin::signed([0; 32].into()),
 			3,
@@ -2239,12 +2163,12 @@ fn relist_a_nft() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2286,7 +2210,7 @@ fn relist_a_nft() {
             0,
             true,
         ));
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_ok!(Marketplace::relist_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -2357,12 +2281,12 @@ fn relist_a_nft_fails() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2408,7 +2332,7 @@ fn relist_a_nft_fails() {
             0,
             true,
         ));
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_noop!(
             Marketplace::relist_token(RuntimeOrigin::signed([0; 32].into()), 0, 1000, 1),
             TokenError::FundsUnavailable
@@ -2455,12 +2379,12 @@ fn buy_relisted_token_works() {
             RuntimeOrigin::root(),
             [3; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2515,7 +2439,7 @@ fn buy_relisted_token_works() {
         );
         assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 6000);
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 1_468_800);
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_ok!(Marketplace::relist_token(
             RuntimeOrigin::signed([2; 32].into()),
             0,
@@ -2594,12 +2518,12 @@ fn buy_relisted_token_fails() {
             RuntimeOrigin::root(),
             [3; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2648,7 +2572,7 @@ fn buy_relisted_token_fails() {
         );
         assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 6_000);
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 460_000);
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_noop!(
             Marketplace::buy_relisted_token(RuntimeOrigin::signed([3; 32].into()), 1, 1, 1984),
             Error::<Test>::TokenNotForSale
@@ -2692,12 +2616,12 @@ fn make_offer_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2802,12 +2726,12 @@ fn make_offer_fails() {
             RuntimeOrigin::root(),
             [3; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -2938,12 +2862,12 @@ fn handle_offer_works() {
             RuntimeOrigin::root(),
             [3; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3100,12 +3024,12 @@ fn handle_offer_fails() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3216,12 +3140,12 @@ fn cancel_offer_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3332,12 +3256,12 @@ fn cancel_offer_fails() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3440,12 +3364,12 @@ fn upgrade_price_works() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3528,12 +3452,12 @@ fn upgrade_price_fails_if_not_owner() {
             RuntimeOrigin::root(),
             [4; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3654,12 +3578,12 @@ fn upgrade_object_and_distribute_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3721,7 +3645,7 @@ fn upgrade_object_and_distribute_works() {
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 980_000);
         assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 110_000);
 
-        assert_eq!(AssetIdDetails::<Test>::get(0).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(ListedToken::<Test>::get(0), None);
     })
 }
@@ -3778,12 +3702,12 @@ fn upgrade_object_for_relisted_nft_fails() {
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -3927,12 +3851,12 @@ fn delist_single_token_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -4046,12 +3970,12 @@ fn delist_fails() {
             RuntimeOrigin::root(),
             [4; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -4190,32 +4114,32 @@ fn listing_objects_in_different_regions() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             2,
             [12; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             2,
             [13; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             4,
             [14; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             4,
             [15; 32].into()
@@ -4303,8 +4227,8 @@ fn listing_objects_in_different_regions() {
             2,
             true,
         ));
-        assert_eq!(AssetIdDetails::<Test>::get(1).unwrap().spv_created, true);
-        assert_eq!(AssetIdDetails::<Test>::get(2).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(1).unwrap().spv_created, true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(2).unwrap().spv_created, true);
         assert_ok!(Marketplace::relist_token(
             RuntimeOrigin::signed([1; 32].into()),
             1,
@@ -4908,12 +4832,12 @@ fn send_property_token_works() {
             RuntimeOrigin::root(),
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -5071,7 +4995,7 @@ fn send_property_token_fails() {
                 [1; 32].into(),
                 20
             ),
-            Error::<Test>::NotEnoughToken
+            RealEstateAssetError::<Test>::NotEnoughToken
         );
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
@@ -5081,12 +5005,12 @@ fn send_property_token_fails() {
             RuntimeOrigin::root(),
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -5120,7 +5044,7 @@ fn send_property_token_fails() {
                 [1; 32].into(),
                 20
             ),
-            Error::<Test>::NotEnoughToken
+            RealEstateAssetError::<Test>::NotEnoughToken
         );
     })
 }
@@ -5163,12 +5087,12 @@ fn send_property_token_fails_if_relist() {
             RuntimeOrigin::root(),
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([8; 32].into()),
             3,
             [11; 32].into()
@@ -5235,7 +5159,7 @@ fn send_property_token_fails_if_relist() {
                 [2; 32].into(),
                 10
             ),
-            Error::<Test>::NotEnoughToken
+            RealEstateAssetError::<Test>::NotEnoughToken
         );
     })
 }

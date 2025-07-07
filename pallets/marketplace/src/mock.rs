@@ -45,6 +45,8 @@ frame_support::construct_runtime!(
         XcavateWhitelist: pallet_xcavate_whitelist,
         AssetsHolder: pallet_assets_holder::<Instance2>,
         Regions: pallet_regions,
+        RealEstateAsset: pallet_real_estate_asset,
+
     }
 );
 
@@ -266,6 +268,21 @@ impl pallet_regions::Config for Test {
     type MinimumVotingAmount = ConstU128<100>;
 }
 
+impl pallet_real_estate_asset::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = u128;
+    type NativeCurrency = Balances;
+    type NftId = <Self as pallet_nfts::Config>::ItemId;
+    type Nfts = Nfts;
+    type PalletId = MarketplacePalletId;
+    type LocalCurrency = LocalAssets;
+    type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+    type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
+    type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+    type PropertyAccountFundingAmount = ConstU128<100>;
+    type MaxPropertyToken = MaxNftTokens;
+}
+
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const MinNftTokens: u32 = 100;
@@ -285,11 +302,9 @@ impl pallet_marketplace::Config for Test {
     type LocalCurrency = LocalAssets;
     type ForeignCurrency = ForeignAssets;
     type ForeignAssetsHolder = AssetsHolder;
-    type Nfts = Nfts;
     type PalletId = MarketplacePalletId;
     type MinNftToken = MinNftTokens;
     type MaxNftToken = MaxNftTokens;
-    type NftId = <Self as pallet_nfts::Config>::ItemId;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = NftHelper;
     type TreasuryId = TreasuryPalletId;
@@ -297,7 +312,6 @@ impl pallet_marketplace::Config for Test {
     type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ConstU128<10>;
-    type PropertyAccountFundingAmount = ConstU128<100>;
     type MarketplaceFeePercentage = ConstU128<1>;
     type AcceptedAssets = AcceptedPaymentAssets;
 }

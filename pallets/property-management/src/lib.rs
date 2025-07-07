@@ -88,8 +88,8 @@ pub mod pallet {
     pub trait Config:
         frame_system::Config
         + pallet_xcavate_whitelist::Config
-        + pallet_marketplace::Config
         + pallet_regions::Config
+        + pallet_real_estate_asset::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -144,6 +144,9 @@ pub mod pallet {
         /// The maximum amount of locations a letting agent can be assigned to.
         #[pallet::constant]
         type MaxLocations: Get<u32>;
+
+        #[pallet::constant]
+        type AcceptedAssets: Get<[u32; 2]>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -380,7 +383,7 @@ pub mod pallet {
         pub fn set_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_marketplace::AssetIdDetails::<T>::get(asset_id).is_some(),
+                pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id).is_some(),
                 Error::<T>::NoObjectFound
             );
             ensure!(
@@ -427,7 +430,7 @@ pub mod pallet {
                 LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
             ensure!(letting_agent == signer, Error::<T>::NoPermission);
             ensure!(
-                <T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset),
+                T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
             );
 
@@ -444,14 +447,14 @@ pub mod pallet {
             )
             .map_err(|_| Error::<T>::NotEnoughFunds)?;
 
-            let owner_list = pallet_marketplace::PropertyOwner::<T>::get(asset_id);
-            let property_info = pallet_marketplace::AssetIdDetails::<T>::get(asset_id)
+            let owner_list = pallet_real_estate_asset::Pallet::<T>::get_property_owner(asset_id);
+            let property_info = pallet_real_estate_asset::Pallet::<T>::get_property_asset_info(asset_id)
                 .ok_or(Error::<T>::NoObjectFound)?;
 
             let total_token = property_info.token_amount;
             for owner in owner_list {
                 let token_amount =
-                    pallet_marketplace::PropertyOwnerToken::<T>::get(asset_id, &owner);
+                    pallet_real_estate_asset::Pallet::<T>::get_token_balance(asset_id, &owner);
                 let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
                     .checked_mul(amount)
                     .ok_or(Error::<T>::MultiplyError)?
@@ -483,7 +486,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                <T as pallet_marketplace::Config>::AcceptedAssets::get().contains(&payment_asset),
+                T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
             );
             let amount = InvestorFunds::<T>::take((&signer, asset_id, payment_asset));

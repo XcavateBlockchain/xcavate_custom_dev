@@ -28,6 +28,7 @@ sp-runtime.workspace = true
 
 pallet-nfts = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-nft-fractionalization = { workspace = true }
 
 # Local dependencies
 pallet-xcavate-whitelist = { workspace = true }
@@ -61,6 +62,7 @@ std = [
 
     "pallet-nfts/std",
 	"pallet-balances/std",
+	"pallet-nft-fractionalization/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",

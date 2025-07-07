@@ -58,20 +58,6 @@ pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
     pub amount: u32,
 }
 
-/// Infos regarding the asset id.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
-    pub collection_id: NftCollectionId,
-    pub item_id: NftId,
-    pub region: RegionId,
-    pub location: LocationId<T>,
-    pub price: <T as pallet::Config>::Balance,
-    pub token_amount: u32,
-    pub spv_created: bool,
-}
-
 /// Infos regarding an offer.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]

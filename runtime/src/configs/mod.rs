@@ -604,11 +604,9 @@ impl pallet_marketplace::Config for Runtime {
     type LocalCurrency = RealEstateAssets;
     type ForeignCurrency = Assets;
     type ForeignAssetsHolder = AssetsHolder;
-    type Nfts = Nfts;
     type PalletId = MarketplacePalletId;
     type MinNftToken = MinNftTokens;
     type MaxNftToken = MaxNftTokens;
-    type NftId = <Self as pallet_nfts::Config>::ItemId;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = pallet_marketplace::NftHelper;
     type TreasuryId = TreasuryPalletId;
@@ -616,7 +614,6 @@ impl pallet_marketplace::Config for Runtime {
     type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ListingDepositAmount;
-    type PropertyAccountFundingAmount = PropertyFundingAmount;
     type MarketplaceFeePercentage = MarketplaceFeePercent;
     type AcceptedAssets = AcceptedPaymentAssets;
 }
@@ -655,6 +652,7 @@ impl pallet_property_management::Config for Runtime {
     type MaxProperties = MaxProperty;
     type MaxLettingAgents = MaxLettingAgent;
     type MaxLocations = MaxLocation;
+    type AcceptedAssets = AcceptedPaymentAssets;
 }
 
 parameter_types! {
@@ -692,6 +690,8 @@ impl pallet_property_governance::Config for Runtime {
     type SaleApprovalYesThreshold = SalesProposalThreshold;
     type AuctionTime = AuctionDuration;
     type Slash = ();
+    type AcceptedAssets = AcceptedPaymentAssets;
+    type TreasuryId = TreasuryPalletId;
 }
 
 parameter_types! {
@@ -747,6 +747,15 @@ impl pallet_regions::Config for Runtime {
 /// Configure the pallet-property-governance in pallets/property-governance.
 impl pallet_real_estate_asset::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type NativeCurrency = Balances;
     type NftId = <Self as pallet_nfts::Config>::ItemId;
     type Nfts = Nfts;
+    type PalletId = MarketplacePalletId;
+    type LocalCurrency = RealEstateAssets;
+    type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+    type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
+    type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+    type PropertyAccountFundingAmount = PropertyFundingAmount;
+    type MaxPropertyToken = MaxNftTokens;
 }

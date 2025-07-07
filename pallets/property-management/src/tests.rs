@@ -753,12 +753,12 @@ fn distribute_income_works() {
             RuntimeOrigin::root(),
             [3; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [11; 32].into()
@@ -962,12 +962,12 @@ fn withdraw_funds_works() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [11; 32].into()
@@ -1100,12 +1100,12 @@ fn withdraw_funds_fails() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [10; 32].into()
         ));
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
             [11; 32].into()

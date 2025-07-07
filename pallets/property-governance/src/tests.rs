@@ -17,7 +17,9 @@ use crate::{
 
 use pallet_property_management::{InvestorFunds, LettingInfo, LettingStorage};
 
-use pallet_marketplace::{types::LegalProperty, AssetIdDetails, PropertyOwner};
+use pallet_marketplace::types::LegalProperty;
+
+use pallet_real_estate_asset::{PropertyAssetInfo, PropertyOwner};
 
 use pallet_regions::RegionIdentifier;
 
@@ -116,12 +118,12 @@ fn setting_letting_agent(agent: AccountId) {
 }
 
 fn lawyer_process() {
-    assert_ok!(Marketplace::register_lawyer(
+    assert_ok!(Regions::register_lawyer(
         RuntimeOrigin::signed([6; 32].into()),
         3,
         [10; 32].into()
     ));
-    assert_ok!(Marketplace::register_lawyer(
+    assert_ok!(Regions::register_lawyer(
         RuntimeOrigin::signed([6; 32].into()),
         3,
         [11; 32].into()
@@ -2278,7 +2280,7 @@ fn lawyer_claim_sale_fails() {
             ),
             Error::<Test>::AssetNotFound
         );
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             4,
             [12; 32].into()
@@ -2450,7 +2452,7 @@ fn lawyer_claim_sale_fails_2() {
             ),
             Error::<Test>::AssetNotFound
         );
-        assert_ok!(Marketplace::register_lawyer(
+        assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             2,
             [12; 32].into()
@@ -3679,7 +3681,7 @@ fn claim_sale_funds_works() {
         );
         assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_075_400);
         assert_eq!(Nfts::owner(0, 0).is_none(), true);
-        assert_eq!(AssetIdDetails::<Test>::get(0).is_none(), true);
+        assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
         assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);
         assert_eq!(LocalAssets::total_issuance(0), 0);
         assert_eq!(PropertySale::<Test>::get(0).is_none(), true);

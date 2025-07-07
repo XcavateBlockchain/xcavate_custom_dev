@@ -377,6 +377,12 @@ pub mod pallet {
         ValueQuery,
     >;
 
+    /// !!!!To be removed!!!!
+    /// Stores in which region a lawyer is active.
+    #[pallet::storage]
+    pub type RealEstateLawyer<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, RegionId, OptionQuery>;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -407,7 +413,10 @@ pub mod pallet {
             listing_duration: BlockNumberFor<T>,
         },
         /// Tax of a region changed.
-        RegionTaxChanged { region_id: RegionId, new_tax: Permill },
+        RegionTaxChanged {
+            region_id: RegionId,
+            new_tax: Permill,
+        },
         /// New location has been created.
         LocationCreated {
             region_id: RegionId,
@@ -416,7 +425,10 @@ pub mod pallet {
         /// An auction for a region has started.
         RegionAuctionStarted { region_id: RegionId },
         /// A region got rejected.
-        RegionRejected { region_id: RegionId, slashed: T::Balance },
+        RegionRejected {
+            region_id: RegionId,
+            slashed: T::Balance,
+        },
         /// A bid for a region got placed.
         BidSuccessfullyPlaced {
             region_id: RegionId,
@@ -480,6 +492,11 @@ pub mod pallet {
         RegionOwnerReplacementFailed {
             region_id: RegionId,
             error: DispatchResult,
+        },
+        /// A lawyer has been registered.
+        LawyerRegistered {
+            lawyer: T::AccountId,
+            region_id: RegionId,
         },
     }
 
@@ -546,6 +563,8 @@ pub mod pallet {
         NotEnoughTokenToVote,
         /// The auction does not have an winning bidder.
         RegionHasNoWinningBidder,
+        /// The lawyer has already been registered.
+        LawyerAlreadyRegistered,
     }
 
     #[pallet::hooks]
@@ -680,7 +699,10 @@ pub mod pallet {
                 Error::<T>::ProposalExpired
             );
             let voting_power = T::NativeCurrency::balance(&signer);
-            ensure!(voting_power >= T::MinimumVotingAmount::get(), Error::<T>::NotEnoughTokenToVote);
+            ensure!(
+                voting_power >= T::MinimumVotingAmount::get(),
+                Error::<T>::NotEnoughTokenToVote
+            );
             OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserRegionVote::<T>::get(region_id, &signer);
@@ -843,7 +865,9 @@ pub mod pallet {
                 Error::<T>::AuctionNotFinished
             );
 
-            let region_owner = auction.highest_bidder.ok_or(Error::<T>::RegionHasNoWinningBidder)?;
+            let region_owner = auction
+                .highest_bidder
+                .ok_or(Error::<T>::RegionHasNoWinningBidder)?;
 
             ensure!(region_owner == signer, Error::<T>::NotRegionOwner);
 
@@ -1109,7 +1133,10 @@ pub mod pallet {
                 Error::<T>::UserNotWhitelisted
             );
             let voting_power = T::NativeCurrency::balance(&signer);
-            ensure!(voting_power >= T::MinimumVotingAmount::get(), Error::<T>::NotEnoughTokenToVote);
+            ensure!(
+                voting_power >= T::MinimumVotingAmount::get(),
+                Error::<T>::NotEnoughTokenToVote
+            );
             OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 let previous_vote_opt = UserRegionOwnerVote::<T>::get(region_id, &signer);
@@ -1344,6 +1371,38 @@ pub mod pallet {
             Self::deposit_event(Event::<T>::RegionOperatorRemoved { regional_operator });
             Ok(())
         }
+
+        /// !!!!To be removed!!!!
+        /// Registers a new lawyer.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `lawyer`: The lawyer that should be registered.
+        ///
+        /// Emits `LawyerRegistered` event when succesfful.
+        #[pallet::call_index(21)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        pub fn register_lawyer(
+            origin: OriginFor<T>,
+            region: RegionId,
+            lawyer: T::AccountId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let region_info =
+                RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+            ensure!(region_info.owner == signer, Error::<T>::NoPermission);
+            ensure!(
+                RealEstateLawyer::<T>::get(&lawyer).is_none(),
+                Error::<T>::LawyerAlreadyRegistered
+            );
+            RealEstateLawyer::<T>::insert(&lawyer, region);
+            Self::deposit_event(Event::<T>::LawyerRegistered {
+                lawyer,
+                region_id: region,
+            });
+            Ok(())
+        }
     }
 
     impl<T: Config> Pallet<T> {
@@ -1408,7 +1467,10 @@ pub mod pallet {
 
                 T::Slash::on_unbalanced(imbalance);
                 ProposedRegionIds::<T>::remove(region_id);
-                Self::deposit_event(Event::RegionRejected { region_id, slashed: proposal.deposit });
+                Self::deposit_event(Event::RegionRejected {
+                    region_id,
+                    slashed: proposal.deposit,
+                });
                 Ok(false)
             }
         }
