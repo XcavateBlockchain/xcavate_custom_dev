@@ -68,13 +68,6 @@ pub mod pallet {
         fn to_asset(i: u32) -> AssetId;
     }
 
-    #[cfg(feature = "runtime-benchmarks")]
-    impl<T: Config> BenchmarkHelper<FractionalizedAssetId<T>, T> for NftHelper {
-        fn to_asset(i: u32) -> FractionalizedAssetId<T> {
-            i.into()
-        }
-    }
-
     #[pallet::composite_enum]
     pub enum HoldReason {
         #[codec(index = 0)]
@@ -159,24 +152,6 @@ pub mod pallet {
         #[pallet::constant]
         type MaxNftToken: Get<u32>;
 
-        /// Collection id type from pallet nft fractionalization.
-        type FractionalizeCollectionId: IsType<<Self as pallet_nft_fractionalization::Config>::NftCollectionId>
-            + Parameter
-            + From<<Self as pallet_regions::Config>::NftCollectionId>
-            + Ord
-            + Copy
-            + MaxEncodedLen
-            + Encode;
-
-        /// Item id type from pallet nft fractionalization.
-        type FractionalizeItemId: IsType<<Self as pallet_nft_fractionalization::Config>::NftId>
-            + Parameter
-            + From<<Self as pallet_real_estate_asset::Config>::NftId>
-            + Ord
-            + Copy
-            + MaxEncodedLen
-            + Encode;
-
         /// Asset id type from pallet nft fractionalization.
         type AssetId: IsType<<Self as pallet_nft_fractionalization::Config>::AssetId>
             + Parameter
@@ -202,9 +177,6 @@ pub mod pallet {
         type PropertyToken: PropertyTokenTrait<Self>;
     }
 
-    pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
-    pub type FractionalizeCollectionId<T> = <T as Config>::FractionalizeCollectionId;
-    pub type FractionalizeItemId<T> = <T as Config>::FractionalizeItemId;
     pub type RegionId = u16;
     pub type ListingId = u32;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -441,8 +413,6 @@ pub mod pallet {
         NotEnoughFunds,
         /// Not enough token available to buy.
         NotEnoughTokenAvailable,
-        /// Error by converting a type.
-        ConversionError,
         /// Error by dividing a number.
         DivisionError,
         /// Error by multiplying a number.
@@ -465,8 +435,6 @@ pub mod pallet {
         TooManyTokenBuyer,
         /// This Region is not known.
         RegionUnknown,
-        /// The location is already registered.
-        LocationRegistered,
         /// The location is not registered.
         LocationUnknown,
         /// The object can not be divided in so many token.
@@ -490,8 +458,6 @@ pub mod pallet {
         ExceedsMaxEntries,
         /// The property is not refunded.
         TokenNotRefunded,
-        /// The duration of a listing can not be zero.
-        ListingDurationCantBeZero,
         /// The property is already sold.
         PropertyAlreadySold,
         /// Listing has already expired.
@@ -512,14 +478,6 @@ pub mod pallet {
         NotEnoughToken,
         /// Token have not been returned yet.
         TokenNotReturned,
-        /// Listing limit is set too high.
-        ListingDurationTooHigh,
-        /// The proposer is already owner of this region.
-        AlreadyRegionOwner,
-        /// There is already a takeover request pending.
-        TakeoverAlreadyPending,
-        /// There is no pending takeover request.
-        NoTakeoverRequest,
         /// The real estate object could not be found.
         NoObjectFound,
         /// The lawyer has no permission for this region.
@@ -543,7 +501,7 @@ pub mod pallet {
         /// - `data`: The Metadata of the nft.
         ///
         /// Emits `ObjectListed` event when succesfful
-        #[pallet::call_index(7)]
+        #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object())]
         pub fn list_object(
             origin: OriginFor<T>,
@@ -665,7 +623,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
         /// Emits `PropertyTokenBought` event when succesfful.
-        #[pallet::call_index(8)]
+        #[pallet::call_index(1)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
         pub fn buy_property_token(
             origin: OriginFor<T>,
@@ -874,7 +832,7 @@ pub mod pallet {
         /// - `amount`: The amount of token of the real estate object that should be listed.
         ///
         /// Emits `TokenRelisted` event when succesfful
-        #[pallet::call_index(9)]
+        #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
         pub fn relist_token(
             origin: OriginFor<T>,
@@ -937,7 +895,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
         /// Emits `RelistedTokenBought` event when succesfful.
-        #[pallet::call_index(10)]
+        #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
         pub fn buy_relisted_token(
             origin: OriginFor<T>,
@@ -985,7 +943,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `BuyCancelled` event when succesfful.
-        #[pallet::call_index(11)]
+        #[pallet::call_index(4)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn cancel_property_purchase(
             origin: OriginFor<T>,
@@ -1050,7 +1008,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
         /// Emits `OfferCreated` event when succesfful.
-        #[pallet::call_index(12)]
+        #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
         pub fn make_offer(
             origin: OriginFor<T>,
@@ -1118,7 +1076,7 @@ pub mod pallet {
         ///
         /// Emits `OfferAccepted` event when offer gets accepted succesffully.
         /// Emits `OfferRejected` event when offer gets rejected succesffully.
-        #[pallet::call_index(13)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
         pub fn handle_offer(
             origin: OriginFor<T>,
@@ -1186,7 +1144,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `OfferCancelled` event when succesfful.
-        #[pallet::call_index(14)]
+        #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1216,7 +1174,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `RejectedFundsWithdrawn` event when succesfful.
-        #[pallet::call_index(15)]
+        #[pallet::call_index(8)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1293,7 +1251,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `ExpiredFundsWithdrawn` event when succesfful.
-        #[pallet::call_index(16)]
+        #[pallet::call_index(9)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1380,7 +1338,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
         ///
         /// Emits `DepositWithdrawnUnsold` event when succesfful.
-        #[pallet::call_index(17)]
+        #[pallet::call_index(10)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_deposit_unsold(
             origin: OriginFor<T>,
@@ -1454,7 +1412,7 @@ pub mod pallet {
         /// - `new_price`: The new price of the nft.
         ///
         /// Emits `ListingUpdated` event when succesfful.
-        #[pallet::call_index(18)]
+        #[pallet::call_index(11)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
         pub fn upgrade_listing(
             origin: OriginFor<T>,
@@ -1490,7 +1448,7 @@ pub mod pallet {
         /// - `new_price`: The new price of the object.
         ///
         /// Emits `ObjectUpdated` event when succesfful.
-        #[pallet::call_index(19)]
+        #[pallet::call_index(12)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
         pub fn upgrade_object(
             origin: OriginFor<T>,
@@ -1545,7 +1503,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the seller wants to delist.
         ///
         /// Emits `ListingDelisted` event when succesfful.
-        #[pallet::call_index(20)]
+        #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1581,7 +1539,7 @@ pub mod pallet {
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
         /// Emits `LawyerClaimedProperty` event when succesfful.
-        #[pallet::call_index(22)]
+        #[pallet::call_index(14)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn lawyer_claim_property(
             origin: OriginFor<T>,
@@ -1721,7 +1679,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         ///
         /// Emits `LawyerRemovedFromCase` event when succesfful.
-        #[pallet::call_index(23)]
+        #[pallet::call_index(15)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn remove_from_case(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1767,7 +1725,7 @@ pub mod pallet {
         /// - `approve`: Approves or Rejects the case.
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
-        #[pallet::call_index(24)]
+        #[pallet::call_index(16)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn lawyer_confirm_documents(
             origin: OriginFor<T>,
@@ -1891,7 +1849,7 @@ pub mod pallet {
         /// - `token_amount`: The amount of token the sender wants to send.
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
-        #[pallet::call_index(25)]
+        #[pallet::call_index(17)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn send_property_token(
             origin: OriginFor<T>,
@@ -2179,7 +2137,7 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, *asset)?;
                 Self::transfer_funds(&property_account, &spv_lawyer_id, *lawyer_costs, *asset)?;
             }
-            T::PropertyToken::remove_token_owner_list(nft_details.asset_id)?;
+            T::PropertyToken::clear_token_owners(nft_details.asset_id)?;
             <TokenBuyer<T>>::take(listing_id);
             Ok(())
         }

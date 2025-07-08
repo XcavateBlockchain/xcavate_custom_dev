@@ -1499,7 +1499,7 @@ pub mod pallet {
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
             if property_sale_info.property_token_amount == 0 {
                 <T as pallet::Config>::PropertyToken::burn_property_token(asset_id)?;
-                <T as pallet::Config>::PropertyToken::remove_token_owner_list(asset_id)?;
+                <T as pallet::Config>::PropertyToken::clear_token_owners(asset_id)?;
             } else {
                 PropertySale::<T>::insert(asset_id, property_sale_info);
             }

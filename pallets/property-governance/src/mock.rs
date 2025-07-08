@@ -318,8 +318,6 @@ impl pallet_marketplace::Config for Test {
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = NftHelper;
     type TreasuryId = TreasuryPalletId;
-    type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
-    type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ConstU128<10>;
     type MarketplaceFeePercentage = ConstU128<1>;

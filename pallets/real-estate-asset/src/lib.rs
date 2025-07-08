@@ -2,6 +2,12 @@
 
 pub use pallet::*;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 pub mod traits;
 
 use frame_support::pallet_prelude::*;
@@ -323,47 +329,53 @@ pub mod pallet {
             Ok((item_id, asset_number))
         }
 
-        pub(crate) fn burn_property_token(asset_id: u32) -> DispatchResult {
-            let asset_details = PropertyAssetInfo::<T>::take(asset_id)
-                .ok_or(Error::<T>::PropertyAssetNotRegistered)?;
-            let pallet_account = Self::property_account_id(asset_id);
-            let pallet_origin: OriginFor<T> = RawOrigin::Signed(pallet_account.clone()).into();
-            let user_lookup = <T::Lookup as StaticLookup>::unlookup(pallet_account);
-            let fractionalize_collection_id =
-                FractionalizeCollectionId::<T>::from(asset_details.collection_id);
-            let fractionalize_item_id = FractionalizeItemId::<T>::from(asset_details.item_id);
-            let fractionalize_asset_id = FractionalizedAssetId::<T>::from(asset_id);
-            pallet_nft_fractionalization::Pallet::<T>::unify(
-                pallet_origin.clone(),
-                fractionalize_collection_id.into(),
-                fractionalize_item_id.into(),
-                fractionalize_asset_id.into(),
-                user_lookup,
-            )?;
-            <T as pallet::Config>::Nfts::burn(
-                &asset_details.collection_id,
-                &asset_details.item_id,
-                None,
-            )?;
-            Self::deposit_event(Event::<T>::PropertyNftBurned {
-                collection_id: asset_details.collection_id,
-                item_id: asset_details.item_id,
-                asset_id,
-            });
+        pub(crate) fn do_burn_property_token(asset_id: u32) -> DispatchResult {
+            PropertyAssetInfo::<T>::try_mutate_exists(asset_id, |maybe_details| {
+                let asset_details = maybe_details.as_ref().ok_or(Error::<T>::PropertyAssetNotRegistered)?;
+                let pallet_account = Self::property_account_id(asset_id);
+                let pallet_origin: OriginFor<T> = RawOrigin::Signed(pallet_account.clone()).into();
+                let user_lookup = <T::Lookup as StaticLookup>::unlookup(pallet_account);
+                let fractionalize_collection_id =
+                    FractionalizeCollectionId::<T>::from(asset_details.collection_id);
+                let fractionalize_item_id = FractionalizeItemId::<T>::from(asset_details.item_id);
+                let fractionalize_asset_id = FractionalizedAssetId::<T>::from(asset_id);
+                pallet_nft_fractionalization::Pallet::<T>::unify(
+                    pallet_origin.clone(),
+                    fractionalize_collection_id.into(),
+                    fractionalize_item_id.into(),
+                    fractionalize_asset_id.into(),
+                    user_lookup,
+                )?;
+                <T as pallet::Config>::Nfts::burn(
+                    &asset_details.collection_id,
+                    &asset_details.item_id,
+                    None,
+                )?;
+
+                Self::deposit_event(Event::<T>::PropertyNftBurned {
+                    collection_id: asset_details.collection_id,
+                    item_id: asset_details.item_id,
+                    asset_id,
+                });
+
+                *maybe_details = None;
+                Ok::<(), DispatchError>(())
+            })?;
             Ok(())
         }
 
-        pub(crate) fn transfer_property_token(
+        pub(crate) fn do_transfer_property_token(
             asset_id: u32,
             sender: &AccountIdOf<T>,
             funds_source: &AccountIdOf<T>,
             receiver: &AccountIdOf<T>,
             token_amount: u32,
         ) -> DispatchResult {
-            let sender_token_amount = PropertyOwnerToken::<T>::take(asset_id, sender);
-            let new_sender_token_amount = sender_token_amount
+            let sender_balance = PropertyOwnerToken::<T>::get(asset_id, sender);
+            let updated_sender_balance = sender_balance
                 .checked_sub(token_amount)
                 .ok_or(Error::<T>::NotEnoughToken)?;
+
             <T as pallet::Config>::LocalCurrency::transfer(
                 asset_id,
                 funds_source,
@@ -372,18 +384,32 @@ pub mod pallet {
                 Preservation::Expendable,
             )
             .map_err(|_| Error::<T>::NotEnoughToken)?;
-            if new_sender_token_amount == 0 {
-                let mut owner_list = PropertyOwner::<T>::take(asset_id);
-                let index = owner_list
-                    .iter()
-                    .position(|x| x == sender)
-                    .ok_or(Error::<T>::InvalidIndex)?;
-                owner_list.remove(index);
-                PropertyOwner::<T>::insert(asset_id, owner_list);
-            } else {
-                PropertyOwnerToken::<T>::insert(asset_id, sender, new_sender_token_amount);
+                
+            if updated_sender_balance == 0 {
+                PropertyOwnerToken::<T>::remove(asset_id, sender);
+                PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
+                    let index = owner_list
+                        .iter()
+                        .position(|x| x == sender)
+                        .ok_or(Error::<T>::InvalidIndex)?;
+                    owner_list.swap_remove(index);
+                    Ok::<(), DispatchError>(())
+                })?;
+             } else {
+                PropertyOwnerToken::<T>::insert(asset_id, sender, updated_sender_balance);
             }
-            if PropertyOwner::<T>::get(asset_id).contains(receiver) {
+            let already_exists = PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
+                if owner_list.contains(receiver) {
+                    Ok::<bool, DispatchError>(true)
+                } else {
+                    owner_list
+                        .try_push(receiver.clone())
+                        .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+                    Ok::<bool, DispatchError>(false)
+                }
+            })?;
+
+            if already_exists {
                 PropertyOwnerToken::<T>::try_mutate(asset_id, receiver, |receiver_balance| {
                     *receiver_balance = receiver_balance
                         .checked_add(token_amount)
@@ -391,18 +417,12 @@ pub mod pallet {
                     Ok::<(), DispatchError>(())
                 })?;
             } else {
-                PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
-                    owner_list
-                        .try_push(receiver.clone())
-                        .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
-                    Ok::<(), DispatchError>(())
-                })?;
                 PropertyOwnerToken::<T>::insert(asset_id, receiver, token_amount);
             }
             Ok(())
         }
 
-        pub(crate) fn distribute_property_token_to_owner(
+        pub(crate) fn do_distribute_property_token_to_owner(
             asset_id: u32,
             investor: &AccountIdOf<T>,
             token_amount: u32,
@@ -426,11 +446,11 @@ pub mod pallet {
             Ok(())
         }
 
-        pub(crate) fn take_property_token(asset_id: u32, owner: &AccountIdOf<T>) -> u32 {
+        pub(crate) fn do_take_property_token(asset_id: u32, owner: &AccountIdOf<T>) -> u32 {
             PropertyOwnerToken::<T>::take(asset_id, owner)
         }
 
-        pub(crate) fn remove_token_ownership(
+        pub(crate) fn do_remove_token_ownership(
             asset_id: u32,
             account: &AccountIdOf<T>,
         ) -> DispatchResult {
@@ -438,12 +458,12 @@ pub mod pallet {
             Ok(())
         }
 
-        pub(crate) fn remove_token_owner_list(asset_id: u32) -> DispatchResult {
+        pub(crate) fn do_clear_token_owners(asset_id: u32) -> DispatchResult {
             PropertyOwner::<T>::take(asset_id);
             Ok(())
         }
 
-        pub(crate) fn register_spv(asset_id: u32) -> DispatchResult {
+        pub(crate) fn do_register_spv(asset_id: u32) -> DispatchResult {
             PropertyAssetInfo::<T>::try_mutate(asset_id, |maybe_asset_details| {
                 let asset_details = maybe_asset_details
                     .as_mut()
@@ -451,13 +471,6 @@ pub mod pallet {
                 asset_details.spv_created = true;
                 Ok::<(), DispatchError>(())
             })
-        }
-
-        /// Set the default item configuration for minting a nft.
-        fn default_item_config() -> ItemConfig {
-            ItemConfig {
-                settings: ItemSettings::all_enabled(),
-            }
         }
 
         pub(crate) fn get_property_asset_info(
@@ -480,6 +493,13 @@ pub mod pallet {
 
         pub(crate) fn get_token_balance(asset_id: u32, owner: &AccountIdOf<T>) -> u32 {
             PropertyOwnerToken::<T>::get(asset_id, owner)
+        }
+
+        /// Set the default item configuration for minting a nft.
+        fn default_item_config() -> ItemConfig {
+            ItemConfig {
+                settings: ItemSettings::all_enabled(),
+            }
         }
     }
 }
