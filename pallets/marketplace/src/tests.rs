@@ -2256,7 +2256,7 @@ fn relist_nfts_not_created_with_marketplace_fails() {
         new_region_helper();
         assert_noop!(
             Marketplace::relist_token(RuntimeOrigin::signed([0; 32].into()), 0, 1000, 1),
-            Error::<Test>::NftNotFound
+            Error::<Test>::PropertyNotFound
         );
     })
 }

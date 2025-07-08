@@ -276,7 +276,7 @@ pub mod pallet {
                 Error::<T>::LocationUnknown
             );
             ensure!(
-                !<LettingInfo<T>>::contains_key(&letting_agent),
+                !LettingInfo::<T>::contains_key(&letting_agent),
                 Error::<T>::LettingAgentExists
             );
             let mut letting_info = LettingAgentInfo {
@@ -523,7 +523,7 @@ pub mod pallet {
 
         /// Removes bad letting agents.
         pub fn remove_bad_letting_agent(asset_id: u32) -> DispatchResult {
-            LettingStorage::<T>::take(asset_id);
+            LettingStorage::<T>::remove(asset_id);
             Ok(())
         }
     }

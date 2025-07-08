@@ -153,7 +153,7 @@ fn distribute_property_token_to_owner_works() {
         );
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxNftTokens>::try_from(
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
                 vec![[1; 32].into(), [2; 32].into()]
             ).unwrap()
         );
@@ -201,7 +201,7 @@ fn transfer_property_token_works() {
         assert_ok!(RealEstateAsset::transfer_property_token(0, &[2; 32].into(), &[2; 32].into(), &[3; 32].into(), 3));
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxNftTokens>::try_from(
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
                 vec![[1; 32].into(), [3; 32].into()]
             ).unwrap()
         );
@@ -254,6 +254,86 @@ fn transfer_property_token_fails() {
         assert_eq!(
             LocalAssets::balance(0, &[2; 32].into()),
             6
+        );
+    })
+}
+
+#[test]
+fn take_property_token_works() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
+        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 4);
+        assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
+        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 0);
+    })
+}
+
+#[test]
+fn remove_token_ownership_works() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
+        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 4);
+        assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
+        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 0);
+    })
+}
+
+#[test]
+fn clear_token_owners_works() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
+        assert_eq!(
+            PropertyOwner::<Test>::get(0),
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
+                vec![[1; 32].into(), [2; 32].into()]
+            ).unwrap()
+        );
+        assert_ok!(RealEstateAsset::clear_token_owners(0));
+        assert_eq!(
+            PropertyOwner::<Test>::get(0),
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
+                vec![]
+            ).unwrap()
+        );
+    })
+}
+
+#[test]
+fn register_spv_works() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_eq!(
+            PropertyAssetInfo::<Test>::get(0).unwrap(), 
+            PropertyAssetDetails {
+                collection_id: 0,
+                item_id: 0,
+                region: 3,
+                location: bvec![10, 10],
+                price: 1_000,
+                token_amount: 10,
+                spv_created: false,
+            }
+        );
+        assert_ok!(RealEstateAsset::register_spv(0));
+        assert_eq!(
+            PropertyAssetInfo::<Test>::get(0).unwrap(), 
+            PropertyAssetDetails {
+                collection_id: 0,
+                item_id: 0,
+                region: 3,
+                location: bvec![10, 10],
+                price: 1_000,
+                token_amount: 10,
+                spv_created: true,
+            }
         );
     })
 }

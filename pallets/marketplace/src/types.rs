@@ -31,12 +31,12 @@ pub struct NftDetails<T: Config> {
 /// Infos regarding the listing of a real estate object.
 #[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
+pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub real_estate_developer: AccountIdOf<T>,
     pub token_price: <T as pallet::Config>::Balance,
-    pub collected_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
-    pub collected_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
-    pub collected_fees: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub collected_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub collected_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub collected_fees: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
     pub asset_id: u32,
     pub item_id: NftId,
     pub collection_id: NftCollectionId,
@@ -87,8 +87,8 @@ pub struct PropertyLawyerDetails<T: Config> {
     pub real_estate_developer_status: DocumentStatus,
     pub spv_status: DocumentStatus,
     pub real_estate_developer_lawyer_costs:
-        BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
-    pub spv_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+        BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub spv_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
     pub second_attempt: bool,
 }
 
@@ -98,8 +98,8 @@ pub struct PropertyLawyerDetails<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct TokenOwnerDetails<T: Config> {
     pub token_amount: u32,
-    pub paid_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
-    pub paid_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+    pub paid_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub paid_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
 }
 
 #[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]

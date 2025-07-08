@@ -279,13 +279,13 @@ impl pallet_real_estate_asset::Config for Test {
     type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type PropertyAccountFundingAmount = ConstU128<100>;
-    type MaxPropertyToken = MaxNftTokens;
+    type MaxPropertyToken = MaxPropertyTokens;
 }
 
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
-    pub const MinNftTokens: u32 = 100;
-    pub const MaxNftTokens: u32 = 250;
+    pub const MinPropertyTokens: u32 = 100;
+    pub const MaxPropertyTokens: u32 = 250;
     pub const MaxNftsInCollection: u32 = 100;
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
@@ -302,8 +302,8 @@ impl pallet_marketplace::Config for Test {
     type ForeignCurrency = ForeignAssets;
     type ForeignAssetsHolder = AssetsHolder;
     type PalletId = MarketplacePalletId;
-    type MinNftToken = MinNftTokens;
-    type MaxNftToken = MaxNftTokens;
+    type MinPropertyToken = MinPropertyTokens;
+    type MaxPropertyToken = MaxPropertyTokens;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = NftHelper;
     type TreasuryId = TreasuryPalletId;

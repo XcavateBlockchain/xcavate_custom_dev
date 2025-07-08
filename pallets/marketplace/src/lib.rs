@@ -144,13 +144,13 @@ pub mod pallet {
             Self,
         >;
 
-        /// The minimum amount of token of a nft.
+        /// The minimum amount of token of a property.
         #[pallet::constant]
-        type MinNftToken: Get<u32>;
+        type MinPropertyToken: Get<u32>;
 
-        /// The maximum amount of token of a nft.
+        /// The maximum amount of token of a property.
         #[pallet::constant]
-        type MaxNftToken: Get<u32>;
+        type MaxPropertyToken: Get<u32>;
 
         /// Asset id type from pallet nft fractionalization.
         type AssetId: IsType<<Self as pallet_nft_fractionalization::Config>::AssetId>
@@ -181,7 +181,7 @@ pub mod pallet {
     pub type ListingId = u32;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
-    pub(super) type NftListingDetailsType<T> = NftListingDetails<
+    pub(super) type PropertyListingDetailsType<T> = PropertyListingDetails<
         <T as pallet_real_estate_asset::Config>::NftId,
         <T as pallet_regions::Config>::NftCollectionId,
         T,
@@ -197,10 +197,10 @@ pub mod pallet {
     #[pallet::storage]
     pub(super) type NextListingId<T: Config> = StorageValue<_, ListingId, ValueQuery>;
 
-    /// Mapping of the listing id to the ongoing nft listing details.
+    /// Mapping of the listing id to the ongoing property listing details.
     #[pallet::storage]
     pub(super) type OngoingObjectListing<T: Config> =
-        StorageMap<_, Blake2_128Concat, ListingId, NftListingDetailsType<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ListingId, PropertyListingDetailsType<T>, OptionQuery>;
 
     /// Mapping of the listing id to the amount of listed token.
     #[pallet::storage]
@@ -213,7 +213,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         ListingId,
-        BoundedVec<AccountIdOf<T>, T::MaxNftToken>,
+        BoundedVec<AccountIdOf<T>, <T as pallet::Config>::MaxPropertyToken>,
         ValueQuery,
     >;
 
@@ -312,7 +312,7 @@ pub mod pallet {
             listing_index: ListingId,
             new_price: <T as pallet::Config>::Balance,
         },
-        /// The nft has been delisted.
+        /// The property has been delisted.
         ListingDelisted { listing_index: ListingId },
         /// The price of the listed object has been updated.
         ObjectUpdated {
@@ -429,8 +429,8 @@ pub mod pallet {
         ArithmeticOverflow,
         /// The token is not for sale.
         TokenNotForSale,
-        /// The nft has not been registered on the marketplace.
-        NftNotFound,
+        /// The property has not been registered on the marketplace.
+        PropertyNotFound,
         /// There are already too many token buyer.
         TooManyTokenBuyer,
         /// This Region is not known.
@@ -519,11 +519,11 @@ pub mod pallet {
             );
             ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(
-                token_amount <= T::MaxNftToken::get(),
+                token_amount <= <T as pallet::Config>::MaxPropertyToken::get(),
                 Error::<T>::TooManyToken
             );
             ensure!(
-                token_amount >= T::MinNftToken::get(),
+                token_amount >= T::MinPropertyToken::get(),
                 Error::<T>::TokenAmountTooLow
             );
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
@@ -571,7 +571,7 @@ pub mod pallet {
                 data,
             )?;
 
-            let nft = NftListingDetails {
+            let property_details = PropertyListingDetails {
                 real_estate_developer: signer.clone(),
                 token_price,
                 collected_funds: collected_funds.clone(),
@@ -584,7 +584,7 @@ pub mod pallet {
                 tax_paid_by_developer,
                 listing_expiry,
             };
-            OngoingObjectListing::<T>::insert(listing_id, nft);
+            OngoingObjectListing::<T>::insert(listing_id, property_details);
             ListedToken::<T>::insert(listing_id, token_amount);
 
             <T as pallet::Config>::NativeCurrency::hold(
@@ -648,21 +648,21 @@ pub mod pallet {
                     .as_mut()
                     .ok_or(Error::<T>::TokenNotForSale)?;
                 ensure!(*listed_token >= amount, Error::<T>::NotEnoughTokenAvailable);
-                let mut nft_details =
+                let mut property_details =
                     OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
                 let asset_details =
-                    pallet_real_estate_asset::PropertyAssetInfo::<T>::get(nft_details.asset_id)
+                    pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
                         .ok_or(Error::<T>::InvalidIndex)?;
 
                 ensure!(!asset_details.spv_created, Error::<T>::SpvAlreadyCreated);
 
                 ensure!(
-                    nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
+                    property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                     Error::<T>::ListingExpired
                 );
 
-                let transfer_price = nft_details
+                let transfer_price = property_details
                     .token_price
                     .checked_mul(&((amount as u128).into()))
                     .ok_or(Error::<T>::MultiplyError)?;
@@ -692,7 +692,7 @@ pub mod pallet {
                     .checked_add(&fee)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-                let total_transfer_price = if nft_details.tax_paid_by_developer {
+                let total_transfer_price = if property_details.tax_paid_by_developer {
                     base_price
                 } else {
                     base_price
@@ -754,7 +754,7 @@ pub mod pallet {
                             }
                         }
 
-                        if !nft_details.tax_paid_by_developer {
+                        if !property_details.tax_paid_by_developer {
                             match token_owner_details.paid_tax.get_mut(&payment_asset) {
                                 Some(existing) => {
                                     *existing = existing
@@ -774,9 +774,9 @@ pub mod pallet {
                     },
                 )?;
                 for (map, value) in [
-                    (&mut nft_details.collected_funds, transfer_price),
-                    (&mut nft_details.collected_tax, tax),
-                    (&mut nft_details.collected_fees, fee),
+                    (&mut property_details.collected_funds, transfer_price),
+                    (&mut property_details.collected_tax, tax),
+                    (&mut property_details.collected_fees, fee),
                 ] {
                     match map.get_mut(&payment_asset) {
                         Some(existing) => {
@@ -790,8 +790,8 @@ pub mod pallet {
                             .map_err(|_| Error::<T>::ExceedsMaxEntries)?,
                     }
                 }
-                let asset_id = nft_details.asset_id;
-                OngoingObjectListing::<T>::insert(listing_id, &nft_details);
+                let asset_id = property_details.asset_id;
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
                 if *listed_token == 0 {
                     let initial_funds = Self::create_initial_funds()?;
                     let property_lawyer_details = PropertyLawyerDetails {
@@ -803,7 +803,7 @@ pub mod pallet {
                         spv_lawyer_costs: initial_funds,
                         second_attempt: false,
                     };
-                    Self::token_distribution(listing_id, nft_details)?;
+                    Self::token_distribution(listing_id, property_details)?;
                     PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                     *maybe_listed_token = None;
                 }
@@ -850,7 +850,7 @@ pub mod pallet {
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
 
             let asset_details = pallet_real_estate_asset::PropertyAssetInfo::<T>::get(asset_id)
-                .ok_or(Error::<T>::NftNotFound)?;
+                .ok_or(Error::<T>::PropertyNotFound)?;
             ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
 
             let property_account = Self::property_account_id(asset_id);
@@ -950,10 +950,10 @@ pub mod pallet {
             listing_id: ListingId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let mut nft_details =
+            let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
-                nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
+                property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingExpired
             );
             ensure!(
@@ -968,7 +968,7 @@ pub mod pallet {
             );
 
             // Process refunds
-            Self::unfreeze_token(&mut nft_details, &token_details, &signer)?;
+            Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
 
             ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
                 let listed_token = maybe_listed_token
@@ -979,7 +979,7 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 Ok::<(), DispatchError>(())
             })?;
-            TokenBuyer::<T>::try_mutate(nft_details.asset_id, |buyer_list| {
+            TokenBuyer::<T>::try_mutate(property_details.asset_id, |buyer_list| {
                 let index = buyer_list
                     .iter()
                     .position(|x| x == &signer)
@@ -987,7 +987,7 @@ pub mod pallet {
                 buyer_list.remove(index);
                 Ok::<(), DispatchError>(())
             })?;
-            OngoingObjectListing::<T>::insert(listing_id, &nft_details);
+            OngoingObjectListing::<T>::insert(listing_id, &property_details);
 
             Self::deposit_event(Event::<T>::BuyCancelled {
                 listing_id,
@@ -1179,9 +1179,9 @@ pub mod pallet {
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id);
-            let nft_details =
+            let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let property_account = Self::property_account_id(nft_details.asset_id);
+            let property_account = Self::property_account_id(property_details.asset_id);
             let token_amount = token_details.token_amount;
             let mut refund_infos =
                 RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
@@ -1208,14 +1208,14 @@ pub mod pallet {
                 }
             }
             <T as pallet::Config>::LocalCurrency::transfer(
-                nft_details.asset_id,
+                property_details.asset_id,
                 &signer,
                 &property_account,
                 token_amount.into(),
                 Preservation::Expendable,
             )?;
             if refund_infos.refund_amount == 0 {
-                T::PropertyToken::burn_property_token(nft_details.asset_id)?;
+                T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 Self::refund_investors_with_fees(listing_id, refund_infos.property_lawyer_details)?;
                 let (depositor, deposit_amount) =
                     ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
@@ -1230,7 +1230,7 @@ pub mod pallet {
                 if !native_balance.is_zero() {
                     <T as pallet::Config>::NativeCurrency::transfer(
                         &property_account,
-                        &nft_details.real_estate_developer,
+                        &property_details.real_estate_developer,
                         native_balance,
                         Preservation::Expendable,
                     )?;
@@ -1238,7 +1238,7 @@ pub mod pallet {
             } else {
                 RefundToken::<T>::insert(listing_id, refund_infos);
             }
-            T::PropertyToken::remove_token_ownership(nft_details.asset_id, &signer)?;
+            T::PropertyToken::remove_token_ownership(property_details.asset_id, &signer)?;
             Self::deposit_event(Event::<T>::RejectedFundsWithdrawn { signer, listing_id });
             Ok(())
         }
@@ -1255,10 +1255,10 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let mut nft_details =
+            let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
-                nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+                property_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingNotExpired
             );
 
@@ -1274,7 +1274,7 @@ pub mod pallet {
             );
 
             // Process refunds for supported assets (USDT and USDC)
-            Self::unfreeze_token(&mut nft_details, &token_details, &signer)?;
+            Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
 
             // Update ListedToken
             ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
@@ -1286,9 +1286,9 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
 
                 // Check if all tokens are returned
-                if *listed_token >= nft_details.token_amount {
+                if *listed_token >= property_details.token_amount {
                     // Listing is over, burn and clean everything
-                    T::PropertyToken::burn_property_token(nft_details.asset_id)?;
+                    T::PropertyToken::burn_property_token(property_details.asset_id)?;
                     let (depositor, deposit_amount) =
                         ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
                     <T as pallet::Config>::NativeCurrency::release(
@@ -1297,13 +1297,13 @@ pub mod pallet {
                         deposit_amount,
                         Precision::Exact,
                     )?;
-                    let property_account = Self::property_account_id(nft_details.asset_id);
+                    let property_account = Self::property_account_id(property_details.asset_id);
                     let native_balance =
                         <T as pallet::Config>::NativeCurrency::balance(&property_account);
                     if !native_balance.is_zero() {
                         <T as pallet::Config>::NativeCurrency::transfer(
                             &property_account,
-                            &nft_details.real_estate_developer,
+                            &property_details.real_estate_developer,
                             native_balance,
                             Preservation::Expendable,
                         )?;
@@ -1321,7 +1321,7 @@ pub mod pallet {
                         buyers.swap_remove(index);
                         Ok::<(), DispatchError>(())
                     })?;
-                    OngoingObjectListing::<T>::insert(listing_id, &nft_details);
+                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
                 }
 
                 Ok::<(), DispatchError>(())
@@ -1345,14 +1345,14 @@ pub mod pallet {
             listing_id: ListingId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let nft_details =
+            let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
-                nft_details.real_estate_developer == signer,
+                property_details.real_estate_developer == signer,
                 Error::<T>::NoPermission
             );
             ensure!(
-                nft_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
+                property_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingNotExpired
             );
 
@@ -1369,11 +1369,11 @@ pub mod pallet {
 
                 // Check if all tokens are returned
                 ensure!(
-                    *listed_token >= nft_details.token_amount,
+                    *listed_token >= property_details.token_amount,
                     Error::<T>::TokenNotReturned
                 );
                 // Listing is over, burn and clean everything
-                T::PropertyToken::burn_property_token(nft_details.asset_id)?;
+                T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 let (depositor, deposit_amount) =
                     ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
                 <T as pallet::Config>::NativeCurrency::release(
@@ -1382,13 +1382,13 @@ pub mod pallet {
                     deposit_amount,
                     Precision::Exact,
                 )?;
-                let property_account = Self::property_account_id(nft_details.asset_id);
+                let property_account = Self::property_account_id(property_details.asset_id);
                 let native_balance =
                     <T as pallet::Config>::NativeCurrency::balance(&property_account);
                 if !native_balance.is_zero() {
                     <T as pallet::Config>::NativeCurrency::transfer(
                         &property_account,
-                        &nft_details.real_estate_developer,
+                        &property_details.real_estate_developer,
                         native_balance,
                         Preservation::Expendable,
                     )?;
@@ -1409,7 +1409,7 @@ pub mod pallet {
         ///
         /// Parameters:
         /// - `listing_id`: The listing that the seller wants to update.
-        /// - `new_price`: The new price of the nft.
+        /// - `new_price`: The new price of a property token.
         ///
         /// Emits `ListingUpdated` event when succesfful.
         #[pallet::call_index(11)]
@@ -1468,23 +1468,23 @@ pub mod pallet {
                 PropertyLawyer::<T>::get(listing_id).is_none(),
                 Error::<T>::PropertyAlreadySold
             );
-            OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_nft_details| {
-                let nft_details = maybe_nft_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+            OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_property_details| {
+                let property_details = maybe_property_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
                 ensure!(
-                    nft_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
+                    property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                     Error::<T>::ListingExpired
                 );
                 ensure!(
-                    nft_details.real_estate_developer == signer,
+                    property_details.real_estate_developer == signer,
                     Error::<T>::NoPermission
                 );
                 ensure!(
-                    !pallet_real_estate_asset::PropertyAssetInfo::<T>::get(nft_details.asset_id)
+                    !pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
                         .ok_or(Error::<T>::InvalidIndex)?
                         .spv_created,
                     Error::<T>::SpvAlreadyCreated
                 );
-                nft_details.token_price = new_price;
+                property_details.token_price = new_price;
                 Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::<T>::ObjectUpdated {
@@ -1552,11 +1552,11 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoPermission)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let nft_details =
+            let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
             let asset_details =
-                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(nft_details.asset_id)
+                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
                     .ok_or(Error::<T>::NoObjectFound)?;
 
             ensure!(
@@ -1566,11 +1566,11 @@ pub mod pallet {
 
             let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
-            let collected_fee_usdt = nft_details
+            let collected_fee_usdt = property_details
                 .collected_fees
                 .get(&asset_id_usdt)
                 .ok_or(Error::<T>::AssetNotSupported)?;
-            let collected_fee_usdc = nft_details
+            let collected_fee_usdc = property_details
                 .collected_fees
                 .get(&asset_id_usdc)
                 .ok_or(Error::<T>::AssetNotSupported)?;
@@ -1784,12 +1784,12 @@ pub mod pallet {
                     Self::execute_deal(listing_id, property_lawyer_details.clone())?;
                 }
                 (DocumentStatus::Rejected, DocumentStatus::Rejected) => {
-                    let nft_details = OngoingObjectListing::<T>::get(listing_id)
+                    let property_details = OngoingObjectListing::<T>::get(listing_id)
                         .ok_or(Error::<T>::InvalidIndex)?;
                     RefundToken::<T>::insert(
                         listing_id,
                         RefundInfos {
-                            refund_amount: nft_details.token_amount,
+                            refund_amount: property_details.token_amount,
                             property_lawyer_details: property_lawyer_details.clone(),
                         },
                     );
@@ -1802,12 +1802,12 @@ pub mod pallet {
                         property_lawyer_details.second_attempt = true;
                         PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                     } else {
-                        let nft_details = OngoingObjectListing::<T>::get(listing_id)
+                        let property_details = OngoingObjectListing::<T>::get(listing_id)
                             .ok_or(Error::<T>::InvalidIndex)?;
                         RefundToken::<T>::insert(
                             listing_id,
                             RefundInfos {
-                                refund_amount: nft_details.token_amount,
+                                refund_amount: property_details.token_amount,
                                 property_lawyer_details: property_lawyer_details.clone(),
                             },
                         );
@@ -1821,12 +1821,12 @@ pub mod pallet {
                         property_lawyer_details.second_attempt = true;
                         PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                     } else {
-                        let nft_details = OngoingObjectListing::<T>::get(listing_id)
+                        let property_details = OngoingObjectListing::<T>::get(listing_id)
                             .ok_or(Error::<T>::InvalidIndex)?;
                         RefundToken::<T>::insert(
                             listing_id,
                             RefundInfos {
-                                refund_amount: nft_details.token_amount,
+                                refund_amount: property_details.token_amount,
                                 property_lawyer_details: property_lawyer_details.clone(),
                             },
                         );
@@ -1911,13 +1911,13 @@ pub mod pallet {
             listing_id: u32,
             property_lawyer_details: PropertyLawyerDetails<T>,
         ) -> DispatchResult {
-            let nft_details =
+            let property_details =
                 OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let mut asset_details =
-                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(nft_details.asset_id)
+            let asset_details =
+                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
                     .ok_or(Error::<T>::InvalidIndex)?;
             let treasury_id = Self::treasury_account_id();
-            let property_account = Self::property_account_id(nft_details.asset_id);
+            let property_account = Self::property_account_id(property_details.asset_id);
             let region = pallet_regions::RegionDetails::<T>::get(asset_details.region)
                 .ok_or(Error::<T>::RegionUnknown)?;
 
@@ -1932,7 +1932,7 @@ pub mod pallet {
             // Distribute funds from property account for each asset
             for &asset in T::AcceptedAssets::get().iter() {
                 // Get total collected amounts and lawyer costs
-                let total_collected_funds = nft_details
+                let total_collected_funds = property_details
                     .collected_funds
                     .get(&asset)
                     .ok_or(Error::<T>::AssetNotSupported)?;
@@ -1944,11 +1944,11 @@ pub mod pallet {
                     .spv_lawyer_costs
                     .get(&asset)
                     .ok_or(Error::<T>::AssetNotSupported)?;
-                let tax = nft_details
+                let tax = property_details
                     .collected_tax
                     .get(&asset)
                     .ok_or(Error::<T>::AssetNotSupported)?;
-                let collected_fees = nft_details
+                let collected_fees = property_details
                     .collected_fees
                     .get(&asset)
                     .ok_or(Error::<T>::AssetNotSupported)?;
@@ -1969,7 +1969,7 @@ pub mod pallet {
                     .ok_or(Error::<T>::MultiplyError)?
                     .checked_div(&(100u128.into()))
                     .ok_or(Error::<T>::DivisionError)?;
-                if nft_details.tax_paid_by_developer {
+                if property_details.tax_paid_by_developer {
                     developer_amount = developer_amount
                         .checked_sub(tax)
                         .ok_or(Error::<T>::ArithmeticUnderflow)?;
@@ -1994,7 +1994,7 @@ pub mod pallet {
                 // Transfer funds from property account
                 Self::transfer_funds(
                     &property_account,
-                    &nft_details.real_estate_developer,
+                    &property_details.real_estate_developer,
                     developer_amount,
                     asset,
                 )?;
@@ -2008,14 +2008,13 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
             }
-            let list = <TokenBuyer<T>>::take(listing_id);
+            let list = TokenBuyer::<T>::take(listing_id);
             for owner in list {
                 TokenOwner::<T>::take(&owner, listing_id);
             }
 
-            // Update registered NFT details to mark SPV as created
-            asset_details.spv_created = true;
-            T::PropertyToken::register_spv(nft_details.asset_id)?;
+            // Update registered property details to mark SPV as created
+            T::PropertyToken::register_spv(property_details.asset_id)?;
             // Release deposit
             if let Some((depositor, deposit_amount)) = ListingDeposits::<T>::take(listing_id) {
                 <T as pallet::Config>::NativeCurrency::release(
@@ -2027,18 +2026,18 @@ pub mod pallet {
             }
             Self::deposit_event(Event::<T>::PropertySuccessfullySold {
                 listing_id,
-                item_index: nft_details.item_id,
-                asset_id: nft_details.asset_id,
+                item_index: property_details.item_id,
+                asset_id: property_details.asset_id,
             });
             Ok(())
         }
 
         fn token_distribution(
             listing_id: u32,
-            nft_details: NftListingDetailsType<T>,
+            property_details: PropertyListingDetailsType<T>,
         ) -> DispatchResult {
-            let list = <TokenBuyer<T>>::get(listing_id);
-            let property_account = Self::property_account_id(nft_details.asset_id);
+            let list = TokenBuyer::<T>::get(listing_id);
+            let property_account = Self::property_account_id(property_details.asset_id);
 
             // Process each investor once for all assets and token distribution
             for owner in list {
@@ -2092,14 +2091,14 @@ pub mod pallet {
                 let token_amount = token_details.token_amount;
 
                 T::PropertyToken::distribute_property_token_to_owner(
-                    nft_details.asset_id,
+                    property_details.asset_id,
                     &owner,
                     token_amount,
                 )?;
             }
             Self::deposit_event(Event::<T>::PropertyTokenSent {
                 listing_id,
-                asset_id: nft_details.asset_id,
+                asset_id: property_details.asset_id,
             });
             Ok(())
         }
@@ -2108,9 +2107,9 @@ pub mod pallet {
             listing_id: ListingId,
             property_lawyer_details: PropertyLawyerDetails<T>,
         ) -> DispatchResult {
-            let nft_details =
+            let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let property_account = Self::property_account_id(nft_details.asset_id);
+            let property_account = Self::property_account_id(property_details.asset_id);
             let treasury_id = Self::treasury_account_id();
             let spv_lawyer_id = property_lawyer_details
                 .spv_lawyer
@@ -2119,7 +2118,7 @@ pub mod pallet {
             // Process fees and transfers for each asset
             for asset in T::AcceptedAssets::get().iter() {
                 // Fetch fees and lawyer costs
-                let fees = nft_details
+                let fees = property_details
                     .collected_fees
                     .get(asset)
                     .ok_or(Error::<T>::AssetNotSupported)?;
@@ -2137,8 +2136,8 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, *asset)?;
                 Self::transfer_funds(&property_account, &spv_lawyer_id, *lawyer_costs, *asset)?;
             }
-            T::PropertyToken::clear_token_owners(nft_details.asset_id)?;
-            <TokenBuyer<T>>::take(listing_id);
+            T::PropertyToken::clear_token_owners(property_details.asset_id)?;
+            TokenBuyer::<T>::remove(listing_id);
             Ok(())
         }
 
@@ -2179,7 +2178,7 @@ pub mod pallet {
         }
 
         fn unfreeze_token(
-            nft_details: &mut NftListingDetailsType<T>,
+            property_details: &mut PropertyListingDetailsType<T>,
             token_details: &TokenOwnerDetails<T>,
             signer: &AccountIdOf<T>,
         ) -> DispatchResult {
@@ -2211,17 +2210,17 @@ pub mod pallet {
                         total_investor_amount,
                         Precision::Exact,
                     )?;
-                    if let Some(funds) = nft_details.collected_funds.get_mut(asset) {
+                    if let Some(funds) = property_details.collected_funds.get_mut(asset) {
                         *funds = funds
                             .checked_sub(paid_funds)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     }
-                    if let Some(tax) = nft_details.collected_tax.get_mut(asset) {
+                    if let Some(tax) = property_details.collected_tax.get_mut(asset) {
                         *tax = tax
                             .checked_sub(paid_tax)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     }
-                    if let Some(fee) = nft_details.collected_fees.get_mut(asset) {
+                    if let Some(fee) = property_details.collected_fees.get_mut(asset) {
                         *fee = fee
                             .checked_sub(&investor_fee)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
@@ -2272,7 +2271,7 @@ pub mod pallet {
         }
 
         fn create_initial_funds() -> Result<
-            BoundedBTreeMap<u32, <T as pallet::Config>::Balance, T::MaxNftToken>,
+            BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
             DispatchError,
         > {
             let mut map = BoundedBTreeMap::default();

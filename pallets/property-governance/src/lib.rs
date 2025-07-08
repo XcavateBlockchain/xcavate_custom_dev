@@ -1550,8 +1550,8 @@ pub mod pallet {
         }
 
         fn finish_proposal(proposal_id: ProposalIndex) -> DispatchResult {
-            let voting_results = <OngoingProposalVotes<T>>::take(proposal_id);
-            let proposals = <Proposals<T>>::take(proposal_id);
+            let voting_results = OngoingProposalVotes::<T>::take(proposal_id);
+            let proposals = Proposals::<T>::take(proposal_id);
             if let Some(proposal) = proposals {
                 if let Some(voting_result) = voting_results {
                     let required_threshold =
@@ -1595,8 +1595,8 @@ pub mod pallet {
         }
 
         fn finish_sale_proposal(asset_id: u32) -> DispatchResult {
-            let voting_results = <OngoingSaleProposalVotes<T>>::take(asset_id);
-            let _ = <SaleProposals<T>>::take(asset_id);
+            let voting_results = OngoingSaleProposalVotes::<T>::take(asset_id);
+            SaleProposals::<T>::remove(asset_id);
             if let Some(voting_result) = voting_results {
                 let asset_details =
                     <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id);
@@ -1618,7 +1618,7 @@ pub mod pallet {
         }
 
         fn finish_auction(asset_id: u32) -> DispatchResult {
-            if let Some(auction) = <SaleAuctions<T>>::take(asset_id) {
+            if let Some(auction) = SaleAuctions::<T>::take(asset_id) {
                 if auction.price > 0 {
                     if let Some(buyer) = auction.highest_bidder {
                         if let Some(mut sale) = PropertySale::<T>::get(asset_id) {
@@ -1640,7 +1640,7 @@ pub mod pallet {
         }
 
         fn finish_challenge(asset_id: u32) -> DispatchResult {
-            let _challenge = Challenges::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let _ = Challenges::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
             let voting_result =
                 OngoingChallengeVotes::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
             let asset_details =

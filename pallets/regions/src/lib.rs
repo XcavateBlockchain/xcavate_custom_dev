@@ -1421,8 +1421,8 @@ pub mod pallet {
             current_block_number: BlockNumberFor<T>,
         ) -> Result<bool, DispatchError> {
             let voting_results =
-                <OngoingRegionProposalVotes<T>>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-            let proposal = <RegionProposals<T>>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
+                OngoingRegionProposalVotes::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
+            let proposal = RegionProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let _ = UserRegionVote::<T>::clear_prefix(region_id, u32::MAX, None);
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results

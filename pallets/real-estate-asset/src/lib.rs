@@ -454,12 +454,12 @@ pub mod pallet {
             asset_id: u32,
             account: &AccountIdOf<T>,
         ) -> DispatchResult {
-            PropertyOwnerToken::<T>::take(asset_id, account);
+            PropertyOwnerToken::<T>::remove(asset_id, account);
             Ok(())
         }
 
         pub(crate) fn do_clear_token_owners(asset_id: u32) -> DispatchResult {
-            PropertyOwner::<T>::take(asset_id);
+            PropertyOwner::<T>::remove(asset_id);
             Ok(())
         }
 
