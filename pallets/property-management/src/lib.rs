@@ -8,8 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+/* #[cfg(feature = "runtime-benchmarks")]
+mod benchmarking; */
 pub mod weights;
 pub use weights::*;
 
@@ -58,7 +58,7 @@ pub mod pallet {
         SalesAgent,
     }
 
-    #[cfg(feature = "runtime-benchmarks")]
+/*     #[cfg(feature = "runtime-benchmarks")]
     pub struct AssetHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -71,7 +71,7 @@ pub mod pallet {
         fn to_asset(i: u32) -> AssetId<T> {
             i.into()
         }
-    }
+    } */
 
     /// Info for the letting agent.
     #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -122,11 +122,11 @@ pub mod pallet {
         #[pallet::constant]
         type MarketplacePalletId: Get<PalletId>;
 
-        #[cfg(feature = "runtime-benchmarks")]
+/*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,
-        >;
+        >; */
 
         /// Origin who can set a new letting agent.
         type AgentOrigin: EnsureOrigin<Self::RuntimeOrigin>;

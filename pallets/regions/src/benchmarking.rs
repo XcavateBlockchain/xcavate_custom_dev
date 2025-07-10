@@ -32,7 +32,10 @@ mod benchmarks {
         assert_ok!(Regions::<T>::vote_on_region_proposal(RawOrigin::Signed(signer.clone()).into(), region_id, Vote::Yes));
         assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), signer.clone()));
 
-        let bid_amount = deposit.saturating_mul(2u32.into());
+        let auction_amount = T::MinimumRegionDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&signer, auction_amount * 100u32.into());
+
+        let bid_amount = auction_amount.saturating_mul(10u32.into());
 
         let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);
@@ -112,10 +115,13 @@ mod benchmarks {
         assert_ok!(Regions::<T>::vote_on_region_proposal(RawOrigin::Signed(signer.clone()).into(), region_id, Vote::Yes));
         assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), signer.clone()));
 
-        let bid_amount = deposit.saturating_mul(2u32.into());
-
         let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);
+
+        let auction_amount = T::MinimumRegionDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&signer, auction_amount * 100u32.into());
+
+        let bid_amount = auction_amount.saturating_mul(10u32.into());
 
         #[extrinsic_call]
         bid_on_region(RawOrigin::Signed(signer.clone()), region_id, bid_amount);
@@ -138,7 +144,10 @@ mod benchmarks {
         assert_ok!(Regions::<T>::vote_on_region_proposal(RawOrigin::Signed(signer.clone()).into(), region_id, Vote::Yes));
         assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), signer.clone()));
 
-        let bid_amount = deposit.saturating_mul(2u32.into());
+        let auction_amount = T::MinimumRegionDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&signer, auction_amount * 100u32.into());
+
+        let bid_amount = auction_amount.saturating_mul(10u32.into());
 
         let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);

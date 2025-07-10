@@ -8,8 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+/* #[cfg(feature = "runtime-benchmarks")]
+mod benchmarking; */
 pub mod weights;
 pub use weights::*;
 
@@ -47,7 +47,7 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-    #[cfg(feature = "runtime-benchmarks")]
+/*     #[cfg(feature = "runtime-benchmarks")]
     pub struct AssetHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -60,7 +60,7 @@ pub mod pallet {
         fn to_asset(i: u32) -> AssetId<T> {
             i.into()
         }
-    }
+    } */
 
     pub type ProposalIndex = u32;
 
@@ -253,11 +253,11 @@ pub mod pallet {
         #[pallet::constant]
         type HighThreshold: Get<Percent>;
 
-        #[cfg(feature = "runtime-benchmarks")]
+/*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,
-        >;
+        >; */
 
         /// Proposal amount to be considered a low proposal.
         #[pallet::constant]

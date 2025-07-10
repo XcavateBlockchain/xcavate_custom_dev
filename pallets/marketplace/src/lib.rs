@@ -11,8 +11,8 @@ mod tests;
 
 pub mod types;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
+/* #[cfg(feature = "runtime-benchmarks")]
+mod benchmarking; */
 pub mod weights;
 pub use weights::*;
 
@@ -60,13 +60,13 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-    #[cfg(feature = "runtime-benchmarks")]
+/*     #[cfg(feature = "runtime-benchmarks")]
     pub struct NftHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
     pub trait BenchmarkHelper<AssetId, T> {
         fn to_asset(i: u32) -> AssetId;
-    }
+    } */
 
     #[pallet::composite_enum]
     pub enum HoldReason {
@@ -138,11 +138,11 @@ pub mod pallet {
         #[pallet::constant]
         type PalletId: Get<PalletId>;
 
-        #[cfg(feature = "runtime-benchmarks")]
+/*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,
-        >;
+        >; */
 
         /// The minimum amount of token of a property.
         #[pallet::constant]

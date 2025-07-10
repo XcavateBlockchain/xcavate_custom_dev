@@ -10,6 +10,8 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod weights;
+pub use weights::*;
 
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
 
@@ -155,6 +157,9 @@ pub mod pallet {
         frame_system::Config + pallet_xcavate_whitelist::Config + pallet_nfts::Config
     {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Type representing the weight of this pallet.
+        type WeightInfo: WeightInfo;
 
         type Balance: Balance + TypeInfo;
 
@@ -614,7 +619,7 @@ pub mod pallet {
         ///
         /// Emits `RegionProposed` event when succesfful.
         #[pallet::call_index(0)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_new_region())]
         pub fn propose_new_region(
             origin: OriginFor<T>,
             region_identifier: RegionIdentifier,
@@ -683,7 +688,7 @@ pub mod pallet {
         ///
         /// Emits `VotedOnRegionProposal` event when succesfful.
         #[pallet::call_index(1)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_region_proposal())]
         pub fn vote_on_region_proposal(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -759,7 +764,7 @@ pub mod pallet {
         ///
         /// Emits `BidSuccessfullyPlaced` event when succesfful.
         #[pallet::call_index(2)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_region())]
         pub fn bid_on_region(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -853,7 +858,7 @@ pub mod pallet {
         ///
         /// Emits `RegionCreated` event when succesfful.
         #[pallet::call_index(3)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
         pub fn create_new_region(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -932,7 +937,7 @@ pub mod pallet {
         ///
         /// Emits `ListingDurationChanged` event when succesfful.
         #[pallet::call_index(4)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::adjust_listing_duration())]
         pub fn adjust_listing_duration(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -977,7 +982,7 @@ pub mod pallet {
         ///
         /// Emits `RegionTaxChanged` event when succesfful.
         #[pallet::call_index(5)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::adjust_region_tax())]
         pub fn adjust_region_tax(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1011,7 +1016,7 @@ pub mod pallet {
         ///
         /// Emits `LocationCreated` event when succesfful.
         #[pallet::call_index(6)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_location())]
         pub fn create_new_location(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1063,7 +1068,7 @@ pub mod pallet {
         ///
         /// Emits `RemoveRegionOwnerProposed` event when succesfful.
         #[pallet::call_index(7)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_remove_regional_operator())]
         pub fn propose_remove_regional_operator(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1124,7 +1129,7 @@ pub mod pallet {
         ///
         /// Emits `VotedOnRegionOwnerProposal` event when succesfful.
         #[pallet::call_index(8)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_remove_owner_proposal())]
         pub fn vote_on_remove_owner_proposal(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1192,7 +1197,7 @@ pub mod pallet {
         ///
         /// Emits `ReplacementBidSuccessfullyPlaced` event when succesfful.
         #[pallet::call_index(9)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_region_replacement())]
         pub fn bid_on_region_replacement(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1300,7 +1305,7 @@ pub mod pallet {
         ///
         /// Emits `RegionOwnerResignationInitiated` event when succesfful.
         #[pallet::call_index(10)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::initiate_region_owner_resignation())]
         pub fn initiate_region_owner_resignation(
             origin: OriginFor<T>,
             region_id: RegionId,
@@ -1339,7 +1344,7 @@ pub mod pallet {
         ///
         /// Emits `NewRegionOperatorAdded` event when succesfful.
         #[pallet::call_index(11)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::add_regional_operator())]
         pub fn add_regional_operator(
             origin: OriginFor<T>,
             new_operator: T::AccountId,
@@ -1363,7 +1368,7 @@ pub mod pallet {
         ///
         /// Emits `RegionOperatorRemoved` event when succesfful.
         #[pallet::call_index(12)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_regional_operator())]
         pub fn remove_regional_operator(
             origin: OriginFor<T>,
             regional_operator: T::AccountId,
@@ -1385,7 +1390,7 @@ pub mod pallet {
         ///
         /// Emits `LawyerRegistered` event when succesfful.
         #[pallet::call_index(21)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::register_lawyer())]
         pub fn register_lawyer(
             origin: OriginFor<T>,
             region: RegionId,

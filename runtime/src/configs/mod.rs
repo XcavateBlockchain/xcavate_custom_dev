@@ -568,6 +568,19 @@ impl pallet_nft_fractionalization::Config for Runtime {
     type RuntimeHoldReason = RuntimeHoldReason;
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+pub struct AssetTxHelper;
+
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_asset_tx_payment::BenchmarkHelperTrait<AccountId, u32, u32> for AssetTxHelper {
+	fn create_asset_id_parameter(_id: u32) -> (u32, u32) {
+		unimplemented!("Penpal uses default weights");
+	}
+	fn setup_balances_and_pool(_asset_id: u32, _account: AccountId) {
+		unimplemented!("Penpal uses default weights");
+	}
+}
+
 impl pallet_asset_tx_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Fungibles = Assets;
@@ -581,6 +594,8 @@ impl pallet_asset_tx_payment::Config for Runtime {
         AssetsToBlockAuthor<Runtime, pallet_assets::Instance2>,
     >;
     type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = AssetTxHelper;
 }
 
 parameter_types! {
@@ -607,8 +622,6 @@ impl pallet_marketplace::Config for Runtime {
     type PalletId = MarketplacePalletId;
     type MinPropertyToken = MinPropertyTokens;
     type MaxPropertyToken = MaxPropertyTokens;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = pallet_marketplace::NftHelper;
     type TreasuryId = TreasuryPalletId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ListingDepositAmount;
@@ -644,8 +657,6 @@ impl pallet_property_management::Config for Runtime {
     type NativeCurrency = Balances;
     type ForeignCurrency = Assets;
     type MarketplacePalletId = MarketplacePalletId;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = pallet_property_management::AssetHelper;
     type AgentOrigin = EnsureRoot<Self::AccountId>;
     type LettingAgentDeposit = MinimumStakingAmount;
     type MaxProperties = MaxProperty;
@@ -682,8 +693,6 @@ impl pallet_property_governance::Config for Runtime {
     type MinSlashingAmount = MinimumSlashingAmount;
     type Threshold = VotingThreshold;
     type HighThreshold = HighVotingThreshold;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = pallet_property_governance::AssetHelper;
     type LowProposal = LowProposal;
     type HighProposal = HighProposal;
     type MarketplacePalletId = MarketplacePalletId;
@@ -717,6 +726,7 @@ parameter_types! {
 /// Configure the pallet-property-governance in pallets/property-governance.
 impl pallet_regions::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = pallet_regions::weights::SubstrateWeight<Runtime>;
     type Balance = Balance;
     type NativeCurrency = Balances;
     type RuntimeHoldReason = RuntimeHoldReason;
