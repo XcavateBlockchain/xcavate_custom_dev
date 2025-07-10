@@ -2,7 +2,7 @@ use frame_support::pallet_prelude::*;
 
 use super::*;
 
-pub trait PropertyTokenTrait<T: Config> {
+pub trait PropertyTokenManage<T: Config> {
     fn create_property_token(
         funding_account: &AccountIdOf<T>,
         region: RegionId,
@@ -13,7 +13,9 @@ pub trait PropertyTokenTrait<T: Config> {
     ) -> Result<(<T as pallet::Config>::NftId, u32), DispatchError>;
 
     fn burn_property_token(asset_id: u32) -> DispatchResult;
+}
 
+pub trait PropertyTokenOwnership<T: Config> {
     fn transfer_property_token(
         asset_id: u32,
         sender: &AccountIdOf<T>,
@@ -30,12 +32,38 @@ pub trait PropertyTokenTrait<T: Config> {
 
     fn take_property_token(asset_id: u32, owner: &AccountIdOf<T>) -> u32;
 
-    fn remove_token_ownership(asset_id: u32, account: &AccountIdOf<T>) -> DispatchResult;
+    fn remove_property_token_ownership(asset_id: u32, account: &AccountIdOf<T>) -> DispatchResult;
 
     fn clear_token_owners(asset_id: u32) -> DispatchResult;
+}
 
+pub trait PropertyTokenSpvControl<T: Config> {
     fn register_spv(asset_id: u32) -> DispatchResult;
 
+    fn ensure_spv_not_created(asset_id: u32) -> DispatchResult;
+
+    fn ensure_spv_created(asset_id: u32) -> DispatchResult;
+
+    fn get_if_spv_not_created(asset_id: u32) -> Result<
+        PropertyAssetDetails<
+            <T as pallet::Config>::NftId,
+            <T as pallet_regions::Config>::NftCollectionId,
+            T,
+        >,
+        DispatchError,
+    >;
+
+    fn get_if_spv_created(asset_id: u32) -> Result<
+        PropertyAssetDetails<
+            <T as pallet::Config>::NftId,
+            <T as pallet_regions::Config>::NftCollectionId,
+            T,
+        >,
+        DispatchError,
+    >;
+}
+
+pub trait PropertyTokenInspect<T: Config> {
     fn get_property_asset_info(
         asset_id: u32,
     ) -> Option<
@@ -51,7 +79,7 @@ pub trait PropertyTokenTrait<T: Config> {
     fn get_token_balance(asset_id: u32, owner: &AccountIdOf<T>) -> u32;
 }
 
-impl<T: Config> PropertyTokenTrait<T> for Pallet<T> {
+impl<T: Config> PropertyTokenManage<T> for Pallet<T> {
     fn create_property_token(
         funding_account: &AccountIdOf<T>,
         region: RegionId,
@@ -73,7 +101,9 @@ impl<T: Config> PropertyTokenTrait<T> for Pallet<T> {
     fn burn_property_token(asset_id: u32) -> DispatchResult {
         Self::do_burn_property_token(asset_id)
     }
+}
 
+impl<T: Config> PropertyTokenOwnership<T> for Pallet<T> {
     fn transfer_property_token(
         asset_id: u32,
         sender: &AccountIdOf<T>,
@@ -96,18 +126,52 @@ impl<T: Config> PropertyTokenTrait<T> for Pallet<T> {
         Self::do_take_property_token(asset_id, owner)
     }
 
-    fn remove_token_ownership(asset_id: u32, account: &AccountIdOf<T>) -> DispatchResult {
-        Self::do_remove_token_ownership(asset_id, account)
+    fn remove_property_token_ownership(asset_id: u32, account: &AccountIdOf<T>) -> DispatchResult {
+        Self::do_remove_property_token_ownership(asset_id, account)
     }
 
     fn clear_token_owners(asset_id: u32) -> DispatchResult {
         Self::do_clear_token_owners(asset_id)
     }
+}
 
+impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
     fn register_spv(asset_id: u32) -> DispatchResult {
         Self::do_register_spv(asset_id)
     }
 
+    fn ensure_spv_not_created(asset_id: u32) -> DispatchResult {
+        Self::do_ensure_spv_not_created(asset_id)
+    }
+
+    fn ensure_spv_created(asset_id: u32) -> DispatchResult {
+        Self::do_ensure_spv_created(asset_id)
+    }
+
+    fn get_if_spv_not_created(asset_id: u32) -> Result<
+        PropertyAssetDetails<
+            <T as pallet::Config>::NftId,
+            <T as pallet_regions::Config>::NftCollectionId,
+            T,
+        >,
+        DispatchError,
+    > {
+        Self::do_get_if_spv_not_created(asset_id)
+    }
+
+    fn get_if_spv_created(asset_id: u32) -> Result<
+        PropertyAssetDetails<
+            <T as pallet::Config>::NftId,
+            <T as pallet_regions::Config>::NftCollectionId,
+            T,
+        >,
+        DispatchError,
+    > {
+        Self::do_get_if_spv_created(asset_id)
+    }
+}
+
+impl<T: Config> PropertyTokenInspect<T> for Pallet<T> {
     fn get_property_asset_info(
         asset_id: u32,
     ) -> Option<
@@ -117,7 +181,7 @@ impl<T: Config> PropertyTokenTrait<T> for Pallet<T> {
             T,
         >,
     > {
-        Self::get_property_asset_info(asset_id)
+        Self::do_get_property_asset_info(asset_id)
     }
 
     fn get_property_owner(asset_id: u32) -> BoundedVec<AccountIdOf<T>, T::MaxPropertyToken> {

@@ -2256,7 +2256,7 @@ fn relist_nfts_not_created_with_marketplace_fails() {
         new_region_helper();
         assert_noop!(
             Marketplace::relist_token(RuntimeOrigin::signed([0; 32].into()), 0, 1000, 1),
-            Error::<Test>::PropertyNotFound
+            RealEstateAssetError::<Test>::PropertyNotFound
         );
     })
 }
@@ -2310,7 +2310,7 @@ fn relist_a_nft_fails() {
         ));
         assert_noop!(
             Marketplace::relist_token(RuntimeOrigin::signed([1; 32].into()), 0, 1000, 10),
-            Error::<Test>::SpvNotCreated
+            RealEstateAssetError::<Test>::SpvNotCreated
         );
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([10; 32].into()),

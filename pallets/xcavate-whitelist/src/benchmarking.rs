@@ -14,25 +14,25 @@ mod benchmarks {
 
     #[benchmark]
     fn add_to_whitelist() {
-        let caller: T::AccountId = whitelisted_caller();
+        let user: T::AccountId = account("user", 0, 0);
         #[extrinsic_call]
-        add_to_whitelist(RawOrigin::Root, caller.clone());
+        add_to_whitelist(RawOrigin::Root, user.clone());
 
-        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), true);
+        assert_eq!(WhitelistedAccounts::<T>::get(user), true);
     }
 
     #[benchmark]
     fn remove_from_whitelist() {
-        let caller: T::AccountId = whitelisted_caller();
+        let user: T::AccountId = account("user", 0, 0);
         assert_ok!(Whitelist::<T>::add_to_whitelist(
             RawOrigin::Root.into(),
-            caller.clone()
+            user.clone()
         ));
-        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller.clone()), true);
+        assert_eq!(WhitelistedAccounts::<T>::get(user.clone()), true);
         #[extrinsic_call]
-        remove_from_whitelist(RawOrigin::Root, caller.clone());
+        remove_from_whitelist(RawOrigin::Root, user.clone());
 
-        assert_eq!(Whitelist::<T>::whitelisted_accounts(caller), false);
+        assert_eq!(WhitelistedAccounts::<T>::get(user), false);
     }
 
     impl_benchmark_test_suite!(Whitelist, crate::mock::new_test_ext(), crate::mock::Test);

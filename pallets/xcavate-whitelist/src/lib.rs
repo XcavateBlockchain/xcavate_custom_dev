@@ -75,7 +75,7 @@ pub mod pallet {
         ///
         /// Emits `NewUserWhitelisted` event when succesfful
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::add_to_whitelist())]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn add_to_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
@@ -96,7 +96,7 @@ pub mod pallet {
         ///
         /// Emits `UserRemoved` event when succesfful
         #[pallet::call_index(1)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_whitelist())]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_from_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(

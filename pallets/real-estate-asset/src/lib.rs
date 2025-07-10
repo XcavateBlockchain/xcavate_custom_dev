@@ -227,6 +227,12 @@ pub mod pallet {
         InvalidIndex,
         /// There are already too many token buyer.
         TooManyTokenBuyer,
+        /// The property has not been registered.
+        PropertyNotFound,
+        /// The SPV has already been created.
+        SpvAlreadyCreated,
+        /// The SPV has not been created.
+        SpvNotCreated,
     }
 
     impl<T: Config> Pallet<T> {
@@ -273,7 +279,7 @@ pub mod pallet {
             <T as pallet::Config>::Nfts::mint_into(
                 &region_info.collection_id,
                 &item_id,
-                &property_account.clone(),
+                &property_account,
                 &Self::default_item_config(),
                 true,
             )?;
@@ -292,7 +298,7 @@ pub mod pallet {
             let fractionalize_item_id = FractionalizeItemId::<T>::from(item_id);
 
             pallet_nft_fractionalization::Pallet::<T>::fractionalize(
-                property_origin.clone(),
+                property_origin,
                 fractionalize_collection_id.into(),
                 fractionalize_item_id.into(),
                 asset_id.into(),
@@ -340,7 +346,7 @@ pub mod pallet {
                 let fractionalize_item_id = FractionalizeItemId::<T>::from(asset_details.item_id);
                 let fractionalize_asset_id = FractionalizedAssetId::<T>::from(asset_id);
                 pallet_nft_fractionalization::Pallet::<T>::unify(
-                    pallet_origin.clone(),
+                    pallet_origin,
                     fractionalize_collection_id.into(),
                     fractionalize_item_id.into(),
                     fractionalize_asset_id.into(),
@@ -450,7 +456,7 @@ pub mod pallet {
             PropertyOwnerToken::<T>::take(asset_id, owner)
         }
 
-        pub(crate) fn do_remove_token_ownership(
+        pub(crate) fn do_remove_property_token_ownership(
             asset_id: u32,
             account: &AccountIdOf<T>,
         ) -> DispatchResult {
@@ -473,7 +479,53 @@ pub mod pallet {
             })
         }
 
-        pub(crate) fn get_property_asset_info(
+        pub(crate) fn do_ensure_spv_not_created(asset_id: u32) -> DispatchResult {
+            ensure!(
+                !Self::do_get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::PropertyNotFound)?
+                    .spv_created,
+                Error::<T>::SpvAlreadyCreated
+            );
+            Ok(())
+        }
+
+        pub(crate) fn do_ensure_spv_created(asset_id: u32) -> DispatchResult {
+            ensure!(
+                Self::do_get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::PropertyNotFound)?
+                    .spv_created,
+                Error::<T>::SpvNotCreated
+            );
+            Ok(())
+        }
+
+        pub(crate) fn do_get_if_spv_not_created(asset_id: u32) -> Result<
+            PropertyAssetDetails<
+                <T as pallet::Config>::NftId,
+                <T as pallet_regions::Config>::NftCollectionId,
+                T,
+            >,
+            DispatchError,
+        >  {
+            let asset_details = Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
+            ensure!(!asset_details.spv_created, Error::<T>::SpvAlreadyCreated);
+            Ok(asset_details)
+        } 
+
+        pub(crate) fn do_get_if_spv_created(asset_id: u32) -> Result<
+            PropertyAssetDetails<
+                <T as pallet::Config>::NftId,
+                <T as pallet_regions::Config>::NftCollectionId,
+                T,
+            >,
+            DispatchError,
+        >  {
+            let asset_details = Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
+            ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
+            Ok(asset_details)
+        } 
+
+        pub(crate) fn do_get_property_asset_info(
             asset_id: u32,
         ) -> Option<
             PropertyAssetDetails<

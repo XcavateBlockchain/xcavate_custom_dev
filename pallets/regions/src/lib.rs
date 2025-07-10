@@ -8,6 +8,9 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
 
 use frame_support::{

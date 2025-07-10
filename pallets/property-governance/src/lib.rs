@@ -28,7 +28,7 @@ use codec::{Codec, DecodeWithMemTracking};
 
 use primitives::MarketplaceHoldReason;
 
-use pallet_real_estate_asset::traits::PropertyTokenTrait;
+use pallet_real_estate_asset::traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -289,7 +289,10 @@ pub mod pallet {
         #[pallet::constant]
         type TreasuryId: Get<PalletId>;
 
-        type PropertyToken: PropertyTokenTrait<Self>;
+        type PropertyToken: PropertyTokenManage<Self>
+            + PropertyTokenOwnership<Self>
+            + PropertyTokenSpvControl<Self>
+            + PropertyTokenInspect<Self>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -590,8 +593,6 @@ pub mod pallet {
         SaleNotFinalized,
         ArithmeticOverflow,
         ArithmeticUnderflow,
-        /// Spv has not yet been created.
-        SpvNotCreated,
         /// The lawyer already confirmed the sale.
         SaleAlreadyConfirmed,
         /// There are no funds to claim for the caller.
@@ -945,10 +946,7 @@ pub mod pallet {
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let asset_details =
-                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
-                    .ok_or(Error::<T>::AssetNotFound)?;
-            ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
+            <T as pallet::Config>::PropertyToken::ensure_spv_created(asset_id)?;
 
             ensure!(
                 PropertySale::<T>::get(asset_id).is_none(),

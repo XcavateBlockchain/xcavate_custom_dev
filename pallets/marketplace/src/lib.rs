@@ -39,7 +39,7 @@ use primitives::MarketplaceHoldReason;
 
 use types::*;
 
-use pallet_real_estate_asset::traits::PropertyTokenTrait;
+use pallet_real_estate_asset::traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect};
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
@@ -174,7 +174,10 @@ pub mod pallet {
         #[pallet::constant]
         type AcceptedAssets: Get<[u32; 2]>;
 
-        type PropertyToken: PropertyTokenTrait<Self>;
+        type PropertyToken: PropertyTokenManage<Self>
+            + PropertyTokenOwnership<Self>
+            + PropertyTokenSpvControl<Self>
+            + PropertyTokenInspect<Self>;
     }
 
     pub type RegionId = u16;
@@ -419,18 +422,12 @@ pub mod pallet {
         MultiplyError,
         /// No sufficient permission.
         NoPermission,
-        /// The SPV has already been created.
-        SpvAlreadyCreated,
-        /// The SPV has not been created.
-        SpvNotCreated,
         /// User did not pass the kyc.
         UserNotWhitelisted,
         ArithmeticUnderflow,
         ArithmeticOverflow,
         /// The token is not for sale.
         TokenNotForSale,
-        /// The property has not been registered on the marketplace.
-        PropertyNotFound,
         /// There are already too many token buyer.
         TooManyTokenBuyer,
         /// This Region is not known.
@@ -499,6 +496,7 @@ pub mod pallet {
         /// - `token_price`: The price of a single token.
         /// - `token_amount`: The amount of tokens for a object.
         /// - `data`: The Metadata of the nft.
+        /// - `tax_paid_by_developer`: Bool if the tax is paid by the real estate developer or not.
         ///
         /// Emits `ObjectListed` event when succesfful
         #[pallet::call_index(0)]
@@ -651,11 +649,7 @@ pub mod pallet {
                 let mut property_details =
                     OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
-                let asset_details =
-                    pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
-                        .ok_or(Error::<T>::InvalidIndex)?;
-
-                ensure!(!asset_details.spv_created, Error::<T>::SpvAlreadyCreated);
+                let asset_details = T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
 
                 ensure!(
                     property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
@@ -821,7 +815,7 @@ pub mod pallet {
         }
 
         /// Relist token on the marketplace.
-        /// The nft must be registered on the marketplace.
+        /// The property must be registered on the marketplace.
         ///
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
@@ -849,9 +843,7 @@ pub mod pallet {
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
 
-            let asset_details = pallet_real_estate_asset::PropertyAssetInfo::<T>::get(asset_id)
-                .ok_or(Error::<T>::PropertyNotFound)?;
-            ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
+            let asset_details = T::PropertyToken::get_if_spv_created(asset_id)?;
 
             let property_account = Self::property_account_id(asset_id);
             <T as pallet::Config>::LocalCurrency::transfer(
@@ -1238,7 +1230,7 @@ pub mod pallet {
             } else {
                 RefundToken::<T>::insert(listing_id, refund_infos);
             }
-            T::PropertyToken::remove_token_ownership(property_details.asset_id, &signer)?;
+            T::PropertyToken::remove_property_token_ownership(property_details.asset_id, &signer)?;
             Self::deposit_event(Event::<T>::RejectedFundsWithdrawn { signer, listing_id });
             Ok(())
         }
@@ -1478,12 +1470,7 @@ pub mod pallet {
                     property_details.real_estate_developer == signer,
                     Error::<T>::NoPermission
                 );
-                ensure!(
-                    !pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
-                        .ok_or(Error::<T>::InvalidIndex)?
-                        .spv_created,
-                    Error::<T>::SpvAlreadyCreated
-                );
+                T::PropertyToken::ensure_spv_not_created(property_details.asset_id)?;
                 property_details.token_price = new_price;
                 Ok::<(), DispatchError>(())
             })?;
@@ -1556,7 +1543,7 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
             let asset_details =
-                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
+                T::PropertyToken::get_property_asset_info(property_details.asset_id)
                     .ok_or(Error::<T>::NoObjectFound)?;
 
             ensure!(
@@ -1914,7 +1901,7 @@ pub mod pallet {
             let property_details =
                 OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let asset_details =
-                pallet_real_estate_asset::PropertyAssetInfo::<T>::get(property_details.asset_id)
+                T::PropertyToken::get_property_asset_info(property_details.asset_id)
                     .ok_or(Error::<T>::InvalidIndex)?;
             let treasury_id = Self::treasury_account_id();
             let property_account = Self::property_account_id(property_details.asset_id);

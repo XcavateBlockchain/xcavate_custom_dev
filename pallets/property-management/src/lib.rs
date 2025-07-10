@@ -27,7 +27,7 @@ use frame_support::sp_runtime::traits::{AccountIdConversion, Zero};
 
 use codec::Codec;
 
-use pallet_real_estate_asset::traits::PropertyTokenTrait;
+use pallet_real_estate_asset::traits::PropertyTokenInspect;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
@@ -150,7 +150,7 @@ pub mod pallet {
         #[pallet::constant]
         type AcceptedAssets: Get<[u32; 2]>;
 
-        type PropertyToken: PropertyTokenTrait<Self>;
+        type PropertyToken: PropertyTokenInspect<Self>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;

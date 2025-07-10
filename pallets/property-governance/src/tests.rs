@@ -19,7 +19,7 @@ use pallet_property_management::{InvestorFunds, LettingInfo, LettingStorage};
 
 use pallet_marketplace::types::LegalProperty;
 
-use pallet_real_estate_asset::{PropertyAssetInfo, PropertyOwner};
+use pallet_real_estate_asset::{Error as RealEstateAssetError, PropertyAssetInfo, PropertyOwner};
 
 use pallet_regions::RegionIdentifier;
 
@@ -1492,7 +1492,7 @@ fn propose_property_sale_fails() {
         ));
         assert_noop!(
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
-            Error::<Test>::AssetNotFound
+            RealEstateAssetError::<Test>::PropertyNotFound
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1513,7 +1513,7 @@ fn propose_property_sale_fails() {
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
-            Error::<Test>::SpvNotCreated
+            RealEstateAssetError::<Test>::SpvNotCreated
         );
         lawyer_process();
         assert_noop!(

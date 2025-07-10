@@ -5,7 +5,7 @@ use frame_support::{
 };
 use pallet_regions::RegionIdentifier;
 use sp_runtime::{Permill, TokenError, ArithmeticError};
-use crate::{traits::PropertyTokenTrait, PropertyAssetInfo, PropertyAssetDetails, PropertyOwner, PropertyOwnerToken};
+use crate::{traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect}, PropertyAssetInfo, PropertyAssetDetails, PropertyOwner, PropertyOwnerToken};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -335,6 +335,51 @@ fn register_spv_works() {
                 spv_created: true,
             }
         );
+    })
+}
+
+#[test]
+fn register_spv_fails() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_noop!(RealEstateAsset::register_spv(0), Error::<Test>::PropertyAssetNotRegistered);
+    })
+}
+
+#[test]
+fn getter_function_works() {
+    new_test_ext().execute_with(|| {
+        new_region_helper();
+        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
+        assert_eq!(
+            RealEstateAsset::get_property_asset_info(0).unwrap(),
+            PropertyAssetDetails {
+                collection_id: 0,
+                item_id: 0,
+                region: 3,
+                location: bvec![10, 10],
+                price: 1_000,
+                token_amount: 10,
+                spv_created: false,
+            }
+        );
+        assert_eq!(
+            PropertyOwner::<Test>::get(0),
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
+                vec![[1; 32].into(), [2; 32].into()]
+            ).unwrap()
+        );
+        assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
+        assert_eq!(RealEstateAsset::get_property_asset_info(1).is_none(), true);
+        assert_eq!(
+            PropertyOwner::<Test>::get(1),
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
+                vec![]
+            ).unwrap()
+        );
+        assert_eq!(RealEstateAsset::take_property_token(1, &[3; 32].into()), 0);
     })
 }
 
