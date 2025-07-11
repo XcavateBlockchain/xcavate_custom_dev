@@ -166,6 +166,7 @@ parameter_types! {
 
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = weights::SubstrateWeight<Test>;
     type Balance = u128;
     type NativeCurrency = Balances;
     type RuntimeHoldReason = RuntimeHoldReason;

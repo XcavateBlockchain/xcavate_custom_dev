@@ -9,6 +9,7 @@ use frame_support::assert_ok;
 use frame_system::RawOrigin;
 use pallet_xcavate_whitelist::Pallet as Whitelist;
 use sp_runtime::Permill;
+use scale_info::prelude::vec;
 
 #[benchmarks]
 mod benchmarks {
@@ -84,6 +85,7 @@ mod benchmarks {
         let signer: T::AccountId = create_whitelisted_user::<T>();
 
         let region = RegionIdentifier::France;
+        let region_id = region.clone().into_u16();
 
         let deposit = T::RegionProposalDeposit::get();
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
@@ -91,11 +93,13 @@ mod benchmarks {
         LastRegionProposalBlock::<T>::kill();
         assert_ok!(Regions::<T>::propose_new_region(RawOrigin::Signed(signer.clone()).into(), region.clone()));
 
+        assert_ok!(Regions::<T>::vote_on_region_proposal(RawOrigin::Signed(signer.clone()).into(), region_id, Vote::Yes));
+
         #[extrinsic_call]
-        vote_on_region_proposal(RawOrigin::Signed(signer.clone()), region.clone().into_u16(), Vote::Yes);
+        vote_on_region_proposal(RawOrigin::Signed(signer.clone()), region_id, Vote::Yes);
 
         assert_eq!(
-            UserRegionVote::<T>::get(region.into_u16(), signer).unwrap().vote,
+            UserRegionVote::<T>::get(region_id, signer).unwrap().vote,
             Vote::Yes
         );
     }
@@ -122,6 +126,14 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, auction_amount * 100u32.into());
 
         let bid_amount = auction_amount.saturating_mul(10u32.into());
+
+        let first_bidder: T::AccountId = account("first_bidder", 0, 0);
+
+        let _ = T::NativeCurrency::mint_into(&first_bidder, auction_amount * 100u32.into());
+
+        let first_bid_amount = auction_amount.saturating_mul(9u32.into());
+        assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), first_bidder.clone()));
+        assert_ok!(Regions::<T>::bid_on_region(RawOrigin::Signed(first_bidder).into(), region_id, first_bid_amount));
 
         #[extrinsic_call]
         bid_on_region(RawOrigin::Signed(signer.clone()), region_id, bid_amount);
@@ -216,6 +228,11 @@ mod benchmarks {
         let deposit = T::RegionProposalDeposit::get();
         let _ = T::NativeCurrency::mint_into(&proposer, deposit * 10u32.into());
 
+        let expiry_block = frame_system::Pallet::<T>::block_number() + T::RegionOperatorVotingTime::get();
+        let dummy_region = u16::MAX;
+        let max_proposals = T::MaxProposalsForBlock::get() as usize;
+        RegionOwnerRoundsExpiring::<T>::insert(expiry_block, BoundedVec::truncate_from(vec![dummy_region; max_proposals - 1]));
+
         #[extrinsic_call]
         propose_remove_regional_operator(RawOrigin::Signed(proposer.clone()), region_id);
 
@@ -241,6 +258,8 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&voter, vote_power);
         assert_ok!(Regions::<T>::propose_remove_regional_operator(RawOrigin::Signed(proposer.clone()).into(), region_id));
 
+        assert_ok!(Regions::<T>::vote_on_remove_owner_proposal(RawOrigin::Signed(voter.clone()).into(), region_id, Vote::No));
+
         #[extrinsic_call]
         vote_on_remove_owner_proposal(RawOrigin::Signed(voter.clone()), region_id, Vote::Yes);
 
@@ -253,23 +272,29 @@ mod benchmarks {
         let signer: T::AccountId = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
 
-        let bidder: T::AccountId = account("bidder", 0, 0);
-        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), bidder.clone()).unwrap();
+        let bidder_1: T::AccountId = account("bidder1", 0, 0);
+        let bidder_2: T::AccountId = account("bidder2", 0, 0);
+        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), bidder_1.clone()).unwrap();
+        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), bidder_2.clone()).unwrap();
+        assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), bidder_1.clone()));
+        assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), bidder_2.clone()));
 
         let expiry = frame_system::Pallet::<T>::block_number() + T::RegionOwnerChangePeriod::get() + 1u32.into();
         frame_system::Pallet::<T>::set_block_number(expiry);
 
-        let bid_amount = T::MinimumRegionDeposit::get() * 10u32.into();
-        let _ = T::NativeCurrency::mint_into(&bidder, bid_amount);
+        let base_bid = T::MinimumRegionDeposit::get() * 10u32.into();
+        let _ = T::NativeCurrency::mint_into(&bidder_1, base_bid);
+        let higher_bid = T::MinimumRegionDeposit::get() * 20u32.into();
+        let _ = T::NativeCurrency::mint_into(&bidder_2, higher_bid);
 
-        assert_ok!(Regions::<T>::add_regional_operator(RawOrigin::Root.into(), bidder.clone()));
+        assert_ok!(Regions::<T>::bid_on_region_replacement(RawOrigin::Signed(bidder_1.clone()).into(), region_id, base_bid / 2u32.into()));
 
         #[extrinsic_call]
-        bid_on_region_replacement(RawOrigin::Signed(bidder.clone()), region_id, bid_amount / 2u32.into());
+        bid_on_region_replacement(RawOrigin::Signed(bidder_2.clone()), region_id, higher_bid / 2u32.into());
 
         let auction = RegionReplacementAuctions::<T>::get(region_id).unwrap();
-        assert_eq!(auction.highest_bidder, Some(bidder));
-        assert_eq!(auction.collateral, bid_amount / 2u32.into());
+        assert_eq!(auction.highest_bidder, Some(bidder_2));
+        assert_eq!(auction.collateral, higher_bid / 2u32.into());
     }
 
     #[benchmark]

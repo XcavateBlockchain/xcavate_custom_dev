@@ -583,7 +583,7 @@ pub mod pallet {
             let ended_region_owner_votings = RegionOwnerRoundsExpiring::<T>::take(n);
             // checks if there is a voting for an proposal ending in this block.
             ended_region_owner_votings.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 6));
                 let _ = UserRegionOwnerVote::<T>::clear_prefix(item, u32::MAX, None);
                 if let Err(e) = Self::finish_region_owner_proposal(*item) {
                     Self::deposit_event(Event::RegionOwnerProposalFailed {
@@ -596,7 +596,7 @@ pub mod pallet {
             let ended_replacement_auction = ReplacementAuctionExpiring::<T>::take(n);
             // checks if there is a voting for an auction ending in this block.
             ended_replacement_auction.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(3, 3));
                 if let Err(e) = Self::finish_region_owner_replacement(*item, n) {
                     Self::deposit_event(Event::RegionOwnerReplacementFailed {
                         region_id: *item,
