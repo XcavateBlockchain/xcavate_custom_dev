@@ -28,7 +28,9 @@ use codec::{Codec, DecodeWithMemTracking};
 
 use primitives::MarketplaceHoldReason;
 
-use pallet_real_estate_asset::traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect};
+use pallet_real_estate_asset::traits::{
+    PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
+};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -47,7 +49,7 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-/*     #[cfg(feature = "runtime-benchmarks")]
+    /*     #[cfg(feature = "runtime-benchmarks")]
     pub struct AssetHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -253,7 +255,7 @@ pub mod pallet {
         #[pallet::constant]
         type HighThreshold: Get<Percent>;
 
-/*         #[cfg(feature = "runtime-benchmarks")]
+        /*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,

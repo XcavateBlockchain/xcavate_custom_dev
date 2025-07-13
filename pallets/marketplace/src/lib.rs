@@ -11,8 +11,8 @@ mod tests;
 
 pub mod types;
 
-/* #[cfg(feature = "runtime-benchmarks")]
-mod benchmarking; */
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
@@ -39,7 +39,9 @@ use primitives::MarketplaceHoldReason;
 
 use types::*;
 
-use pallet_real_estate_asset::traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect};
+use pallet_real_estate_asset::traits::{
+    PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
+};
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
@@ -60,7 +62,7 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-/*     #[cfg(feature = "runtime-benchmarks")]
+    /*     #[cfg(feature = "runtime-benchmarks")]
     pub struct NftHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -138,7 +140,7 @@ pub mod pallet {
         #[pallet::constant]
         type PalletId: Get<PalletId>;
 
-/*         #[cfg(feature = "runtime-benchmarks")]
+        /*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,
@@ -500,7 +502,10 @@ pub mod pallet {
         ///
         /// Emits `ObjectListed` event when succesfful
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object())]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object(
+            <T as pallet::Config>::MaxPropertyToken::get(),
+            <T as pallet_nfts::Config>::StringLimit::get()
+        ))]
         pub fn list_object(
             origin: OriginFor<T>,
             region: RegionId,
@@ -622,7 +627,7 @@ pub mod pallet {
         ///
         /// Emits `PropertyTokenBought` event when succesfful.
         #[pallet::call_index(1)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_token())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn buy_property_token(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -649,7 +654,8 @@ pub mod pallet {
                 let mut property_details =
                     OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
-                let asset_details = T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
+                let asset_details =
+                    T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
 
                 ensure!(
                     property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
@@ -827,7 +833,7 @@ pub mod pallet {
         ///
         /// Emits `TokenRelisted` event when succesfful
         #[pallet::call_index(2)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn relist_token(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -888,7 +894,7 @@ pub mod pallet {
         ///
         /// Emits `RelistedTokenBought` event when succesfful.
         #[pallet::call_index(3)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn buy_relisted_token(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -936,7 +942,7 @@ pub mod pallet {
         ///
         /// Emits `BuyCancelled` event when succesfful.
         #[pallet::call_index(4)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn cancel_property_purchase(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1001,7 +1007,7 @@ pub mod pallet {
         ///
         /// Emits `OfferCreated` event when succesfful.
         #[pallet::call_index(5)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn make_offer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1069,7 +1075,7 @@ pub mod pallet {
         /// Emits `OfferAccepted` event when offer gets accepted succesffully.
         /// Emits `OfferRejected` event when offer gets rejected succesffully.
         #[pallet::call_index(6)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn handle_offer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1137,7 +1143,7 @@ pub mod pallet {
         ///
         /// Emits `OfferCancelled` event when succesfful.
         #[pallet::call_index(7)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let offer_details =
@@ -1167,7 +1173,7 @@ pub mod pallet {
         ///
         /// Emits `RejectedFundsWithdrawn` event when succesfful.
         #[pallet::call_index(8)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id);
@@ -1244,7 +1250,7 @@ pub mod pallet {
         ///
         /// Emits `ExpiredFundsWithdrawn` event when succesfful.
         #[pallet::call_index(9)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let mut property_details =
@@ -1331,7 +1337,7 @@ pub mod pallet {
         ///
         /// Emits `DepositWithdrawnUnsold` event when succesfful.
         #[pallet::call_index(10)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn withdraw_deposit_unsold(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1405,7 +1411,7 @@ pub mod pallet {
         ///
         /// Emits `ListingUpdated` event when succesfful.
         #[pallet::call_index(11)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn upgrade_listing(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1441,7 +1447,7 @@ pub mod pallet {
         ///
         /// Emits `ObjectUpdated` event when succesfful.
         #[pallet::call_index(12)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn upgrade_object(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1461,7 +1467,9 @@ pub mod pallet {
                 Error::<T>::PropertyAlreadySold
             );
             OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_property_details| {
-                let property_details = maybe_property_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
+                let property_details = maybe_property_details
+                    .as_mut()
+                    .ok_or(Error::<T>::InvalidIndex)?;
                 ensure!(
                     property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                     Error::<T>::ListingExpired
@@ -1491,7 +1499,7 @@ pub mod pallet {
         ///
         /// Emits `ListingDelisted` event when succesfful.
         #[pallet::call_index(13)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -2258,7 +2266,11 @@ pub mod pallet {
         }
 
         fn create_initial_funds() -> Result<
-            BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+            BoundedBTreeMap<
+                u32,
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::MaxPropertyToken,
+            >,
             DispatchError,
         > {
             let mut map = BoundedBTreeMap::default();

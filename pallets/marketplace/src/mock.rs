@@ -239,6 +239,7 @@ parameter_types! {
 
 impl pallet_regions::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = pallet_regions::weights::SubstrateWeight<Test>;
     type Balance = u128;
     type NativeCurrency = Balances;
     type RuntimeHoldReason = RuntimeHoldReason;
@@ -304,8 +305,6 @@ impl pallet_marketplace::Config for Test {
     type PalletId = MarketplacePalletId;
     type MinPropertyToken = MinPropertyTokens;
     type MaxPropertyToken = MaxPropertyTokens;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = NftHelper;
     type TreasuryId = TreasuryPalletId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ConstU128<10>;

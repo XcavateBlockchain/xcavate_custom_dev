@@ -34,9 +34,21 @@ pub struct NftDetails<T: Config> {
 pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub real_estate_developer: AccountIdOf<T>,
     pub token_price: <T as pallet::Config>::Balance,
-    pub collected_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
-    pub collected_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
-    pub collected_fees: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub collected_funds: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
+    pub collected_tax: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
+    pub collected_fees: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
     pub asset_id: u32,
     pub item_id: NftId,
     pub collection_id: NftCollectionId,
@@ -86,9 +98,16 @@ pub struct PropertyLawyerDetails<T: Config> {
     pub spv_lawyer: Option<AccountIdOf<T>>,
     pub real_estate_developer_status: DocumentStatus,
     pub spv_status: DocumentStatus,
-    pub real_estate_developer_lawyer_costs:
-        BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
-    pub spv_lawyer_costs: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub real_estate_developer_lawyer_costs: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
+    pub spv_lawyer_costs: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
     pub second_attempt: bool,
 }
 
@@ -98,8 +117,16 @@ pub struct PropertyLawyerDetails<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct TokenOwnerDetails<T: Config> {
     pub token_amount: u32,
-    pub paid_funds: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
-    pub paid_tax: BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+    pub paid_funds: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
+    pub paid_tax: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxPropertyToken,
+    >,
 }
 
 #[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]

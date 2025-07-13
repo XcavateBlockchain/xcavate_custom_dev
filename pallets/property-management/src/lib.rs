@@ -58,7 +58,7 @@ pub mod pallet {
         SalesAgent,
     }
 
-/*     #[cfg(feature = "runtime-benchmarks")]
+    /*     #[cfg(feature = "runtime-benchmarks")]
     pub struct AssetHelper;
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -122,7 +122,7 @@ pub mod pallet {
         #[pallet::constant]
         type MarketplacePalletId: Get<PalletId>;
 
-/*         #[cfg(feature = "runtime-benchmarks")]
+        /*         #[cfg(feature = "runtime-benchmarks")]
         type Helper: crate::BenchmarkHelper<
             <Self as pallet_assets::Config<Instance1>>::AssetId,
             Self,

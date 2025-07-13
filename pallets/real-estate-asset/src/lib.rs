@@ -337,7 +337,9 @@ pub mod pallet {
 
         pub(crate) fn do_burn_property_token(asset_id: u32) -> DispatchResult {
             PropertyAssetInfo::<T>::try_mutate_exists(asset_id, |maybe_details| {
-                let asset_details = maybe_details.as_ref().ok_or(Error::<T>::PropertyAssetNotRegistered)?;
+                let asset_details = maybe_details
+                    .as_ref()
+                    .ok_or(Error::<T>::PropertyAssetNotRegistered)?;
                 let pallet_account = Self::property_account_id(asset_id);
                 let pallet_origin: OriginFor<T> = RawOrigin::Signed(pallet_account.clone()).into();
                 let user_lookup = <T::Lookup as StaticLookup>::unlookup(pallet_account);
@@ -390,7 +392,7 @@ pub mod pallet {
                 Preservation::Expendable,
             )
             .map_err(|_| Error::<T>::NotEnoughToken)?;
-                
+
             if updated_sender_balance == 0 {
                 PropertyOwnerToken::<T>::remove(asset_id, sender);
                 PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
@@ -401,7 +403,7 @@ pub mod pallet {
                     owner_list.swap_remove(index);
                     Ok::<(), DispatchError>(())
                 })?;
-             } else {
+            } else {
                 PropertyOwnerToken::<T>::insert(asset_id, sender, updated_sender_balance);
             }
             let already_exists = PropertyOwner::<T>::try_mutate(asset_id, |owner_list| {
@@ -499,31 +501,37 @@ pub mod pallet {
             Ok(())
         }
 
-        pub(crate) fn do_get_if_spv_not_created(asset_id: u32) -> Result<
+        pub(crate) fn do_get_if_spv_not_created(
+            asset_id: u32,
+        ) -> Result<
             PropertyAssetDetails<
                 <T as pallet::Config>::NftId,
                 <T as pallet_regions::Config>::NftCollectionId,
                 T,
             >,
             DispatchError,
-        >  {
-            let asset_details = Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
+        > {
+            let asset_details =
+                Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
             ensure!(!asset_details.spv_created, Error::<T>::SpvAlreadyCreated);
             Ok(asset_details)
-        } 
+        }
 
-        pub(crate) fn do_get_if_spv_created(asset_id: u32) -> Result<
+        pub(crate) fn do_get_if_spv_created(
+            asset_id: u32,
+        ) -> Result<
             PropertyAssetDetails<
                 <T as pallet::Config>::NftId,
                 <T as pallet_regions::Config>::NftCollectionId,
                 T,
             >,
             DispatchError,
-        >  {
-            let asset_details = Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
+        > {
+            let asset_details =
+                Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
             ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
             Ok(asset_details)
-        } 
+        }
 
         pub(crate) fn do_get_property_asset_info(
             asset_id: u32,

@@ -44,7 +44,9 @@ pub trait PropertyTokenSpvControl<T: Config> {
 
     fn ensure_spv_created(asset_id: u32) -> DispatchResult;
 
-    fn get_if_spv_not_created(asset_id: u32) -> Result<
+    fn get_if_spv_not_created(
+        asset_id: u32,
+    ) -> Result<
         PropertyAssetDetails<
             <T as pallet::Config>::NftId,
             <T as pallet_regions::Config>::NftCollectionId,
@@ -53,7 +55,9 @@ pub trait PropertyTokenSpvControl<T: Config> {
         DispatchError,
     >;
 
-    fn get_if_spv_created(asset_id: u32) -> Result<
+    fn get_if_spv_created(
+        asset_id: u32,
+    ) -> Result<
         PropertyAssetDetails<
             <T as pallet::Config>::NftId,
             <T as pallet_regions::Config>::NftCollectionId,
@@ -148,7 +152,9 @@ impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
         Self::do_ensure_spv_created(asset_id)
     }
 
-    fn get_if_spv_not_created(asset_id: u32) -> Result<
+    fn get_if_spv_not_created(
+        asset_id: u32,
+    ) -> Result<
         PropertyAssetDetails<
             <T as pallet::Config>::NftId,
             <T as pallet_regions::Config>::NftCollectionId,
@@ -159,7 +165,9 @@ impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
         Self::do_get_if_spv_not_created(asset_id)
     }
 
-    fn get_if_spv_created(asset_id: u32) -> Result<
+    fn get_if_spv_created(
+        asset_id: u32,
+    ) -> Result<
         PropertyAssetDetails<
             <T as pallet::Config>::NftId,
             <T as pallet_regions::Config>::NftCollectionId,

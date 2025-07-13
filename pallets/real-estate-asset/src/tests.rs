@@ -1,11 +1,16 @@
 use crate::{mock::*, Error};
+use crate::{
+    traits::{
+        PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
+    },
+    PropertyAssetDetails, PropertyAssetInfo, PropertyOwner, PropertyOwnerToken,
+};
 use frame_support::{
     assert_noop, assert_ok,
     traits::{OnFinalize, OnInitialize},
 };
 use pallet_regions::RegionIdentifier;
-use sp_runtime::{Permill, TokenError, ArithmeticError};
-use crate::{traits::{PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl, PropertyTokenInspect}, PropertyAssetInfo, PropertyAssetDetails, PropertyOwner, PropertyOwnerToken};
+use sp_runtime::{ArithmeticError, Permill, TokenError};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -68,7 +73,14 @@ fn new_region_helper() {
 fn create_property_token_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
         assert_eq!(
             LocalAssets::balance(0, &RealEstateAsset::property_account_id(0)),
             10
@@ -78,7 +90,7 @@ fn create_property_token_works() {
             RealEstateAsset::property_account_id(0)
         );
         assert_eq!(
-            PropertyAssetInfo::<Test>::get(0).unwrap(), 
+            PropertyAssetInfo::<Test>::get(0).unwrap(),
             PropertyAssetDetails {
                 collection_id: 0,
                 item_id: 0,
@@ -96,7 +108,14 @@ fn create_property_token_works() {
 fn burn_property_token_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
         assert_eq!(
             LocalAssets::balance(0, &RealEstateAsset::property_account_id(0)),
             10
@@ -119,12 +138,20 @@ fn burn_property_token_fails() {
             RealEstateAsset::burn_property_token(0),
             Error::<Test>::PropertyAssetNotRegistered
         );
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::do_distribute_property_token_to_owner(0, &[1; 32].into(), 10));
-        assert_eq!(
-            LocalAssets::balance(0, &[1; 32].into()),
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::do_distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
             10
-        );
+        ));
+        assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 10);
         assert_noop!(
             RealEstateAsset::burn_property_token(0),
             TokenError::FundsUnavailable
@@ -136,29 +163,46 @@ fn burn_property_token_fails() {
 fn distribute_property_token_to_owner_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[2; 32].into(),
+            6
+        ));
         assert_eq!(
             LocalAssets::balance(0, &RealEstateAsset::property_account_id(0)),
             0
         );
+        assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 4);
+        assert_eq!(LocalAssets::balance(0, &[2; 32].into()), 6);
         assert_eq!(
-            LocalAssets::balance(0, &[1; 32].into()),
+            PropertyOwner::<Test>::get(0),
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![
+                [1; 32].into(),
+                [2; 32].into()
+            ])
+            .unwrap()
+        );
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
             4
         );
         assert_eq!(
-            LocalAssets::balance(0, &[2; 32].into()),
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [2; 32].into()),
             6
         );
-        assert_eq!(
-            PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![[1; 32].into(), [2; 32].into()]
-            ).unwrap()
-        );
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 4);
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [2; 32].into()), 6);
     })
 }
 
@@ -166,7 +210,14 @@ fn distribute_property_token_to_owner_works() {
 fn distribute_property_token_to_owner_fails() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
         assert_eq!(
             LocalAssets::balance(0, &RealEstateAsset::property_account_id(0)),
             10
@@ -186,49 +237,72 @@ fn distribute_property_token_to_owner_fails() {
 fn transfer_property_token_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
-        assert_ok!(RealEstateAsset::transfer_property_token(0, &[2; 32].into(), &[2; 32].into(), &[3; 32].into(), 3));
-        assert_eq!(
-            LocalAssets::balance(0, &[2; 32].into()),
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[2; 32].into(),
+            6
+        ));
+        assert_ok!(RealEstateAsset::transfer_property_token(
+            0,
+            &[2; 32].into(),
+            &[2; 32].into(),
+            &[3; 32].into(),
             3
-        );
-        assert_eq!(
-            LocalAssets::balance(0, &[3; 32].into()),
+        ));
+        assert_eq!(LocalAssets::balance(0, &[2; 32].into()), 3);
+        assert_eq!(LocalAssets::balance(0, &[3; 32].into()), 3);
+        assert_ok!(RealEstateAsset::transfer_property_token(
+            0,
+            &[2; 32].into(),
+            &[2; 32].into(),
+            &[3; 32].into(),
             3
-        );
-        assert_ok!(RealEstateAsset::transfer_property_token(0, &[2; 32].into(), &[2; 32].into(), &[3; 32].into(), 3));
+        ));
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![[1; 32].into(), [3; 32].into()]
-            ).unwrap()
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![
+                [1; 32].into(),
+                [3; 32].into()
+            ])
+            .unwrap()
+        );
+        assert_eq!(LocalAssets::balance(0, &[2; 32].into()), 0);
+        assert_eq!(LocalAssets::balance(0, &[3; 32].into()), 6);
+        assert_ok!(RealEstateAsset::transfer_property_token(
+            0,
+            &[1; 32].into(),
+            &[3; 32].into(),
+            &[0; 32].into(),
+            3
+        ));
+        assert_eq!(LocalAssets::balance(0, &[0; 32].into()), 3);
+        assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 4);
+        assert_eq!(LocalAssets::balance(0, &[3; 32].into()), 3);
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [0; 32].into()),
+            3
         );
         assert_eq!(
-            LocalAssets::balance(0, &[2; 32].into()),
-            0
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            1
         );
         assert_eq!(
-            LocalAssets::balance(0, &[3; 32].into()),
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [3; 32].into()),
             6
         );
-        assert_ok!(RealEstateAsset::transfer_property_token(0, &[1; 32].into(), &[3; 32].into(), &[0; 32].into(), 3));
-        assert_eq!(
-            LocalAssets::balance(0, &[0; 32].into()),
-            3
-        );
-        assert_eq!(
-            LocalAssets::balance(0, &[1; 32].into()),
-            4
-        );
-        assert_eq!(
-            LocalAssets::balance(0, &[3; 32].into()),
-            3
-        );
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [0; 32].into()), 3);
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 1);
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [3; 32].into()), 6);
     })
 }
 
@@ -236,25 +310,46 @@ fn transfer_property_token_works() {
 fn transfer_property_token_fails() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
-        assert_noop!(
-            RealEstateAsset::transfer_property_token(0, &[2; 32].into(), &[2; 32].into(), &[3; 32].into(), 7),
-            Error::<Test>::NotEnoughToken
-        );
-        assert_noop!(
-            RealEstateAsset::transfer_property_token(0, &[1; 32].into(), &[2; 32].into(), &[3; 32].into(), 6),
-            Error::<Test>::NotEnoughToken
-        );
-        assert_eq!(
-            LocalAssets::balance(0, &[1; 32].into()),
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
             4
-        );
-        assert_eq!(
-            LocalAssets::balance(0, &[2; 32].into()),
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[2; 32].into(),
             6
+        ));
+        assert_noop!(
+            RealEstateAsset::transfer_property_token(
+                0,
+                &[2; 32].into(),
+                &[2; 32].into(),
+                &[3; 32].into(),
+                7
+            ),
+            Error::<Test>::NotEnoughToken
         );
+        assert_noop!(
+            RealEstateAsset::transfer_property_token(
+                0,
+                &[1; 32].into(),
+                &[2; 32].into(),
+                &[3; 32].into(),
+                6
+            ),
+            Error::<Test>::NotEnoughToken
+        );
+        assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 4);
+        assert_eq!(LocalAssets::balance(0, &[2; 32].into()), 6);
     })
 }
 
@@ -262,11 +357,28 @@ fn transfer_property_token_fails() {
 fn take_property_token_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 4);
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            4
+        );
         assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 0);
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            0
+        );
     })
 }
 
@@ -274,11 +386,28 @@ fn take_property_token_works() {
 fn remove_token_ownership_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 4);
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            4
+        );
         assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
-        assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()), 0);
+        assert_eq!(
+            PropertyOwnerToken::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            0
+        );
     })
 }
 
@@ -286,21 +415,36 @@ fn remove_token_ownership_works() {
 fn clear_token_owners_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[2; 32].into(),
+            6
+        ));
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![[1; 32].into(), [2; 32].into()]
-            ).unwrap()
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![
+                [1; 32].into(),
+                [2; 32].into()
+            ])
+            .unwrap()
         );
         assert_ok!(RealEstateAsset::clear_token_owners(0));
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![]
-            ).unwrap()
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![]).unwrap()
         );
     })
 }
@@ -309,9 +453,16 @@ fn clear_token_owners_works() {
 fn register_spv_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
         assert_eq!(
-            PropertyAssetInfo::<Test>::get(0).unwrap(), 
+            PropertyAssetInfo::<Test>::get(0).unwrap(),
             PropertyAssetDetails {
                 collection_id: 0,
                 item_id: 0,
@@ -324,7 +475,7 @@ fn register_spv_works() {
         );
         assert_ok!(RealEstateAsset::register_spv(0));
         assert_eq!(
-            PropertyAssetInfo::<Test>::get(0).unwrap(), 
+            PropertyAssetInfo::<Test>::get(0).unwrap(),
             PropertyAssetDetails {
                 collection_id: 0,
                 item_id: 0,
@@ -342,7 +493,10 @@ fn register_spv_works() {
 fn register_spv_fails() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_noop!(RealEstateAsset::register_spv(0), Error::<Test>::PropertyAssetNotRegistered);
+        assert_noop!(
+            RealEstateAsset::register_spv(0),
+            Error::<Test>::PropertyAssetNotRegistered
+        );
     })
 }
 
@@ -350,9 +504,24 @@ fn register_spv_fails() {
 fn getter_function_works() {
     new_test_ext().execute_with(|| {
         new_region_helper();
-        assert_ok!(RealEstateAsset::create_property_token(&[0; 32].into(), 3, bvec![10, 10], 10, 1_000, bvec![22, 22]));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[1; 32].into(), 4));
-        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(0, &[2; 32].into(), 6));
+        assert_ok!(RealEstateAsset::create_property_token(
+            &[0; 32].into(),
+            3,
+            bvec![10, 10],
+            10,
+            1_000,
+            bvec![22, 22]
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[1; 32].into(),
+            4
+        ));
+        assert_ok!(RealEstateAsset::distribute_property_token_to_owner(
+            0,
+            &[2; 32].into(),
+            6
+        ));
         assert_eq!(
             RealEstateAsset::get_property_asset_info(0).unwrap(),
             PropertyAssetDetails {
@@ -367,20 +536,18 @@ fn getter_function_works() {
         );
         assert_eq!(
             PropertyOwner::<Test>::get(0),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![[1; 32].into(), [2; 32].into()]
-            ).unwrap()
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![
+                [1; 32].into(),
+                [2; 32].into()
+            ])
+            .unwrap()
         );
         assert_eq!(RealEstateAsset::take_property_token(0, &[1; 32].into()), 4);
         assert_eq!(RealEstateAsset::get_property_asset_info(1).is_none(), true);
         assert_eq!(
             PropertyOwner::<Test>::get(1),
-            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(
-                vec![]
-            ).unwrap()
+            frame_support::BoundedVec::<_, MaxPropertyTokens>::try_from(vec![]).unwrap()
         );
         assert_eq!(RealEstateAsset::take_property_token(1, &[3; 32].into()), 0);
     })
 }
-
-

@@ -1,94 +1,284 @@
-//! Benchmarking setup for pallet-nft-marketplace
+//! Benchmarking setup for pallet-marketplace
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
 #[allow(unused)]
-use crate::Pallet as NftMarketplace;
-use frame_benchmarking::__private::vec;
+use crate::Pallet as Marketplace;
 use frame_benchmarking::v2::*;
-use frame_support::sp_runtime::traits::Bounded;
-use frame_support::traits::Get;
-use frame_system::RawOrigin;
-use pallet_assets::Pallet as Assets;
-use pallet_xcavate_whitelist::Pallet as Whitelist;
-type DepositBalanceOf<T> = <<T as pallet_nfts::Config>::Currency as Currency<
-    <T as frame_system::Config>::AccountId,
->>::Balance;
 use frame_support::assert_ok;
+use frame_support::traits::Get;
+use frame_support::BoundedVec;
+use frame_system::RawOrigin;
+use pallet_regions::Pallet as Regions;
+use pallet_regions::{RegionIdentifier, Vote};
+use pallet_xcavate_whitelist::Pallet as Whitelist;
+use scale_info::prelude::vec;
 
-fn setup_object_listing<T: Config>() -> (T::AccountId, BalanceOf<T>) {
-    let value: BalanceOf<T> = 1u32.into();
-    let caller: T::AccountId = whitelisted_caller();
-    <T as pallet_nfts::Config>::Currency::make_free_balance_be(
-        &caller,
-        DepositBalanceOf::<T>::max_value(),
-    );
-    let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-        .try_into()
-        .unwrap();
-    assert_ok!(NftMarketplace::<T>::create_new_region(
-        RawOrigin::Root.into()
+fn create_whitelisted_user<T: Config>() -> T::AccountId {
+    let signer: T::AccountId = account("signer", 0, 0);
+    assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), signer.clone()));
+    signer
+}
+
+fn create_a_new_region<T: Config>(signer: T::AccountId) -> (u16, LocationId<T>) {
+    let region = RegionIdentifier::France;
+    let region_id = region.clone().into_u16();
+
+    let deposit = T::RegionProposalDeposit::get();
+    let auction_amount = T::MinimumRegionDeposit::get();
+    let total_funds = deposit
+        .saturating_mul(1000u32.into())
+        .saturating_add(auction_amount.saturating_mul(100u32.into()));
+    assert_ok!(<T as pallet_regions::Config>::NativeCurrency::mint_into(&signer, total_funds));
+
+    assert_ok!(Regions::<T>::propose_new_region(
+        RawOrigin::Signed(signer.clone()).into(),
+        region.clone()
     ));
-    assert_ok!(NftMarketplace::<T>::create_new_location(
+    assert_ok!(Regions::<T>::vote_on_region_proposal(
+        RawOrigin::Signed(signer.clone()).into(),
+        region_id,
+        Vote::Yes
+    ));
+    assert_ok!(Regions::<T>::add_regional_operator(
         RawOrigin::Root.into(),
-        0,
-        location
+        signer.clone()
     ));
-    let amount: BalanceOf<T> = 1_000_000u32.into();
-    let amount2: BalanceOf<T> = 1u32.into();
-    let user_lookup = <T::Lookup as StaticLookup>::unlookup(caller.clone());
-    let asset_id = <T as pallet::Config>::Helper::to_asset(1);
-    assert_ok!(Assets::<T, Instance1>::create(
-        RawOrigin::Signed(caller.clone()).into(),
-        asset_id.clone().into(),
-        user_lookup.clone(),
-        amount2.into(),
+
+    let bid_amount = auction_amount.saturating_mul(10u32.into());
+
+    let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
+    frame_system::Pallet::<T>::set_block_number(expiry);
+
+    assert_ok!(Regions::<T>::bid_on_region(
+        RawOrigin::Signed(signer.clone()).into(),
+        region_id,
+        bid_amount
     ));
-    assert_ok!(Assets::<T, Instance1>::mint(
-        RawOrigin::Signed(caller.clone()).into(),
-        asset_id.clone().into(),
-        user_lookup,
-        amount.into(),
+
+    let auction_expiry = frame_system::Pallet::<T>::block_number() + T::RegionAuctionTime::get();
+    frame_system::Pallet::<T>::set_block_number(auction_expiry);
+    assert_ok!(Regions::<T>::create_new_region(
+        RawOrigin::Signed(signer.clone()).into(),
+        region_id,
+        T::MaxListingDuration::get(),
+        Permill::from_percent(5)
     ));
-    (caller, value)
+
+    let location = BoundedVec::try_from("SG23 5TH".as_bytes().to_vec()).unwrap();
+    assert_ok!(Regions::<T>::create_new_location(
+        RawOrigin::Signed(signer.clone()).into(),
+        region_id,
+        location.clone()
+    ));
+
+    // Verify region and location
+    assert!(pallet_regions::RegionDetails::<T>::contains_key(region_id));
+    assert!(pallet_regions::LocationRegistration::<T>::contains_key(region_id, &location));
+
+    (region_id, location)
+}
+
+fn add_buyers_to_listing<T: Config>(
+    buyers: u32,
+    payment_asset: u32,
+    property_price: <T as pallet::Config>::Balance,
+) {
+    let deposit_amount = property_price
+        .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+
+    for i in 0..buyers {
+        let buyer: T::AccountId = account("buyer", i, i);
+        let payment_asset_buyers = T::AcceptedAssets::get()[0]; 
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price
+        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
+        assert_ok!(Marketplace::<T>::buy_property_token(RawOrigin::Signed(buyer).into(), 0, 1, payment_asset_buyers));
+        }
 }
 
 #[benchmarks]
 mod benchmarks {
     use super::*;
     #[benchmark]
-    fn list_object() {
-        let (caller, value) = setup_object_listing::<T>();
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
+    fn list_object(
+        t: Linear<{ <T as pallet::Config>::MinPropertyToken::get() }, {<T as pallet::Config>::MaxPropertyToken::get()}>,
+        m: Linear<0, {<T as pallet_nfts::Config>::StringLimit::get()}>,
+    ) {
+        let signer: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(signer.clone());
+        let token_amount: u32 = t;
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount = property_price
+            .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &signer,
+            deposit_amount.saturating_mul(20u32.into())
         ));
+
+        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+            BoundedVec::truncate_from(vec![42u8; m as usize]);
+
+        let tax_paid_by_developer = true;
+        assert!(!OngoingObjectListing::<T>::contains_key(0));
         #[extrinsic_call]
         list_object(
-            RawOrigin::Signed(caller),
-            0,
+            RawOrigin::Signed(signer.clone()),
+            region_id,
             location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
+            token_price,
+            token_amount,
+            metadata,
+            tax_paid_by_developer,
         );
-        assert_eq!(
-            NftMarketplace::<T>::registered_nft_details::<
-                <T as pallet::Config>::CollectionId,
-                <T as pallet::Config>::ItemId,
-            >(0.into(), 0.into())
-            .unwrap()
-            .asset_id,
-            0
-        );
+
+        let listing_id = 0;
+        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), token_amount);
+        assert_eq!(ListingDeposits::<T>::get(listing_id).unwrap().0, signer);
+        let listing = OngoingObjectListing::<T>::get(listing_id).unwrap();
+        assert_eq!(listing.token_price, token_price);
+        assert_eq!(listing.tax_paid_by_developer, tax_paid_by_developer);
     }
 
     #[benchmark]
+    fn buy_property_token_single_token(
+        a: Linear<1, {<T as pallet::Config>::MaxPropertyToken::get().saturating_sub(1)}>,
+        b: Linear<0, {<T as pallet::Config>::MaxPropertyToken::get().saturating_sub(2)}>,
+    ) {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount = property_price
+            .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &seller,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+
+        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+            BoundedVec::truncate_from(vec![42u8; <T as pallet_nfts::Config>::StringLimit::get() as usize]);
+
+        let tax_paid_by_developer = true;
+        assert_ok!(
+            Marketplace::<T>::list_object(
+            RawOrigin::Signed(seller).into(),
+            region_id,
+            location,
+            token_price,
+            token_amount,
+            metadata,
+            tax_paid_by_developer,
+        ));
+        let listing_id = 0;
+        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+        let payment_asset = T::AcceptedAssets::get()[0]; 
+        add_buyers_to_listing::<T>(b, payment_asset, property_price);
+
+        let buyer: T::AccountId = account("buyer_final", 0, 0);      
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
+        let amount: u32 = a.min(token_amount - b - 1);
+
+        #[extrinsic_call]
+        buy_property_token(
+            RawOrigin::Signed(buyer.clone()),
+            listing_id,
+            amount,
+            payment_asset,
+        );
+
+        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), token_amount - amount - b);
+        assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
+        let token_owner = TokenOwner::<T>::get(&buyer, listing_id);
+        assert_eq!(token_owner.token_amount, amount);
+        assert!(PropertyLawyer::<T>::get(listing_id).is_none());
+    }
+
+    #[benchmark]
+    fn buy_property_token_all_token(
+        b: Linear<1, {<T as pallet::Config>::MaxPropertyToken::get()}>,
+        n: Linear<1, {<T as pallet::Config>::AcceptedAssets::get().len() as u32}>,
+    ) {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount = property_price
+            .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &seller,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+
+        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+            BoundedVec::truncate_from(vec![42u8; <T as pallet_nfts::Config>::StringLimit::get() as usize]);
+
+        let tax_paid_by_developer = true;
+        assert_ok!(
+            Marketplace::<T>::list_object(
+            RawOrigin::Signed(seller).into(),
+            region_id,
+            location,
+            token_price,
+            token_amount,
+            metadata,
+            tax_paid_by_developer,
+        ));
+        assert!(OngoingObjectListing::<T>::contains_key(0));
+        let payment_asset = T::AcceptedAssets::get()[0]; 
+        let listing_id = 0;
+        add_buyers_to_listing::<T>(b - 1, payment_asset, property_price);
+
+        let buyer: T::AccountId = account("buyer_final", 0, 0);
+        let amount: u32 = token_amount - (b - 1);
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
+
+        #[extrinsic_call]
+        buy_property_token(
+            RawOrigin::Signed(buyer.clone()),
+            listing_id,
+            amount,
+            payment_asset,
+        );
+
+        assert_eq!(ListedToken::<T>::get(listing_id), None);
+        assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
+        let token_owner = TokenOwner::<T>::get(&buyer, listing_id);
+        assert_eq!(token_owner.token_amount, amount);
+        let property_lawyer = PropertyLawyer::<T>::get(listing_id).unwrap();
+        assert_eq!(property_lawyer.real_estate_developer_status, DocumentStatus::Pending);
+    }
+
+    /*     #[benchmark]
     fn buy_token() {
         let (caller, value) = setup_object_listing::<T>();
         assert_ok!(Whitelist::<T>::add_to_whitelist(
@@ -508,10 +698,10 @@ mod benchmarks {
     fn create_new_region() {
         #[extrinsic_call]
         create_new_region(RawOrigin::Root);
-    }
+    } */
 
     impl_benchmark_test_suite!(
-        NftMarketplace,
+        Marketplace,
         crate::mock::new_test_ext(),
         crate::mock::Test
     );
