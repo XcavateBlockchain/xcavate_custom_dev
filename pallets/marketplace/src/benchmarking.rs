@@ -79,6 +79,71 @@ fn create_a_new_region<T: Config>(signer: T::AccountId) -> (u16, LocationId<T>) 
     (region_id, location)
 }
 
+fn list_and_sell_property<T: Config>(seller: T::AccountId, region_id: u16, location: LocationId<T>) -> T::AccountId {
+    let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+    let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+    let property_price = token_price.saturating_mul((token_amount as u128).into());
+    let deposit_amount = property_price
+        .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+    assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+        &seller,
+        deposit_amount.saturating_mul(20u32.into())
+    ));
+
+    let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+        BoundedVec::truncate_from(vec![42u8; <T as pallet_nfts::Config>::StringLimit::get() as usize]);
+
+    let tax_paid_by_developer = true;
+    assert_ok!(
+        Marketplace::<T>::list_object(
+        RawOrigin::Signed(seller).into(),
+        region_id,
+        location,
+        token_price,
+        token_amount,
+        metadata,
+        tax_paid_by_developer,
+    ));
+    let listing_id = 0;
+    assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+    let payment_asset = T::AcceptedAssets::get()[0]; 
+        let buyer: T::AccountId = account("buyer", 0, 0);      
+    assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+        &buyer,
+        deposit_amount.saturating_mul(20u32.into())
+    ));
+    assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+        payment_asset,
+        &buyer,
+        property_price.saturating_mul(100u32.into())
+    ));
+    assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
+    add_buyers_to_listing::<T>(token_amount-1, payment_asset, property_price);
+
+    assert_ok!(Marketplace::<T>::buy_property_token(
+        RawOrigin::Signed(buyer.clone()).into(),
+        listing_id,
+        1,
+        payment_asset,
+    ));
+    buyer
+}
+
+fn create_registered_property<T: Config>(seller: T::AccountId, region_id: u16, location: LocationId<T>) -> T::AccountId{
+    let token_owner = list_and_sell_property::<T>(seller.clone(), region_id, location);
+    let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
+    let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
+
+    assert_ok!(Regions::<T>::register_lawyer(RawOrigin::Signed(seller.clone()).into(), region_id, lawyer_1.clone()));
+    assert_ok!(Regions::<T>::register_lawyer(RawOrigin::Signed(seller.clone()).into(), region_id, lawyer_2.clone()));
+    assert_ok!(Marketplace::<T>::lawyer_claim_property(RawOrigin::Signed(lawyer_1.clone()).into(), 0, crate::LegalProperty::RealEstateDeveloperSide, 400_u32.into()));
+    assert_ok!(Marketplace::<T>::lawyer_claim_property(RawOrigin::Signed(lawyer_2.clone()).into(), 0, crate::LegalProperty::SpvSide, 400_u32.into()));
+
+    assert_ok!(Marketplace::<T>::lawyer_confirm_documents(RawOrigin::Signed(lawyer_1).into(), 0, true));
+    assert_ok!(Marketplace::<T>::lawyer_confirm_documents(RawOrigin::Signed(lawyer_2).into(), 0, true));
+    token_owner
+}
+
 fn add_buyers_to_listing<T: Config>(
     buyers: u32,
     payment_asset: u32,
@@ -87,7 +152,7 @@ fn add_buyers_to_listing<T: Config>(
     let deposit_amount = property_price
         .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
 
-    for i in 0..buyers {
+    for i in 1..=buyers {
         let buyer: T::AccountId = account("buyer", i, i);
         let payment_asset_buyers = T::AcceptedAssets::get()[0]; 
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -101,7 +166,7 @@ fn add_buyers_to_listing<T: Config>(
         ));
         assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
         assert_ok!(Marketplace::<T>::buy_property_token(RawOrigin::Signed(buyer).into(), 0, 1, payment_asset_buyers));
-        }
+    }
 }
 
 #[benchmarks]
@@ -278,427 +343,238 @@ mod benchmarks {
         assert_eq!(property_lawyer.real_estate_developer_status, DocumentStatus::Pending);
     }
 
-    /*     #[benchmark]
-    fn buy_token() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
-        ));
-        #[extrinsic_call]
-        buy_token(RawOrigin::Signed(caller), 0, 100);
-
-        assert_eq!(
-            NftMarketplace::<T>::registered_nft_details::<
-                <T as pallet::Config>::CollectionId,
-                <T as pallet::Config>::ItemId,
-            >(0.into(), 0.into())
-            .unwrap()
-            .spv_created,
-            true
-        );
-    }
-
     #[benchmark]
     fn relist_token() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
-        ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2_000u32.into();
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
+
+        let asset_id = 0;
+        let amount = 1;
+        let price = 5_000u32.into();
+
         #[extrinsic_call]
-        relist_token(RawOrigin::Signed(caller), 0, 0.into(), listing_value, 80);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 1);
+        relist_token(RawOrigin::Signed(token_owner.clone()), asset_id, price, amount);
+
+        let listing = TokenListings::<T>::get(1).unwrap();
+        assert_eq!(listing.seller, token_owner);
+        assert_eq!(listing.token_price, price);
+        assert_eq!(listing.amount, amount);
+        assert_eq!(NextListingId::<T>::get(), 2);
     }
 
     #[benchmark]
     fn buy_relisted_token() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
+
+        let asset_id = 0;
+        let amount = 1;
+        let price = 5_000u32.into();
+        
+        assert_ok!(Marketplace::<T>::relist_token(RawOrigin::Signed(token_owner.clone()).into(), asset_id, price, amount));
+
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let relist_buyer: T::AccountId = account("relist_buyer", 0, 0);    
+        let deposit_amount = price
+            .saturating_mul(T::ListingDeposit::get());  
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &relist_buyer,
+            deposit_amount.saturating_mul(20u32.into())
         ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &relist_buyer,
+            price.saturating_mul(100u32.into())
         ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        let nft_buyer: T::AccountId = whitelisted_caller();
-        <T as pallet_nfts::Config>::Currency::make_free_balance_be(
-            &nft_buyer,
-            DepositBalanceOf::<T>::max_value(),
-        );
-        let amount: BalanceOf<T> = 1_000_000u32.into();
-        let user_lookup = <T::Lookup as StaticLookup>::unlookup(nft_buyer.clone());
-        let asset_id = <T as pallet::Config>::Helper::to_asset(1);
-        assert_ok!(Assets::<T, Instance1>::mint(
-            RawOrigin::Signed(caller.clone()).into(),
-            asset_id.clone().into(),
-            user_lookup,
-            amount.into(),
-        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), relist_buyer.clone()));
+
         #[extrinsic_call]
-        buy_relisted_token(RawOrigin::Signed(nft_buyer), 1, 1);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 0);
+        buy_relisted_token(RawOrigin::Signed(relist_buyer.clone()), 1, amount, payment_asset);
+
+        assert!(!TokenListings::<T>::contains_key(1));
+        assert!(pallet_real_estate_asset::PropertyOwner::<T>::get(asset_id).contains(&relist_buyer));
+        assert!(!pallet_real_estate_asset::PropertyOwner::<T>::get(asset_id).contains(&token_owner));
+        assert_eq!(pallet_real_estate_asset::PropertyOwnerToken::<T>::get(asset_id, &relist_buyer), amount);
+        assert_eq!(pallet_real_estate_asset::PropertyOwnerToken::<T>::get(asset_id, &token_owner), 0);
+    }
+
+    #[benchmark]
+    fn cancel_property_purchase(
+        a: Linear<1, {<T as pallet::Config>::MaxPropertyToken::get().saturating_sub(1)}>,
+        b: Linear<0, {<T as pallet::Config>::MaxPropertyToken::get().saturating_sub(2)}>,
+    ) {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount = property_price
+            .saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &seller,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+
+        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+            BoundedVec::truncate_from(vec![42u8; <T as pallet_nfts::Config>::StringLimit::get() as usize]);
+
+        let tax_paid_by_developer = true;
+        assert_ok!(
+            Marketplace::<T>::list_object(
+            RawOrigin::Signed(seller).into(),
+            region_id,
+            location,
+            token_price,
+            token_amount,
+            metadata,
+            tax_paid_by_developer,
+        ));
+        let listing_id = 0;
+        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+        let payment_asset = T::AcceptedAssets::get()[0]; 
+        add_buyers_to_listing::<T>(b, payment_asset, property_price);
+
+        let buyer: T::AccountId = account("buyer_final", 0, 0);      
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), buyer.clone()));
+        let amount: u32 = a.min(token_amount - b - 1);
+
+        assert_ok!(Marketplace::<T>::buy_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+            amount,
+            payment_asset,
+        ));
+
+        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), token_amount - amount - b);
+        assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
+
+        #[extrinsic_call]
+        cancel_property_purchase(RawOrigin::Signed(buyer.clone()), 0);
+
+        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), token_amount - b);
+        assert!(!TokenBuyer::<T>::get(listing_id).contains(&buyer));
     }
 
     #[benchmark]
     fn make_offer() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
+
+        let asset_id = 0;
+        let amount = 1;
+        let price = 5_000u32.into();
+        
+        assert_ok!(Marketplace::<T>::relist_token(RawOrigin::Signed(token_owner.clone()).into(), asset_id, price, amount));
+
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let offerer: T::AccountId = account("offerer", 0, 0);    
+        let deposit_amount = price
+            .saturating_mul(T::ListingDeposit::get());  
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &offerer,
+            deposit_amount.saturating_mul(20u32.into())
         ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &offerer,
+            price.saturating_mul(100u32.into())
         ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        let token_buyer: T::AccountId = whitelisted_caller();
-        <T as pallet_nfts::Config>::Currency::make_free_balance_be(
-            &token_buyer,
-            DepositBalanceOf::<T>::max_value(),
-        );
-        let amount: BalanceOf<T> = 1_000_000_000u32.into();
-        let user_lookup = <T::Lookup as StaticLookup>::unlookup(token_buyer.clone());
-        let asset_id = <T as pallet::Config>::Helper::to_asset(1);
-        assert_ok!(Assets::<T, Instance1>::mint(
-            RawOrigin::Signed(caller.clone()).into(),
-            asset_id.clone().into(),
-            user_lookup,
-            amount.into(),
-        ));
-        let offer_value: BalanceOf<T> = 100u32.into();
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), offerer.clone()));
+
+        let offer_price = price - 1u32.into();
+
         #[extrinsic_call]
-        make_offer(RawOrigin::Signed(token_buyer), 1, offer_value, 10);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 0);
+        make_offer(RawOrigin::Signed(offerer.clone()), 1, offer_price, amount, payment_asset);
+
+        assert_eq!(OngoingOffers::<T>::get(1, offerer).unwrap().token_price, offer_price);
     }
 
     #[benchmark]
     fn handle_offer() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
+
+        let asset_id = 0;
+        let amount = 1;
+        let price = 5_000u32.into();
+        
+        assert_ok!(Marketplace::<T>::relist_token(RawOrigin::Signed(token_owner.clone()).into(), asset_id, price, amount));
+
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let offerer: T::AccountId = account("offerer", 0, 0);    
+        let deposit_amount = price
+            .saturating_mul(T::ListingDeposit::get());  
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &offerer,
+            deposit_amount.saturating_mul(20u32.into())
         ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &offerer,
+            price.saturating_mul(100u32.into())
         ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        let token_buyer: T::AccountId = whitelisted_caller();
-        <T as pallet_nfts::Config>::Currency::make_free_balance_be(
-            &token_buyer,
-            DepositBalanceOf::<T>::max_value(),
-        );
-        let amount: BalanceOf<T> = 1_000_000_000u32.into();
-        let user_lookup = <T::Lookup as StaticLookup>::unlookup(token_buyer.clone());
-        let asset_id = <T as pallet::Config>::Helper::to_asset(1);
-        assert_ok!(Assets::<T, Instance1>::mint(
-            RawOrigin::Signed(caller.clone()).into(),
-            asset_id.clone().into(),
-            user_lookup,
-            amount.into(),
-        ));
-        let offer_value: BalanceOf<T> = 10u32.into();
-        assert_ok!(NftMarketplace::<T>::make_offer(
-            RawOrigin::Signed(token_buyer).into(),
-            1,
-            offer_value,
-            10
-        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), offerer.clone()));
+
+        let offer_price = price - 1u32.into();
+
+        assert_ok!(Marketplace::<T>::make_offer(RawOrigin::Signed(offerer.clone()).into(), 1, offer_price, amount, payment_asset));
+
         #[extrinsic_call]
-        handle_offer(RawOrigin::Signed(caller), 1, 0, crate::Offer::Accept);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 0);
+        handle_offer(RawOrigin::Signed(token_owner), 1, offerer.clone(), Offer::Accept);
+
+        assert_eq!(OngoingOffers::<T>::get(1, offerer).is_none(), true);
     }
 
     #[benchmark]
     fn cancel_offer() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
-        ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        let token_buyer: T::AccountId = whitelisted_caller();
-        <T as pallet_nfts::Config>::Currency::make_free_balance_be(
-            &token_buyer,
-            DepositBalanceOf::<T>::max_value(),
-        );
-        let amount: BalanceOf<T> = 1_000_000_000u32.into();
-        let user_lookup = <T::Lookup as StaticLookup>::unlookup(token_buyer.clone());
-        let asset_id = <T as pallet::Config>::Helper::to_asset(1);
-        assert_ok!(Assets::<T, Instance1>::mint(
-            RawOrigin::Signed(caller.clone()).into(),
-            asset_id.clone().into(),
-            user_lookup,
-            amount.into(),
-        ));
-        let offer_value: BalanceOf<T> = 100u32.into();
-        assert_ok!(NftMarketplace::<T>::make_offer(
-            RawOrigin::Signed(token_buyer.clone()).into(),
-            1,
-            offer_value,
-            10
-        ));
-        #[extrinsic_call]
-        cancel_offer(RawOrigin::Signed(token_buyer), 1, 0);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 0);
-    }
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
 
-    #[benchmark]
-    fn upgrade_listing() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
-        ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2_000u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        let new_price: BalanceOf<T> = 5_000u32.into();
-        #[extrinsic_call]
-        upgrade_listing(RawOrigin::Signed(caller), 1, new_price);
-        /* 		assert_eq!(
-            NftMarketplace::<T>::ongoing_nft_details::<
-                <T as pallet::Config>::CollectionId,
-                <T as pallet::Config>::ItemId,
-            >(0.into(), 22.into())
-            .unwrap()
-            .price,
-            new_price
-        ); */
-    }
+        let asset_id = 0;
+        let amount = 1;
+        let price = 5_000u32.into();
+        
+        assert_ok!(Marketplace::<T>::relist_token(RawOrigin::Signed(token_owner.clone()).into(), asset_id, price, amount));
 
-    #[benchmark]
-    fn upgrade_object() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let offerer: T::AccountId = account("offerer", 0, 0);    
+        let deposit_amount = price
+            .saturating_mul(T::ListingDeposit::get());  
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &offerer,
+            deposit_amount.saturating_mul(20u32.into())
         ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &offerer,
+            price.saturating_mul(100u32.into())
         ));
-        let new_price: BalanceOf<T> = 300_000u32.into();
-        #[extrinsic_call]
-        upgrade_object(RawOrigin::Signed(caller), 0, new_price);
-        assert_eq!(
-            NftMarketplace::<T>::ongoing_object_listing(0)
-                .unwrap()
-                .token_price,
-            new_price
-        );
-    }
+        assert_ok!(Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), offerer.clone()));
 
-    #[benchmark]
-    fn delist_token() {
-        let (caller, value) = setup_object_listing::<T>();
-        assert_ok!(Whitelist::<T>::add_to_whitelist(
-            RawOrigin::Root.into(),
-            caller.clone()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        assert_ok!(NftMarketplace::<T>::list_object(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            location,
-            value,
-            100,
-            vec![0; <T as pallet_nfts::Config>::StringLimit::get() as usize]
-                .try_into()
-                .unwrap(),
-        ));
-        assert_ok!(NftMarketplace::<T>::buy_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            100
-        ));
-        let listing_value: BalanceOf<T> = 2_000u32.into();
-        assert_ok!(NftMarketplace::<T>::relist_token(
-            RawOrigin::Signed(caller.clone()).into(),
-            0,
-            0.into(),
-            listing_value,
-            80,
-        ));
-        #[extrinsic_call]
-        delist_token(RawOrigin::Signed(caller), 1);
-        //assert_eq!(NftMarketplace::<T>::listed_nfts().len(), 0);
-    }
+        let offer_price = price - 1u32.into();
 
-    #[benchmark]
-    fn create_new_location() {
-        assert_ok!(NftMarketplace::<T>::create_new_region(
-            RawOrigin::Root.into()
-        ));
-        let location = vec![0; <T as pallet::Config>::PostcodeLimit::get() as usize]
-            .try_into()
-            .unwrap();
-        #[extrinsic_call]
-        create_new_location(RawOrigin::Root, 0, location);
-    }
+        assert_ok!(Marketplace::<T>::make_offer(RawOrigin::Signed(offerer.clone()).into(), 1, offer_price, amount, payment_asset));
 
-    #[benchmark]
-    fn create_new_region() {
         #[extrinsic_call]
-        create_new_region(RawOrigin::Root);
-    } */
+        cancel_offer(RawOrigin::Signed(offerer.clone()), 1);
+
+        assert_eq!(OngoingOffers::<T>::get(1, offerer).is_none(), true);
+        assert!(TokenListings::<T>::contains_key(1));
+    }
 
     impl_benchmark_test_suite!(
         Marketplace,

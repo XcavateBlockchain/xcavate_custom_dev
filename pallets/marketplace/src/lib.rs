@@ -1047,7 +1047,6 @@ pub mod pallet {
                 price,
             )?;
             let offer_details = OfferDetails {
-                buyer: signer.clone(),
                 token_price: offer_price,
                 amount,
                 payment_assets: payment_asset,
@@ -1091,7 +1090,7 @@ pub mod pallet {
                 TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
             let offer_details =
-                OngoingOffers::<T>::take(listing_id, offeror).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingOffers::<T>::take(listing_id, offeror.clone()).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
                 listing_details.amount >= offer_details.amount,
                 Error::<T>::NotEnoughTokenAvailable
@@ -1100,7 +1099,7 @@ pub mod pallet {
             T::ForeignAssetsHolder::release(
                 offer_details.payment_assets,
                 &MarketplaceHoldReason::Marketplace,
-                &offer_details.buyer,
+                &offeror,
                 price,
                 Precision::Exact,
             )?;
@@ -1108,8 +1107,8 @@ pub mod pallet {
                 Offer::Accept => {
                     Self::buying_token_process(
                         listing_id,
-                        &offer_details.buyer,
-                        &offer_details.buyer,
+                        &offeror,
+                        &offeror,
                         listing_details,
                         price,
                         offer_details.amount,
@@ -1117,7 +1116,7 @@ pub mod pallet {
                     )?;
                     Self::deposit_event(Event::<T>::OfferAccepted {
                         listing_id,
-                        offeror: offer_details.buyer,
+                        offeror,
                         amount: offer_details.amount,
                         price,
                     });
@@ -1125,7 +1124,7 @@ pub mod pallet {
                 Offer::Reject => {
                     Self::deposit_event(Event::<T>::OfferRejected {
                         listing_id,
-                        offeror: offer_details.buyer,
+                        offeror,
                         amount: offer_details.amount,
                         price,
                     });
@@ -1148,12 +1147,11 @@ pub mod pallet {
             let signer = ensure_signed(origin)?;
             let offer_details =
                 OngoingOffers::<T>::take(listing_id, &signer).ok_or(Error::<T>::InvalidIndex)?;
-            ensure!(offer_details.buyer == signer, Error::<T>::NoPermission);
             let price = offer_details.get_total_amount()?;
             T::ForeignAssetsHolder::release(
                 offer_details.payment_assets,
                 &MarketplaceHoldReason::Marketplace,
-                &offer_details.buyer,
+                &signer,
                 price,
                 Precision::Exact,
             )?;

@@ -75,7 +75,6 @@ pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct OfferDetails<T: Config> {
-    pub buyer: AccountIdOf<T>,
     pub token_price: <T as pallet::Config>::Balance,
     pub amount: u32,
     pub payment_assets: u32,
