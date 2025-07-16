@@ -8,8 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/* #[cfg(feature = "runtime-benchmarks")]
-mod benchmarking; */
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
@@ -18,7 +18,7 @@ use frame_support::{
         fungible::MutateHold,
         fungibles::Mutate as FungiblesMutate,
         tokens::Preservation,
-        tokens::{fungible, fungibles},
+        tokens::{fungible, fungibles, Balance},
     },
     PalletId,
 };
@@ -35,8 +35,6 @@ pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 pub type ForeignAssetIdOf<T> = <<T as Config>::ForeignCurrency as fungibles::Inspect<
     <T as frame_system::Config>::AccountId,
 >>::AssetId;
-
-pub type Balance = u128;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -99,24 +97,30 @@ pub mod pallet {
         /// Type representing the weight of this pallet.
         type WeightInfo: WeightInfo;
 
+        type Balance: Balance
+            + TypeInfo
+            + From<u128>
+            + Into<<Self as pallet_real_estate_asset::Config>::Balance>
+            + Default;
+
         /// The overarching hold reason.
         type RuntimeHoldReason: From<HoldReason>;
 
         /// The reservable currency type.
         type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
             + fungible::Mutate<AccountIdOf<Self>>
-            + fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
+            + fungible::InspectHold<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
             + fungible::MutateHold<
                 AccountIdOf<Self>,
-                Balance = Balance,
+                Balance = <Self as pallet::Config>::Balance,
                 Reason = RuntimeHoldReasonOf<Self>,
-            > + fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+            > + fungible::BalancedHold<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
-        type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+        type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance, AssetId = u32>
             + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
-            + fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
-            + fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+            + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
+            + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
         /// The property management's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
@@ -133,7 +137,7 @@ pub mod pallet {
 
         /// The minimum amount of a letting agent that has to be deposited.
         #[pallet::constant]
-        type LettingAgentDeposit: Get<Balance>;
+        type LettingAgentDeposit: Get<<Self as pallet::Config>::Balance>;
 
         /// The maximum amount of properties that can be assigned to a letting agent.
         #[pallet::constant]
@@ -168,7 +172,7 @@ pub mod pallet {
             NMapKey<Blake2_128Concat, u32>,
             NMapKey<Blake2_128Concat, u32>,
         ),
-        Balance,
+        <T as pallet::Config>::Balance,
         ValueQuery,
     >;
 
@@ -192,9 +196,9 @@ pub mod pallet {
         /// A letting agent has been added to a property.
         LettingAgentSet { asset_id: u32, who: T::AccountId },
         /// The rental income has been distributed.
-        IncomeDistributed { asset_id: u32, amount: Balance },
+        IncomeDistributed { asset_id: u32, amount: <T as pallet::Config>::Balance },
         /// A user withdrew funds.
-        WithdrawFunds { who: T::AccountId, amount: Balance },
+        WithdrawFunds { who: T::AccountId, amount: <T as pallet::Config>::Balance },
     }
 
     #[pallet::error]
@@ -426,7 +430,7 @@ pub mod pallet {
         pub fn distribute_income(
             origin: OriginFor<T>,
             asset_id: u32,
-            amount: Balance,
+            amount: <T as pallet::Config>::Balance,
             payment_asset: u32,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -439,7 +443,7 @@ pub mod pallet {
             );
 
             let scaled_amount = amount
-                .checked_mul(1) // Modify the scale factor if needed
+                .checked_mul(&1u128.into()) // Modify the scale factor if needed
                 .ok_or(Error::<T>::MultiplyError)?;
 
             <T as pallet::Config>::ForeignCurrency::transfer(
@@ -459,13 +463,13 @@ pub mod pallet {
             for owner in owner_list {
                 let token_amount = T::PropertyToken::get_token_balance(asset_id, &owner);
                 let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
-                    .checked_mul(amount)
+                    .checked_mul(&amount)
                     .ok_or(Error::<T>::MultiplyError)?
-                    .checked_div(Self::u64_to_balance_option(total_token.into())?)
+                    .checked_div(&Self::u64_to_balance_option(total_token.into())?)
                     .ok_or(Error::<T>::DivisionError)?;
                 InvestorFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
                     *stored = stored
-                        .checked_add(amount_for_owner)
+                        .checked_add(&amount_for_owner)
                         .ok_or(Error::<T>::ArithmeticOverflow)?;
                     Ok::<(), DispatchError>(())
                 })?;
@@ -481,7 +485,7 @@ pub mod pallet {
         ///
         /// Emits `WithdrawFunds` event when succesfful.
         #[pallet::call_index(5)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn withdraw_funds(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -517,7 +521,7 @@ pub mod pallet {
         }
 
         /// Converts a u64 to a balance.
-        pub fn u64_to_balance_option(input: u64) -> Result<Balance, Error<T>> {
+        pub fn u64_to_balance_option(input: u64) -> Result<<T as pallet::Config>::Balance, Error<T>> {
             input.try_into().map_err(|_| Error::<T>::ConversionError)
         }
 

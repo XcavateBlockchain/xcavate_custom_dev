@@ -35,4 +35,5 @@ frame_benchmarking::define_benchmarks!(
     [cumulus_pallet_xcmp_queue, XcmpQueue]
     [pallet_regions, Regions]
     [pallet_marketplace, Marketplace]
+    [pallet_property_management, PropertyManagement]
 );
