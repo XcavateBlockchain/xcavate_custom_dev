@@ -627,7 +627,10 @@ pub mod pallet {
         ///
         /// Emits `PropertyTokenBought` event when succesfful.
         #[pallet::call_index(1)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_property_token_all_token(
+            <T as pallet::Config>::MaxPropertyToken::get(),
+            <T as pallet::Config>::AcceptedAssets::get().len() as u32
+        ))]
         pub fn buy_property_token(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -833,7 +836,7 @@ pub mod pallet {
         ///
         /// Emits `TokenRelisted` event when succesfful
         #[pallet::call_index(2)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
         pub fn relist_token(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -894,7 +897,7 @@ pub mod pallet {
         ///
         /// Emits `RelistedTokenBought` event when succesfful.
         #[pallet::call_index(3)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
         pub fn buy_relisted_token(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -942,7 +945,7 @@ pub mod pallet {
         ///
         /// Emits `BuyCancelled` event when succesfful.
         #[pallet::call_index(4)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_property_purchase())]
         pub fn cancel_property_purchase(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1007,7 +1010,7 @@ pub mod pallet {
         ///
         /// Emits `OfferCreated` event when succesfful.
         #[pallet::call_index(5)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
         pub fn make_offer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1074,7 +1077,7 @@ pub mod pallet {
         /// Emits `OfferAccepted` event when offer gets accepted succesffully.
         /// Emits `OfferRejected` event when offer gets rejected succesffully.
         #[pallet::call_index(6)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
         pub fn handle_offer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1142,7 +1145,7 @@ pub mod pallet {
         ///
         /// Emits `OfferCancelled` event when succesfful.
         #[pallet::call_index(7)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let offer_details =
@@ -1171,7 +1174,7 @@ pub mod pallet {
         ///
         /// Emits `RejectedFundsWithdrawn` event when succesfful.
         #[pallet::call_index(8)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_rejected())]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id);
@@ -1248,7 +1251,7 @@ pub mod pallet {
         ///
         /// Emits `ExpiredFundsWithdrawn` event when succesfful.
         #[pallet::call_index(9)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_expired())]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let mut property_details =
@@ -1335,7 +1338,7 @@ pub mod pallet {
         ///
         /// Emits `DepositWithdrawnUnsold` event when succesfful.
         #[pallet::call_index(10)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_deposit_unsold())]
         pub fn withdraw_deposit_unsold(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1409,7 +1412,7 @@ pub mod pallet {
         ///
         /// Emits `ListingUpdated` event when succesfful.
         #[pallet::call_index(11)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_listing())]
         pub fn upgrade_listing(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1445,7 +1448,7 @@ pub mod pallet {
         ///
         /// Emits `ObjectUpdated` event when succesfful.
         #[pallet::call_index(12)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
         pub fn upgrade_object(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1497,7 +1500,7 @@ pub mod pallet {
         ///
         /// Emits `ListingDelisted` event when succesfful.
         #[pallet::call_index(13)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -1533,7 +1536,7 @@ pub mod pallet {
         ///
         /// Emits `LawyerClaimedProperty` event when succesfful.
         #[pallet::call_index(14)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_property())]
         pub fn lawyer_claim_property(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1673,7 +1676,7 @@ pub mod pallet {
         ///
         /// Emits `LawyerRemovedFromCase` event when succesfful.
         #[pallet::call_index(15)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_from_case(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -1719,7 +1722,7 @@ pub mod pallet {
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
         #[pallet::call_index(16)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents())]
         pub fn lawyer_confirm_documents(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1843,7 +1846,7 @@ pub mod pallet {
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
         #[pallet::call_index(17)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::send_property_token())]
         pub fn send_property_token(
             origin: OriginFor<T>,
             asset_id: u32,
