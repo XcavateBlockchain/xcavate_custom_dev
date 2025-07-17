@@ -194,7 +194,7 @@ runtime-benchmarks = [
 	"xcm-executor/runtime-benchmarks",
 	"pallet-marketplace/runtime-benchmarks",
 	"pallet-xcavate-whitelist/runtime-benchmarks",
-	#"pallet-property-governance/runtime-benchmarks",
+	"pallet-property-governance/runtime-benchmarks",
 	"pallet-property-management/runtime-benchmarks",
 	"pallet-regions/runtime-benchmarks",
 	#"pallet-real-estate-asset/runtime-benchmarks",

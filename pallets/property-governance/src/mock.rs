@@ -237,7 +237,6 @@ impl pallet_xcavate_whitelist::Config for Test {
 
 parameter_types! {
     pub const Postcode: u32 = 10;
-    pub const LocationDepositAmount: Balance = 10_000;
     pub const MaximumListingDuration: u64 = 10_000;
     pub const RegionVotingTime: BlockNumber = 30;
     pub const RegionAuctionTime: BlockNumber = 30;
@@ -250,6 +249,7 @@ parameter_types! {
 
 impl pallet_regions::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = pallet_regions::weights::SubstrateWeight<Test>;
     type Balance = u128;
     type NativeCurrency = Balances;
     type RuntimeHoldReason = RuntimeHoldReason;
@@ -259,7 +259,7 @@ impl pallet_regions::Config for Test {
     type PalletId = MarketplacePalletId;
     type MaxListingDuration = MaximumListingDuration;
     type PostcodeLimit = Postcode;
-    type LocationDeposit = LocationDepositAmount;
+    type LocationDeposit = ConstU128<10_000>;
     type RegionVotingTime = RegionVotingTime;
     type RegionAuctionTime = RegionAuctionTime;
     type RegionThreshold = RegionThreshold;
@@ -315,8 +315,6 @@ impl pallet_marketplace::Config for Test {
     type PalletId = MarketplacePalletId;
     type MinPropertyToken = MinPropertyTokens;
     type MaxPropertyToken = MaxPropertyTokens;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = NftHelper;
     type TreasuryId = TreasuryPalletId;
     type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
     type ListingDeposit = ConstU128<10>;
@@ -335,6 +333,7 @@ parameter_types! {
 impl pallet_property_management::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_property_management::weights::SubstrateWeight<Test>;
+    type Balance = u128;
     type RuntimeHoldReason = RuntimeHoldReason;
     type NativeCurrency = Balances;
     type ForeignCurrency = ForeignAssets;
@@ -363,6 +362,7 @@ parameter_types! {
 impl pallet_property_governance::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = weights::SubstrateWeight<Test>;
+    type Balance = u128;
     type NativeCurrency = Balances;
     type LocalCurrency = LocalAssets;
     type ForeignCurrency = ForeignAssets;
@@ -373,8 +373,6 @@ impl pallet_property_governance::Config for Test {
     type MinSlashingAmount = ConstU128<100>;
     type Threshold = VotingThreshold;
     type HighThreshold = HighVotingThreshold;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = AssetHelper;
     type LowProposal = ConstU128<500>;
     type HighProposal = ConstU128<2000>;
     type MarketplacePalletId = MarketplacePalletId;

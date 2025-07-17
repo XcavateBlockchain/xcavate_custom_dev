@@ -116,8 +116,11 @@ pub mod pallet {
                 Reason = RuntimeHoldReasonOf<Self>,
             > + fungible::BalancedHold<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
-        type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance, AssetId = u32>
-            + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+        type ForeignCurrency: fungibles::InspectEnumerable<
+                AccountIdOf<Self>,
+                Balance = <Self as pallet::Config>::Balance,
+                AssetId = u32,
+            > + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
             + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
             + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
@@ -196,9 +199,15 @@ pub mod pallet {
         /// A letting agent has been added to a property.
         LettingAgentSet { asset_id: u32, who: T::AccountId },
         /// The rental income has been distributed.
-        IncomeDistributed { asset_id: u32, amount: <T as pallet::Config>::Balance },
+        IncomeDistributed {
+            asset_id: u32,
+            amount: <T as pallet::Config>::Balance,
+        },
         /// A user withdrew funds.
-        WithdrawFunds { who: T::AccountId, amount: <T as pallet::Config>::Balance },
+        WithdrawFunds {
+            who: T::AccountId,
+            amount: <T as pallet::Config>::Balance,
+        },
     }
 
     #[pallet::error]
@@ -521,7 +530,9 @@ pub mod pallet {
         }
 
         /// Converts a u64 to a balance.
-        pub fn u64_to_balance_option(input: u64) -> Result<<T as pallet::Config>::Balance, Error<T>> {
+        pub fn u64_to_balance_option(
+            input: u64,
+        ) -> Result<<T as pallet::Config>::Balance, Error<T>> {
             input.try_into().map_err(|_| Error::<T>::ConversionError)
         }
 

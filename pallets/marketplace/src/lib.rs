@@ -1092,8 +1092,8 @@ pub mod pallet {
             let listing_details =
                 TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
-            let offer_details =
-                OngoingOffers::<T>::take(listing_id, offeror.clone()).ok_or(Error::<T>::InvalidIndex)?;
+            let offer_details = OngoingOffers::<T>::take(listing_id, offeror.clone())
+                .ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
                 listing_details.amount >= offer_details.amount,
                 Error::<T>::NotEnoughTokenAvailable

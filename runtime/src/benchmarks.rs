@@ -36,4 +36,5 @@ frame_benchmarking::define_benchmarks!(
     [pallet_regions, Regions]
     [pallet_marketplace, Marketplace]
     [pallet_property_management, PropertyManagement]
+    [pallet_property_governance, PropertyGovernance]
 );

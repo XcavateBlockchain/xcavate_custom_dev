@@ -8,8 +8,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/* #[cfg(feature = "runtime-benchmarks")]
-mod benchmarking; */
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
@@ -19,7 +19,7 @@ use frame_support::{
         fungible::{BalancedHold, Credit},
         fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
         tokens::{fungible, fungibles},
-        tokens::{imbalance::OnUnbalanced, Precision, Preservation},
+        tokens::{imbalance::OnUnbalanced, Balance, Precision, Preservation},
     },
     PalletId,
 };
@@ -34,8 +34,6 @@ use pallet_real_estate_asset::traits::{
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
-
-pub type Balance = u128;
 
 pub type NegativeImbalanceOf<T> =
     Credit<<T as frame_system::Config>::AccountId, <T as Config>::NativeCurrency>;
@@ -73,7 +71,7 @@ pub mod pallet {
     pub struct Proposal<T: Config> {
         pub proposer: AccountIdOf<T>,
         pub asset_id: u32,
-        pub amount: Balance,
+        pub amount: <T as pallet::Config>::Balance,
         pub created_at: BlockNumberFor<T>,
         pub metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
     }
@@ -159,14 +157,14 @@ pub mod pallet {
         pub buyer: Option<AccountIdOf<T>>,
         pub spv_status: DocumentStatus,
         pub buyer_status: DocumentStatus,
-        pub spv_lawyer_costs: Balance,
-        pub buyer_lawyer_costs: Balance,
-        pub price: Option<Balance>,
+        pub spv_lawyer_costs: <T as pallet::Config>::Balance,
+        pub buyer_lawyer_costs: <T as pallet::Config>::Balance,
+        pub price: Option<<T as pallet::Config>::Balance>,
         pub second_attempt: bool,
         pub lawyer_approved: bool,
         pub finalized: bool,
         pub property_token_amount: u32,
-        pub reserve: Option<Reserve>,
+        pub reserve: Option<Reserve<T>>,
     }
 
     /// Info for sale auctions.
@@ -175,17 +173,17 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct SaleAuction<T: Config> {
         pub highest_bidder: Option<AccountIdOf<T>>,
-        pub price: Balance,
-        pub reserve: Option<Reserve>,
+        pub price: <T as pallet::Config>::Balance,
+        pub reserve: Option<Reserve<T>>,
     }
 
     /// Reserve of an auction.
     #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
     #[scale_info(skip_type_params(T))]
-    pub struct Reserve {
+    pub struct Reserve<T: Config> {
         pub payment_asset: u32,
-        pub amount: Balance,
+        pub amount: <T as pallet::Config>::Balance,
     }
 
     #[pallet::config]
@@ -202,32 +200,44 @@ pub mod pallet {
         /// Type representing the weight of this pallet.
         type WeightInfo: WeightInfo;
 
+        type Balance: Balance
+            + TypeInfo
+            + From<u128>
+            + Into<<Self as pallet_real_estate_asset::Config>::Balance>
+            + Default;
+
         /// The reservable currency type.
         type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
             + fungible::Mutate<AccountIdOf<Self>>
-            + fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
+            + fungible::InspectHold<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
             + fungible::MutateHold<
                 AccountIdOf<Self>,
-                Balance = Balance,
+                Balance = <Self as pallet::Config>::Balance,
                 Reason = RuntimeHoldReasonOf<Self>,
-            > + fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+            > + fungible::BalancedHold<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
-        type LocalCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
-            + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+        type LocalCurrency: fungibles::InspectEnumerable<
+                AccountIdOf<Self>,
+                Balance = <Self as pallet::Config>::Balance,
+                AssetId = u32,
+            > + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
-            + fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
-            + fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+            + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
+            + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
-        type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
-            + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+        type ForeignCurrency: fungibles::InspectEnumerable<
+                AccountIdOf<Self>,
+                Balance = <Self as pallet::Config>::Balance,
+                AssetId = u32,
+            > + fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
-            + fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
-            + fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+            + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
+            + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
 
         type ForeignAssetsHolder: fungibles::MutateHold<
                 AccountIdOf<Self>,
                 AssetId = u32,
-                Balance = Balance,
+                Balance = <Self as pallet::Config>::Balance,
                 Reason = MarketplaceHoldReason,
             > + fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
 
@@ -245,7 +255,7 @@ pub mod pallet {
 
         /// The minimum amount of a letting agent that will be slashed.
         #[pallet::constant]
-        type MinSlashingAmount: Get<Balance>;
+        type MinSlashingAmount: Get<<Self as pallet::Config>::Balance>;
 
         /// Threshold for challenge votes.
         #[pallet::constant]
@@ -263,11 +273,11 @@ pub mod pallet {
 
         /// Proposal amount to be considered a low proposal.
         #[pallet::constant]
-        type LowProposal: Get<Balance>;
+        type LowProposal: Get<<Self as pallet::Config>::Balance>;
 
         /// Proposal amount to be considered a high proposal.
         #[pallet::constant]
-        type HighProposal: Get<Balance>;
+        type HighProposal: Get<<Self as pallet::Config>::Balance>;
 
         /// The property governance's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
@@ -412,7 +422,7 @@ pub mod pallet {
             NMapKey<Blake2_128Concat, u32>,
             NMapKey<Blake2_128Concat, u32>,
         ),
-        Balance,
+        <T as pallet::Config>::Balance,
         ValueQuery,
     >;
 
@@ -464,9 +474,15 @@ pub mod pallet {
             vote: Vote,
         },
         /// The proposal has been executed.
-        ProposalExecuted { asset_id: u32, amount: Balance },
+        ProposalExecuted {
+            asset_id: u32,
+            amount: <T as pallet::Config>::Balance,
+        },
         /// The agent got slashed.
-        AgentSlashed { asset_id: u32, amount: Balance },
+        AgentSlashed {
+            asset_id: u32,
+            amount: <T as pallet::Config>::Balance,
+        },
         /// The agent has been changed.
         AgentChanged { asset_id: u32 },
         /// A proposal got rejected.
@@ -511,27 +527,27 @@ pub mod pallet {
         /// A sale has been finalized.
         SaleFinalized {
             asset_id: u32,
-            amount: Balance,
+            amount: <T as pallet::Config>::Balance,
             payment_asset: u32,
         },
         /// A token owner claimed his sale funds.
         SaleFundsClaimed {
             claimer: AccountIdOf<T>,
             asset_id: u32,
-            amount: Balance,
+            amount: <T as pallet::Config>::Balance,
             payment_asset: u32,
         },
         /// A bid has ben placed.
         BidSuccessfullyPlaced {
             asset_id: u32,
             bidder: AccountIdOf<T>,
-            new_leading_bid: Balance,
+            new_leading_bid: <T as pallet::Config>::Balance,
         },
         /// An auction has been won.
         AuctionWon {
             asset_id: u32,
             winner: AccountIdOf<T>,
-            highest_bid: Balance,
+            highest_bid: <T as pallet::Config>::Balance,
         },
         /// A sale has been approved.
         SaleApproved { asset_id: u32 },
@@ -709,7 +725,7 @@ pub mod pallet {
         pub fn propose(
             origin: OriginFor<T>,
             asset_id: u32,
-            amount: Balance,
+            amount: <T as pallet::Config>::Balance,
             data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1063,7 +1079,7 @@ pub mod pallet {
         pub fn bid_on_sale(
             origin: OriginFor<T>,
             asset_id: u32,
-            price: Balance,
+            price: <T as pallet::Config>::Balance,
             payment_asset: u32,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1075,7 +1091,9 @@ pub mod pallet {
                 <T as pallet::Config>::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
             );
-            let reserve_amount = price.checked_div(10).ok_or(Error::<T>::DivisionError)?;
+            let reserve_amount = price
+                .checked_div(&10u128.into())
+                .ok_or(Error::<T>::DivisionError)?;
             <T as pallet::Config>::ForeignAssetsHolder::hold(
                 payment_asset,
                 &MarketplaceHoldReason::Auction,
@@ -1129,7 +1147,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             asset_id: u32,
             legal_side: LegalSale,
-            costs: Balance,
+            costs: <T as pallet::Config>::Balance,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
@@ -1144,7 +1162,9 @@ pub mod pallet {
             let mut property_sale_info =
                 PropertySale::<T>::get(asset_id).ok_or(Error::<T>::NotForSale)?;
             let price = property_sale_info.price.ok_or(Error::<T>::PriceNotSet)?;
-            let max_costs = price.checked_div(100).ok_or(Error::<T>::DivisionError)?;
+            let max_costs = price
+                .checked_div(&100u128.into())
+                .ok_or(Error::<T>::DivisionError)?;
             ensure!(max_costs >= costs, Error::<T>::CostsTooHigh);
             match legal_side {
                 LegalSale::SpvSide => {
@@ -1342,21 +1362,21 @@ pub mod pallet {
                 let total_token = property_info.token_amount;
 
                 let total_fees = sales_price
-                    .checked_mul(2)
+                    .checked_mul(&2u128.into())
                     .ok_or(Error::<T>::MultiplyError)?
-                    .checked_div(100)
+                    .checked_div(&100u128.into())
                     .ok_or(Error::<T>::DivisionError)?;
                 let protocol_fees = total_fees
-                    .checked_sub(spv_lawyer_fees)
+                    .checked_sub(&spv_lawyer_fees)
                     .ok_or(Error::<T>::ArithmeticUnderflow)?
-                    .checked_sub(buyer_lawyer_fees)
+                    .checked_sub(&buyer_lawyer_fees)
                     .ok_or(Error::<T>::ArithmeticUnderflow)?;
                 let region_owner_share = protocol_fees
-                    .checked_div(2u128)
+                    .checked_div(&2u128.into())
                     .ok_or(Error::<T>::DivisionError)?;
                 let treasury_share = protocol_fees.saturating_sub(region_owner_share);
                 let net_amount = sales_price
-                    .checked_sub(total_fees)
+                    .checked_sub(&total_fees)
                     .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
                 let reserve = sale_info.reserve.clone().ok_or(Error::<T>::NoReserve)?;
@@ -1373,7 +1393,7 @@ pub mod pallet {
                 Self::transfer_funds(&buyer, &property_account, reserve.amount, reserve_asset)?;
 
                 let expected_buyer_amount = net_amount
-                    .checked_sub(reserve_released)
+                    .checked_sub(&reserve_released)
                     .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
                 Self::transfer_funds(
@@ -1399,31 +1419,31 @@ pub mod pallet {
                     let property_token_amount =
                         <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &owner);
 
-                    let owner_share = (property_token_amount as u128)
-                        .checked_mul(net_amount)
+                    let owner_share = net_amount
+                        .checked_mul(&(property_token_amount as u128).into())
                         .ok_or(Error::<T>::MultiplyError)?
-                        .checked_div(total_token as u128)
+                        .checked_div(&(total_token as u128).into())
                         .ok_or(Error::<T>::DivisionError)?;
                     if remaining_payment >= owner_share {
                         // Enough funds in payment_asset to cover full owner_share
                         SaleFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
                             *stored = stored
-                                .checked_add(owner_share)
+                                .checked_add(&owner_share)
                                 .ok_or(Error::<T>::ArithmeticOverflow)?;
                             Ok::<(), DispatchError>(())
                         })?;
                         remaining_payment = remaining_payment
-                            .checked_sub(owner_share)
+                            .checked_sub(&owner_share)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     } else {
                         // Not enough payment_asset funds, split owner_share
-                        if remaining_payment > 0 {
+                        if remaining_payment > 0u128.into() {
                             // Pay what is left from payment_asset
                             SaleFunds::<T>::try_mutate(
                                 (&owner, asset_id, payment_asset),
                                 |stored| {
                                     *stored = stored
-                                        .checked_add(remaining_payment)
+                                        .checked_add(&remaining_payment)
                                         .ok_or(Error::<T>::ArithmeticOverflow)?;
                                     Ok::<(), DispatchError>(())
                                 },
@@ -1431,20 +1451,20 @@ pub mod pallet {
                         }
 
                         let leftover = owner_share
-                            .checked_sub(remaining_payment)
+                            .checked_sub(&remaining_payment)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                        remaining_payment = 0;
+                        remaining_payment = 0u128.into();
 
                         // Pay the leftover from reserve_asset
                         SaleFunds::<T>::try_mutate((&owner, asset_id, reserve_asset), |stored| {
                             *stored = stored
-                                .checked_add(leftover)
+                                .checked_add(&leftover)
                                 .ok_or(Error::<T>::ArithmeticOverflow)?;
                             Ok::<(), DispatchError>(())
                         })?;
 
                         remaining_reserve = remaining_reserve
-                            .checked_sub(leftover)
+                            .checked_sub(&leftover)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     }
                 }
@@ -1481,7 +1501,7 @@ pub mod pallet {
                 PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
             ensure!(property_sale_info.finalized, Error::<T>::SaleNotFinalized);
             let amount = SaleFunds::<T>::take((&signer, asset_id, payment_asset));
-            ensure!(amount > 0, Error::<T>::NoFundsToClaim);
+            ensure!(amount > 0u128.into(), Error::<T>::NoFundsToClaim);
             let property_account = Self::property_account_id(asset_id);
             Self::transfer_funds(&property_account, &signer, amount, payment_asset)?;
             let property_token_amount =
@@ -1619,7 +1639,7 @@ pub mod pallet {
 
         fn finish_auction(asset_id: u32) -> DispatchResult {
             if let Some(auction) = SaleAuctions::<T>::take(asset_id) {
-                if auction.price > 0 {
+                if auction.price > 0u128.into() {
                     if let Some(buyer) = auction.highest_bidder {
                         if let Some(mut sale) = PropertySale::<T>::get(asset_id) {
                             sale.price = Some(auction.price);
@@ -1763,7 +1783,7 @@ pub mod pallet {
         fn transfer_funds(
             from: &AccountIdOf<T>,
             to: &AccountIdOf<T>,
-            amount: Balance,
+            amount: <T as pallet::Config>::Balance,
             asset: u32,
         ) -> DispatchResult {
             if !amount.is_zero() {

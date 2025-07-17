@@ -684,6 +684,7 @@ parameter_types! {
 impl pallet_property_governance::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
+    type Balance = Balance;
     type NativeCurrency = Balances;
     type LocalCurrency = RealEstateAssets;
     type ForeignCurrency = Assets;

@@ -32,13 +32,13 @@ pallet-regions = { workspace = true }
 pallet-real-estate-asset = { workspace = true }
 pallet-property-management = { workspace = true }
 primitives = { path = "../../primitives", default-features = false }
+pallet-marketplace = { workspace = true }
 
 [dev-dependencies]
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 pallet-assets-holder = { workspace = true }
-pallet-marketplace = { workspace = true }
 
 [features]
 default = ["std"]
