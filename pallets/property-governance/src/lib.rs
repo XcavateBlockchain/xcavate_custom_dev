@@ -47,21 +47,6 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-    /*     #[cfg(feature = "runtime-benchmarks")]
-    pub struct AssetHelper;
-
-    #[cfg(feature = "runtime-benchmarks")]
-    pub trait BenchmarkHelper<AssetId, T> {
-        fn to_asset(i: u32) -> AssetId;
-    }
-
-    #[cfg(feature = "runtime-benchmarks")]
-    impl<T: Config> BenchmarkHelper<AssetId<T>, T> for AssetHelper {
-        fn to_asset(i: u32) -> AssetId<T> {
-            i.into()
-        }
-    } */
-
     pub type ProposalIndex = u32;
 
     /// Proposal with the proposal Details.
@@ -264,12 +249,6 @@ pub mod pallet {
         /// Threshold for high costs challenge votes.
         #[pallet::constant]
         type HighThreshold: Get<Percent>;
-
-        /*         #[cfg(feature = "runtime-benchmarks")]
-        type Helper: crate::BenchmarkHelper<
-            <Self as pallet_assets::Config<Instance1>>::AssetId,
-            Self,
-        >; */
 
         /// Proposal amount to be considered a low proposal.
         #[pallet::constant]
