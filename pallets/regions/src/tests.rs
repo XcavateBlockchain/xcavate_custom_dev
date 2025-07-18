@@ -143,7 +143,7 @@ fn remove_regional_operator_fails() {
 fn propose_new_region_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(Regions::add_regional_operator(
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
@@ -176,6 +176,10 @@ fn propose_new_region_works_after_rejected() {
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
             crate::RegionIdentifier::England
@@ -187,10 +191,6 @@ fn propose_new_region_works_after_rejected() {
         ));
         assert_eq!(ProposedRegionIds::<Test>::get(1).is_some(), true);
         run_to_block(31);
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [0; 32].into()
-        ));
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
             1,
@@ -209,6 +209,10 @@ fn propose_new_region_slash_proposer() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
@@ -256,6 +260,10 @@ fn propose_new_region_no_treasury_rewards() {
         ));
         assert_ok!(Regions::add_regional_operator(
             RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
             [1; 32].into()
         ));
         assert_ok!(Regions::propose_new_region(
@@ -290,9 +298,13 @@ fn propose_new_region_fails() {
                 RuntimeOrigin::signed([0; 32].into()),
                 crate::RegionIdentifier::Japan
             ),
-            Error::<Test>::UserNotWhitelisted
+            Error::<Test>::UserNotRegionalOperator
         );
         assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
             RuntimeOrigin::root(),
             [0; 32].into()
         ));
@@ -324,10 +336,6 @@ fn propose_new_region_fails() {
             crate::Vote::Yes
         ));
         run_to_block(31);
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [0; 32].into()
-        ));
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([0; 32].into()),
             3,
@@ -372,6 +380,10 @@ fn vote_on_region_proposal_works() {
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [2; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [0; 32].into()
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -460,6 +472,14 @@ fn vote_on_region_proposal_fails() {
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [9; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [8; 32].into()
         ));
         assert_ok!(Balances::force_set_balance(
             RuntimeOrigin::root(),
@@ -830,6 +850,10 @@ fn create_new_region_does_not_works() {
             RuntimeOrigin::root(),
             [8; 32].into()
         ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
             crate::RegionIdentifier::Japan
@@ -840,10 +864,6 @@ fn create_new_region_does_not_works() {
             crate::Vote::Yes
         ));
         run_to_block(31);
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
             3,

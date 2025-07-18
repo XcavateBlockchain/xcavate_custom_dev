@@ -45,6 +45,10 @@ fn create_a_new_region<T: Config>(signer: T::AccountId) -> (u16, LocationId<T>) 
         total_funds
     ));
 
+    assert_ok!(Regions::<T>::add_regional_operator(
+        RawOrigin::Root.into(),
+        signer.clone()
+    ));
     assert_ok!(Regions::<T>::propose_new_region(
         RawOrigin::Signed(signer.clone()).into(),
         region.clone()
@@ -53,10 +57,6 @@ fn create_a_new_region<T: Config>(signer: T::AccountId) -> (u16, LocationId<T>) 
         RawOrigin::Signed(signer.clone()).into(),
         region_id,
         Vote::Yes
-    ));
-    assert_ok!(Regions::<T>::add_regional_operator(
-        RawOrigin::Root.into(),
-        signer.clone()
     ));
 
     let bid_amount = auction_amount.saturating_mul(10u32.into());

@@ -626,8 +626,8 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
-                Error::<T>::UserNotWhitelisted
+                RegionOperatorAccounts::<T>::contains_key(&signer),
+                Error::<T>::UserNotRegionalOperator
             );
 
             let region_id = region_identifier.into_u16();

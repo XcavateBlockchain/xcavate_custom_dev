@@ -1435,6 +1435,10 @@ fn distributes_nfts_and_funds_3() {
             RuntimeOrigin::root(),
             [8; 32].into()
         ));
+        assert_ok!(Regions::add_regional_operator(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
             RegionIdentifier::Japan
@@ -1445,10 +1449,6 @@ fn distributes_nfts_and_funds_3() {
             pallet_regions::Vote::Yes
         ));
         run_to_block(31);
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
             3,

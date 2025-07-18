@@ -649,177 +649,141 @@ pub mod pallet {
                 Error::<T>::PaymentAssetNotSupported
             );
 
-            ListedToken::<T>::try_mutate_exists(listing_id, |maybe_listed_token| {
-                let listed_token = maybe_listed_token
-                    .as_mut()
-                    .ok_or(Error::<T>::TokenNotForSale)?;
-                ensure!(*listed_token >= amount, Error::<T>::NotEnoughTokenAvailable);
-                let mut property_details =
-                    OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let mut listed_token =
+                ListedToken::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
+            ensure!(listed_token >= amount, Error::<T>::NotEnoughTokenAvailable);
+            let mut property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            ensure!(
+                property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
+                Error::<T>::ListingExpired
+            );
+            let asset_details =
+                T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
+            let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region)
+                .ok_or(Error::<T>::RegionUnknown)?;
 
-                let asset_details =
-                    T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
+            let fee_percent = T::MarketplaceFeePercentage::get();
+            ensure!(
+                fee_percent < 100u128.into(),
+                Error::<T>::InvalidFeePercentage
+            );
+            let tax_percent = region_info.tax;
+            ensure!(
+                tax_percent < Permill::from_percent(100),
+                Error::<T>::InvalidTaxPercentage
+            );
 
-                ensure!(
-                    property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
-                    Error::<T>::ListingExpired
-                );
+            let transfer_price = property_details
+                .token_price
+                .checked_mul(&((amount as u128).into()))
+                .ok_or(Error::<T>::MultiplyError)?;
+            let fee = transfer_price
+                .checked_mul(&fee_percent)
+                .ok_or(Error::<T>::MultiplyError)?
+                .checked_div(&100u128.into())
+                .ok_or(Error::<T>::DivisionError)?;
+            let tax = tax_percent.mul_floor(transfer_price);
 
-                let transfer_price = property_details
-                    .token_price
-                    .checked_mul(&((amount as u128).into()))
-                    .ok_or(Error::<T>::MultiplyError)?;
+            let base_price = transfer_price
+                .checked_add(&fee)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-                let fee_percent = T::MarketplaceFeePercentage::get();
-                ensure!(
-                    fee_percent < 100u128.into(),
-                    Error::<T>::InvalidFeePercentage
-                );
-                let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region)
-                    .ok_or(Error::<T>::RegionUnknown)?;
-                let tax_percent = region_info.tax;
-                ensure!(
-                    tax_percent < Permill::from_percent(100),
-                    Error::<T>::InvalidTaxPercentage
-                );
+            let total_transfer_price = if property_details.tax_paid_by_developer {
+                base_price
+            } else {
+                base_price
+                    .checked_add(&tax)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?
+            };
 
-                let fee = transfer_price
-                    .checked_mul(&fee_percent)
-                    .ok_or(Error::<T>::MultiplyError)?
-                    .checked_div(&100u128.into())
-                    .ok_or(Error::<T>::DivisionError)?;
+            T::ForeignAssetsHolder::hold(
+                payment_asset,
+                &MarketplaceHoldReason::Marketplace,
+                &signer,
+                total_transfer_price,
+            )?;
 
-                let tax = tax_percent.mul_floor(transfer_price);
+            listed_token = listed_token
+                .checked_sub(amount)
+                .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
-                let base_price = transfer_price
-                    .checked_add(&fee)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
-
-                let total_transfer_price = if property_details.tax_paid_by_developer {
-                    base_price
-                } else {
-                    base_price
-                        .checked_add(&tax)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?
-                };
-
-                T::ForeignAssetsHolder::hold(
-                    payment_asset,
-                    &MarketplaceHoldReason::Marketplace,
-                    &signer,
-                    total_transfer_price,
-                )?;
-                *listed_token = listed_token
-                    .checked_sub(amount)
-                    .ok_or(Error::<T>::ArithmeticUnderflow)?;
-
-                TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
-                    if !buyers.contains(&signer) {
-                        buyers
-                            .try_push(signer.clone())
-                            .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
-                    }
-                    Ok::<(), DispatchError>(())
-                })?;
-
-                TokenOwner::<T>::try_mutate_exists(
-                    &signer,
-                    listing_id,
-                    |maybe_token_owner_details| {
-                        if maybe_token_owner_details.is_none() {
-                            let initial_funds = Self::create_initial_funds()?;
-                            *maybe_token_owner_details = Some(TokenOwnerDetails {
-                                token_amount: 0,
-                                paid_funds: initial_funds.clone(),
-                                paid_tax: initial_funds,
-                            });
-                        }
-
-                        let token_owner_details = maybe_token_owner_details
-                            .as_mut()
-                            .ok_or(Error::<T>::TokenOwnerNotFound)?;
-                        token_owner_details.token_amount = token_owner_details
-                            .token_amount
-                            .checked_add(amount)
-                            .ok_or(Error::<T>::ArithmeticOverflow)?;
-
-                        match token_owner_details.paid_funds.get_mut(&payment_asset) {
-                            Some(existing) => {
-                                *existing = existing
-                                    .checked_add(&transfer_price)
-                                    .ok_or(Error::<T>::ArithmeticOverflow)?;
-                            }
-                            None => {
-                                token_owner_details
-                                    .paid_funds
-                                    .try_insert(payment_asset, transfer_price)
-                                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                            }
-                        }
-
-                        if !property_details.tax_paid_by_developer {
-                            match token_owner_details.paid_tax.get_mut(&payment_asset) {
-                                Some(existing) => {
-                                    *existing = existing
-                                        .checked_add(&tax)
-                                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-                                }
-                                None => {
-                                    token_owner_details
-                                        .paid_tax
-                                        .try_insert(payment_asset, tax)
-                                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                                }
-                            }
-                        }
-
-                        Ok::<(), DispatchError>(())
-                    },
-                )?;
-                for (map, value) in [
-                    (&mut property_details.collected_funds, transfer_price),
-                    (&mut property_details.collected_tax, tax),
-                    (&mut property_details.collected_fees, fee),
-                ] {
-                    match map.get_mut(&payment_asset) {
-                        Some(existing) => {
-                            *existing = existing
-                                .checked_add(&value)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?
-                        }
-                        None => map
-                            .try_insert(payment_asset, value)
-                            .map(|_| ())
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?,
-                    }
+            TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
+                if !buyers.contains(&signer) {
+                    buyers
+                        .try_push(signer.clone())
+                        .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
                 }
-                let asset_id = property_details.asset_id;
-                OngoingObjectListing::<T>::insert(listing_id, &property_details);
-                if *listed_token == 0 {
-                    let initial_funds = Self::create_initial_funds()?;
-                    let property_lawyer_details = PropertyLawyerDetails {
-                        real_estate_developer_lawyer: None,
-                        spv_lawyer: None,
-                        real_estate_developer_status: DocumentStatus::Pending,
-                        spv_status: DocumentStatus::Pending,
-                        real_estate_developer_lawyer_costs: initial_funds.clone(),
-                        spv_lawyer_costs: initial_funds,
-                        second_attempt: false,
-                    };
-                    Self::token_distribution(listing_id, property_details)?;
-                    PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
-                    *maybe_listed_token = None;
-                }
-                Self::deposit_event(Event::<T>::PropertyTokenBought {
-                    listing_index: listing_id,
-                    asset_id,
-                    buyer: signer,
-                    amount,
-                    price: transfer_price,
-                    payment_asset,
-                });
                 Ok::<(), DispatchError>(())
             })?;
+
+            TokenOwner::<T>::try_mutate_exists(&signer, listing_id, |maybe_token_owner_details| {
+                if maybe_token_owner_details.is_none() {
+                    let initial_funds = Self::create_initial_funds()?;
+                    *maybe_token_owner_details = Some(TokenOwnerDetails {
+                        token_amount: 0,
+                        paid_funds: initial_funds.clone(),
+                        paid_tax: initial_funds,
+                    });
+                }
+
+                let token_owner_details = maybe_token_owner_details
+                    .as_mut()
+                    .ok_or(Error::<T>::TokenOwnerNotFound)?;
+
+                token_owner_details.token_amount = token_owner_details
+                    .token_amount
+                    .checked_add(amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                Self::update_map(
+                    &mut token_owner_details.paid_funds,
+                    payment_asset,
+                    transfer_price,
+                )?;
+
+                if !property_details.tax_paid_by_developer {
+                    Self::update_map(&mut token_owner_details.paid_tax, payment_asset, tax)?;
+                }
+
+                Ok::<(), DispatchError>(())
+            })?;
+
+            Self::update_map(
+                &mut property_details.collected_funds,
+                payment_asset,
+                transfer_price,
+            )?;
+            Self::update_map(&mut property_details.collected_tax, payment_asset, tax)?;
+            Self::update_map(&mut property_details.collected_fees, payment_asset, fee)?;
+
+            let asset_id = property_details.asset_id;
+            OngoingObjectListing::<T>::insert(listing_id, &property_details);
+            if listed_token == 0 {
+                let initial_funds = Self::create_initial_funds()?;
+                let property_lawyer_details = PropertyLawyerDetails {
+                    real_estate_developer_lawyer: None,
+                    spv_lawyer: None,
+                    real_estate_developer_status: DocumentStatus::Pending,
+                    spv_status: DocumentStatus::Pending,
+                    real_estate_developer_lawyer_costs: initial_funds.clone(),
+                    spv_lawyer_costs: initial_funds,
+                    second_attempt: false,
+                };
+                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+                Self::token_distribution(listing_id, property_details)?;
+                ListedToken::<T>::remove(listing_id);
+            } else {
+                ListedToken::<T>::insert(listing_id, listed_token);
+            }
+            Self::deposit_event(Event::<T>::PropertyTokenBought {
+                listing_index: listing_id,
+                asset_id,
+                buyer: signer,
+                amount,
+                price: transfer_price,
+                payment_asset,
+            });
             Ok(())
         }
 
@@ -2006,7 +1970,7 @@ pub mod pallet {
             }
             let list = TokenBuyer::<T>::take(listing_id);
             for owner in list {
-                TokenOwner::<T>::take(&owner, listing_id);
+                TokenOwner::<T>::remove(&owner, listing_id);
             }
 
             // Update registered property details to mark SPV as created
@@ -2034,53 +1998,48 @@ pub mod pallet {
         ) -> DispatchResult {
             let list = TokenBuyer::<T>::get(listing_id);
             let property_account = Self::property_account_id(property_details.asset_id);
+            let fee_percent = T::MarketplaceFeePercentage::get();
+            ensure!(
+                fee_percent < 100u128.into(),
+                Error::<T>::InvalidFeePercentage
+            );
 
             // Process each investor once for all assets and token distribution
             for owner in list {
                 let token_details = TokenOwner::<T>::get(&owner, listing_id);
 
                 // Process each payment asset
-                for &asset in T::AcceptedAssets::get().iter() {
-                    if let Some(paid_funds) = token_details.paid_funds.get(&asset) {
-                        if !paid_funds.is_zero() {
-                            let default = Default::default();
-                            let paid_tax = token_details.paid_tax.get(&asset).unwrap_or(&default);
-                            let fee_percent = T::MarketplaceFeePercentage::get();
-                            ensure!(
-                                fee_percent < 100u128.into(),
-                                Error::<T>::InvalidFeePercentage
-                            );
-                            // Calculate investor's fee (1% of paid_funds)
-                            let investor_fee = paid_funds
-                                .checked_mul(&fee_percent)
-                                .ok_or(Error::<T>::MultiplyError)?
-                                .checked_div(&100u128.into())
-                                .ok_or(Error::<T>::DivisionError)?;
+                for (asset, paid_funds) in token_details
+                    .paid_funds
+                    .iter()
+                    .filter(|(_, funds)| !funds.is_zero())
+                {
+                    let default = Default::default();
+                    let paid_tax = token_details.paid_tax.get(&asset).unwrap_or(&default);
+                    // Calculate investor's fee (1% of paid_funds)
+                    let investor_fee = paid_funds
+                        .checked_mul(&fee_percent)
+                        .ok_or(Error::<T>::MultiplyError)?
+                        .checked_div(&100u128.into())
+                        .ok_or(Error::<T>::DivisionError)?;
 
-                            // Total amount to unfreeze (paid_funds + fee + tax)
-                            let total_investor_amount = paid_funds
-                                .checked_add(&investor_fee)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?
-                                .checked_add(paid_tax)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?;
+                    // Total amount to unfreeze (paid_funds + fee + tax)
+                    let total_investor_amount = paid_funds
+                        .checked_add(&investor_fee)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?
+                        .checked_add(paid_tax)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-                            T::ForeignAssetsHolder::release(
-                                asset,
-                                &MarketplaceHoldReason::Marketplace,
-                                &owner,
-                                total_investor_amount,
-                                Precision::Exact,
-                            )?;
+                    T::ForeignAssetsHolder::release(
+                        *asset,
+                        &MarketplaceHoldReason::Marketplace,
+                        &owner,
+                        total_investor_amount,
+                        Precision::Exact,
+                    )?;
 
-                            // Transfer funds to property account
-                            Self::transfer_funds(
-                                &owner,
-                                &property_account,
-                                total_investor_amount,
-                                asset,
-                            )?;
-                        }
-                    }
+                    // Transfer funds to property account
+                    Self::transfer_funds(&owner, &property_account, total_investor_amount, *asset)?;
                 }
 
                 // Distribute property tokens
@@ -2280,6 +2239,26 @@ pub mod pallet {
                     .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
             }
             Ok(map)
+        }
+
+        fn update_map(
+            map: &mut BoundedBTreeMap<
+                u32,
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::MaxPropertyToken,
+            >,
+            asset: u32,
+            value: <T as pallet::Config>::Balance,
+        ) -> DispatchResult {
+            if let Some(existing) = map.get_mut(&asset) {
+                *existing = existing
+                    .checked_add(&value)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+            } else {
+                map.try_insert(asset, value)
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+            }
+            Ok(())
         }
     }
 }
