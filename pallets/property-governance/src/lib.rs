@@ -634,7 +634,7 @@ pub mod pallet {
             let ended_votings = ProposalRoundsExpiring::<T>::take(n);
             // checks if there is a voting for a proposal ending in this block.
             ended_votings.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(4, 3));
                 let _ = UserProposalVote::<T>::clear_prefix(item, u32::MAX, None);
                 if let Err(e) = Self::finish_proposal(*item) {
                     Self::deposit_event(Event::ProposalProcessingFailed {
@@ -647,7 +647,7 @@ pub mod pallet {
             let ended_votings = SaleProposalRoundsExpiring::<T>::take(n);
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 4));
                 let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
                 if let Err(e) = Self::finish_sale_proposal(*item) {
                     Self::deposit_event(Event::SaleProposalProcessingFailed {
@@ -660,7 +660,7 @@ pub mod pallet {
             let ended_votings = AuctionRoundsExpiring::<T>::take(n);
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(3, 3));
                 let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
                 if let Err(e) = Self::finish_auction(*item) {
                     Self::deposit_event(Event::AuctionProcessingFailed {
@@ -673,7 +673,7 @@ pub mod pallet {
             let ended_challenge_votings = ChallengeRoundsExpiring::<T>::take(n);
             // checks if there is a voting for an challenge ending in this block.
             ended_challenge_votings.iter().for_each(|item| {
-                weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+                weight = weight.saturating_add(T::DbWeight::get().reads_writes(7, 9));
                 let _ = UserChallengeVote::<T>::clear_prefix(item, u32::MAX, None);
                 if let Err(e) = Self::finish_challenge(*item) {
                     Self::deposit_event(Event::ChallengeProcessingFailed {
@@ -940,7 +940,7 @@ pub mod pallet {
         ///
         /// Emits `PropertySaleProposed` event when succesfful.
         #[pallet::call_index(4)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_property_sale())]
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             <T as pallet::Config>::PropertyToken::ensure_spv_created(asset_id)?;
@@ -991,7 +991,7 @@ pub mod pallet {
         ///
         /// Emits `VotedOnPropertySaleProposal` event when succesfful.
         #[pallet::call_index(5)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_property_sale())]
         pub fn vote_on_property_sale(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -1054,7 +1054,7 @@ pub mod pallet {
         ///
         /// Emits `BidSuccessfullyPlaced` event when succesfful.
         #[pallet::call_index(6)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_sale())]
         pub fn bid_on_sale(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -1121,7 +1121,7 @@ pub mod pallet {
         ///
         /// Emits `SalesLawyerSet` event when succesfful.
         #[pallet::call_index(7)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_sale())]
         pub fn lawyer_claim_sale(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -1192,7 +1192,7 @@ pub mod pallet {
         /// Emits `LawyerApprovesSale` event when approved successfully.
         /// Emits `LawyerRejectsSale` event when rejected successfully.
         #[pallet::call_index(8)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_sale())]
         pub fn lawyer_confirm_sale(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -1297,7 +1297,7 @@ pub mod pallet {
         ///
         /// Emits `SaleFinalized` event when succesfful.
         #[pallet::call_index(9)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(2, 2))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_sale())]
         pub fn finalize_sale(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -1469,7 +1469,7 @@ pub mod pallet {
         ///
         /// Emits `SaleFundsClaimed` event when succesfful.
         #[pallet::call_index(10)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_sale_funds())]
         pub fn claim_sale_funds(
             origin: OriginFor<T>,
             asset_id: u32,

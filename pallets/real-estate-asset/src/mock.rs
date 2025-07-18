@@ -222,6 +222,7 @@ parameter_types! {
 
 impl pallet_regions::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = pallet_regions::weights::SubstrateWeight<Test>;
     type Balance = u128;
     type NativeCurrency = Balances;
     type RuntimeHoldReason = RuntimeHoldReason;

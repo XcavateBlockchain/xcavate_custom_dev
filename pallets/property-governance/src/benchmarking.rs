@@ -645,7 +645,7 @@ mod benchmarks {
         let auction_expiry = System::<T>::block_number() + T::AuctionTime::get();
         run_to_block::<T>(auction_expiry);
 
-        let costs = 500_u32.into();
+        let costs = 500_000_000_u32.into();
 
         #[extrinsic_call]
         lawyer_claim_sale(
@@ -721,7 +721,7 @@ mod benchmarks {
         let auction_expiry = System::<T>::block_number() + T::AuctionTime::get();
         run_to_block::<T>(auction_expiry);
 
-        let costs = 500_u32.into();
+        let costs = 500_000_000_u32.into();
 
         assert_ok!(PropertyGovernance::<T>::lawyer_claim_sale(
             RawOrigin::Signed(lawyer_1.clone()).into(),
@@ -807,7 +807,7 @@ mod benchmarks {
         let auction_expiry = System::<T>::block_number() + T::AuctionTime::get();
         run_to_block::<T>(auction_expiry);
 
-        let costs = 500_u32.into();
+        let costs = 500_000_000_u32.into();
 
         assert_ok!(PropertyGovernance::<T>::lawyer_claim_sale(
             RawOrigin::Signed(lawyer_1.clone()).into(),
@@ -917,7 +917,7 @@ mod benchmarks {
         let auction_expiry = System::<T>::block_number() + T::AuctionTime::get();
         run_to_block::<T>(auction_expiry);
 
-        let costs = 500_u32.into();
+        let costs = 500_000_000_u32.into();
 
         assert_ok!(PropertyGovernance::<T>::lawyer_claim_sale(
             RawOrigin::Signed(lawyer_1.clone()).into(),
