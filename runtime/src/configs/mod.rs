@@ -607,6 +607,7 @@ parameter_types! {
     pub const PropertyFundingAmount: Balance = 10 * UNIT;
     pub const MarketplaceFeePercent: Balance = 1;
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
+    pub const LawyerVotingDuration: BlockNumber = 30;
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -628,6 +629,7 @@ impl pallet_marketplace::Config for Runtime {
     type MarketplaceFeePercentage = MarketplaceFeePercent;
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
+    type LawyerVotingTime = LawyerVotingDuration;
 }
 
 parameter_types! {

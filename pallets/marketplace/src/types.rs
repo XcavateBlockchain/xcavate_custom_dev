@@ -148,6 +148,29 @@ where
     }
 }
 
+#[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct ProposedDeveloperLawyer<T: Config> {
+    pub lawyer: AccountIdOf<T>,
+    pub costs: <T as pallet::Config>::Balance,
+}
+
+#[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct ProposedSpvLawyer<T: Config> {
+    pub lawyer: AccountIdOf<T>,
+    pub costs: <T as pallet::Config>::Balance,
+    pub expiry_block: BlockNumberFor<T>,
+}
+
+/// Voting stats.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub struct VoteStats {
+    pub yes_voting_power: u32,
+    pub no_voting_power: u32,
+}
+
 /// Takeover enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
