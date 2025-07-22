@@ -242,6 +242,24 @@ pub enum DocumentStatus {
     Rejected,
 }
 
+/// Vote enum.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Clone,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    RuntimeDebug,
+    TypeInfo,
+)]
+pub enum Vote {
+    Yes,
+    No,
+}
+
 /// AccountId storage.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]

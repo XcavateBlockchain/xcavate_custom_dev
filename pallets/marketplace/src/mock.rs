@@ -290,6 +290,7 @@ parameter_types! {
     pub const MaxNftsInCollection: u32 = 100;
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
+    pub const LawyerVotingDuration: BlockNumber = 30;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -311,6 +312,7 @@ impl pallet_marketplace::Config for Test {
     type MarketplaceFeePercentage = ConstU128<1>;
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
+    type LawyerVotingTime = LawyerVotingDuration;
 }
 
 // Build genesis storage according to the mock runtime.

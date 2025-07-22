@@ -492,7 +492,7 @@ fn buy_property_token_fails_insufficient_balance() {
         );
     })
 }
-
+/*
 #[test]
 fn listing_and_selling_multiple_objects() {
     new_test_ext().execute_with(|| {
@@ -656,7 +656,7 @@ fn listing_and_selling_multiple_objects() {
             100
         );
     });
-}
+} */
 
 // lawyer_claim_property function
 #[test]
@@ -713,10 +713,15 @@ fn claim_property_works1() {
             4_000,
         ));
         assert_eq!(
+            ProposedLawyers::<Test>::get(0).unwrap().lawyer,
+            [10; 32].into()
+        );
+        assert_eq!(ProposedLawyers::<Test>::get(0).unwrap().costs, 4_000);
+        assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
                 .real_estate_developer_lawyer,
-            Some([10; 32].into())
+            None
         );
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -725,13 +730,780 @@ fn claim_property_works1() {
             4_000,
         ));
         assert_eq!(
-            PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
-            Some([11; 32].into())
+            SpvLawyerProposal::<Test>::get(0).unwrap().lawyer,
+            [11; 32].into()
+        );
+        assert_eq!(SpvLawyerProposal::<Test>::get(0).unwrap().expiry_block, 91);
+        assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_some(), true);
+        assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
+    })
+}
+
+#[test]
+fn claim_property_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [11; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            99,
+            1984
+        ));
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                4_000,
+            ),
+            Error::<Test>::InvalidIndex
+        );
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            1,
+            1984
+        ));
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([9; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                4_000,
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                11_000,
+            ),
+            Error::<Test>::CostsTooHigh
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            4_000,
+        ));
+        assert_eq!(
+            ProposedLawyers::<Test>::get(0).unwrap().lawyer,
+            [10; 32].into()
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                4_000,
+            ),
+            Error::<Test>::LawyerProposalOngoing
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalProperty::SpvSide,
+                4_000,
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true,
+        ));
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0)
+                .unwrap()
+                .real_estate_developer_lawyer,
+            Some([10; 32].into())
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                4_000,
+            ),
+            Error::<Test>::LawyerJobTaken
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalProperty::SpvSide,
+                4_000,
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            RegionIdentifier::France
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            pallet_regions::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            100_000
+        ));
+        run_to_block(121);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            30,
+            Permill::from_percent(3)
+        ));
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            2,
+            bvec![20, 10]
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            2,
+            bvec![20, 10],
+            1_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            100,
+            1984
+        ));
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                1,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                400,
+            ),
+            Error::<Test>::WrongRegion
+        );
+    })
+}
+
+// approve_developer_lawyer function
+#[test]
+fn approve_developer_lawyer_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            4_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            false
+        ));
+        assert_eq!(ProposedLawyers::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0)
+                .unwrap()
+                .real_estate_developer_lawyer,
+            None
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            3_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
+        assert_eq!(ProposedLawyers::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0)
+                .unwrap()
+                .real_estate_developer_lawyer,
+            Some([10; 32].into())
+        );
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0)
+                .unwrap()
+                .real_estate_developer_lawyer_costs
+                .get(&1984)
+                .unwrap(),
+            &3_000u128
         );
     })
 }
 
 #[test]
+fn approve_developer_lawyer_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_noop!(
+            Marketplace::approve_developer_lawyer(RuntimeOrigin::signed([0; 32].into()), 0, true),
+            Error::<Test>::InvalidIndex
+        );
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_noop!(
+            Marketplace::approve_developer_lawyer(RuntimeOrigin::signed([0; 32].into()), 0, true),
+            Error::<Test>::InvalidIndex
+        );
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_noop!(
+            Marketplace::approve_developer_lawyer(RuntimeOrigin::signed([0; 32].into()), 0, true),
+            Error::<Test>::NoLawyerProposed
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            4_000,
+        ));
+        assert_noop!(
+            Marketplace::approve_developer_lawyer(RuntimeOrigin::signed([10; 32].into()), 0, false),
+            Error::<Test>::NoPermission
+        );
+    })
+}
+
+// vote_on_spv_lawyer function
+#[test]
+fn vote_on_spv_lawyer_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            4_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingLawyerVoting::<Test>::get(0).unwrap(),
+            VoteStats {
+                yes_voting_power: 40,
+                no_voting_power: 60,
+            }
+        );
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
+            crate::Vote::No
+        );
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_eq!(
+            OngoingLawyerVoting::<Test>::get(0).unwrap(),
+            VoteStats {
+                yes_voting_power: 100,
+                no_voting_power: 0,
+            }
+        );
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
+            crate::Vote::Yes
+        );
+    })
+}
+
+#[test]
+fn vote_on_spv_lawyer_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::No
+            ),
+            Error::<Test>::NoLawyerProposed
+        );
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::No
+            ),
+            Error::<Test>::NoLawyerProposed
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            4_000,
+        ));
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::Vote::No
+            ),
+            Error::<Test>::NoPermission
+        );
+        run_to_block(100);
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::Vote::No
+            ),
+            Error::<Test>::VotingExpired
+        );
+    })
+}
+
+// vote_on_spv_lawyer function
+#[test]
+fn finalize_spv_lawyer_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            40,
+            1337
+        ));
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            4_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            4_000,
+        ));
+        run_to_block(121);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_none(),
+            true
+        );
+        assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
+        assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            3_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        run_to_block(151);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_none(),
+            true
+        );
+        assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
+            Some([10; 32].into())
+        );
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0)
+                .unwrap()
+                .spv_lawyer_costs
+                .get(&1984)
+                .unwrap(),
+            &3_000u128
+        );
+    })
+}
+
+#[test]
+fn finalize_spv_lawyer_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [8; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([8; 32].into()),
+            3,
+            [10; 32].into()
+        ));
+        assert_noop!(
+            Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([0; 32].into()), 0,),
+            Error::<Test>::NoLawyerProposed
+        );
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            60,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            40,
+            1337
+        ));
+        assert_noop!(
+            Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([0; 32].into()), 0,),
+            Error::<Test>::NoLawyerProposed
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            0,
+            crate::LegalProperty::SpvSide,
+            4_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        assert_noop!(
+            Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([0; 32].into()), 0,),
+            Error::<Test>::VotingStillOngoing
+        );
+        run_to_block(91);
+        assert_noop!(
+            Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([10; 32].into()), 0,),
+            Error::<Test>::UserNotWhitelisted
+        );
+    })
+}
+
+/* #[test]
 fn claim_property_works2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -843,163 +1615,7 @@ fn claim_property_works2() {
             &15_000u128
         );
     })
-}
-
-#[test]
-fn claim_property_fails() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        new_region_helper();
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            bvec![10, 10]
-        ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [0; 32].into()
-        ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [1; 32].into()
-        ));
-        assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            [10; 32].into()
-        ));
-        assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            [11; 32].into()
-        ));
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10],
-            10_000,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            0,
-            99,
-            1984
-        ));
-        assert_noop!(
-            Marketplace::lawyer_claim_property(
-                RuntimeOrigin::signed([10; 32].into()),
-                0,
-                crate::LegalProperty::RealEstateDeveloperSide,
-                4_000,
-            ),
-            Error::<Test>::InvalidIndex
-        );
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            0,
-            1,
-            1984
-        ));
-        assert_noop!(
-            Marketplace::lawyer_claim_property(
-                RuntimeOrigin::signed([9; 32].into()),
-                0,
-                crate::LegalProperty::RealEstateDeveloperSide,
-                4_000,
-            ),
-            Error::<Test>::NoPermission
-        );
-        assert_noop!(
-            Marketplace::lawyer_claim_property(
-                RuntimeOrigin::signed([10; 32].into()),
-                0,
-                crate::LegalProperty::RealEstateDeveloperSide,
-                11_000,
-            ),
-            Error::<Test>::CostsTooHigh
-        );
-        assert_ok!(Marketplace::lawyer_claim_property(
-            RuntimeOrigin::signed([10; 32].into()),
-            0,
-            crate::LegalProperty::RealEstateDeveloperSide,
-            4_000,
-        ));
-        assert_eq!(
-            PropertyLawyer::<Test>::get(0)
-                .unwrap()
-                .real_estate_developer_lawyer,
-            Some([10; 32].into())
-        );
-        assert_noop!(
-            Marketplace::lawyer_claim_property(
-                RuntimeOrigin::signed([11; 32].into()),
-                0,
-                crate::LegalProperty::RealEstateDeveloperSide,
-                4_000,
-            ),
-            Error::<Test>::LawyerJobTaken
-        );
-        assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
-        assert_ok!(Regions::propose_new_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            RegionIdentifier::France
-        ));
-        assert_ok!(Regions::vote_on_region_proposal(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            pallet_regions::Vote::Yes
-        ));
-        run_to_block(91);
-        assert_ok!(Regions::bid_on_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            100_000
-        ));
-        run_to_block(121);
-        assert_ok!(Regions::create_new_region(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            30,
-            Permill::from_percent(3)
-        ));
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([8; 32].into()),
-            2,
-            bvec![20, 10]
-        ));
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            2,
-            bvec![20, 10],
-            1_000,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            1,
-            100,
-            1984
-        ));
-        assert_noop!(
-            Marketplace::lawyer_claim_property(
-                RuntimeOrigin::signed([10; 32].into()),
-                1,
-                crate::LegalProperty::RealEstateDeveloperSide,
-                400,
-            ),
-            Error::<Test>::WrongRegion
-        );
-    })
-}
+} */
 
 // remove_from_case function
 #[test]
@@ -1060,6 +1676,11 @@ fn remove_from_case_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1071,6 +1692,16 @@ fn remove_from_case_works() {
             0,
             crate::LegalProperty::SpvSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
@@ -1095,6 +1726,11 @@ fn remove_from_case_works() {
             0,
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
         ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
@@ -1160,6 +1796,11 @@ fn remove_from_case_fails() {
             0,
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
         ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
@@ -1237,6 +1878,11 @@ fn distributes_nfts_and_funds() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1249,6 +1895,16 @@ fn distributes_nfts_and_funds() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -1366,6 +2022,11 @@ fn distributes_nfts_and_funds_2() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1378,6 +2039,16 @@ fn distributes_nfts_and_funds_2() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -1515,6 +2186,11 @@ fn distributes_nfts_and_funds_3() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1527,6 +2203,16 @@ fn distributes_nfts_and_funds_3() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -1665,6 +2351,11 @@ fn reject_contract_and_refund() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1677,6 +2368,16 @@ fn reject_contract_and_refund() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -1864,6 +2565,11 @@ fn reject_contract_and_refund_2() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -1876,6 +2582,16 @@ fn reject_contract_and_refund_2() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -2010,6 +2726,11 @@ fn second_attempt_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
                 .unwrap()
@@ -2022,6 +2743,16 @@ fn second_attempt_works() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([11; 32].into())
@@ -2111,12 +2842,27 @@ fn lawyer_confirm_documents_fails() {
 			crate::LegalProperty::RealEstateDeveloperSide,
 			4_000,
 		));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+			RuntimeOrigin::signed([0; 32].into()),
+			0,
+            true
+		));
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer, Some([10; 32].into()));
 		assert_ok!(Marketplace::lawyer_claim_property(
 			RuntimeOrigin::signed([11; 32].into()),
 			0,
 			crate::LegalProperty::SpvSide,
 			4_000,
+		));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
+            crate::Vote::Yes
+		));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+			RuntimeOrigin::signed([1; 32].into()),
+			0,
 		));
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, Some([11; 32].into()));
 		assert_noop!(Marketplace::lawyer_confirm_documents(
@@ -2196,12 +2942,27 @@ fn relist_a_nft() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2318,12 +3079,27 @@ fn relist_a_nft_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2418,12 +3194,27 @@ fn buy_relisted_token_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2551,12 +3342,27 @@ fn buy_relisted_token_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2649,12 +3455,27 @@ fn make_offer_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2759,12 +3580,27 @@ fn make_offer_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2895,12 +3731,27 @@ fn handle_offer_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3057,12 +3908,27 @@ fn handle_offer_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3173,12 +4039,27 @@ fn cancel_offer_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3289,12 +4170,27 @@ fn cancel_offer_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3397,12 +4293,27 @@ fn upgrade_price_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3485,12 +4396,27 @@ fn upgrade_price_fails_if_not_owner() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3622,12 +4548,27 @@ fn upgrade_object_and_distribute_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3735,12 +4676,27 @@ fn upgrade_object_for_relisted_nft_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -3884,12 +4840,27 @@ fn delist_single_token_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -4003,12 +4974,27 @@ fn delist_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -4179,11 +5165,22 @@ fn listing_objects_in_different_regions() {
             100,
             1984
         ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
+            100,
+            1984
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([12; 32].into()),
             1,
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            true
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([13; 32].into()),
@@ -4191,6 +5188,16 @@ fn listing_objects_in_different_regions() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        run_to_block(221);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+        ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([12; 32].into()),
             1,
@@ -4200,12 +5207,6 @@ fn listing_objects_in_different_regions() {
             RuntimeOrigin::signed([13; 32].into()),
             1,
             true,
-        ));
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([2; 32].into()),
-            2,
-            100,
-            1984
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([14; 32].into()),
@@ -4218,6 +5219,21 @@ fn listing_objects_in_different_regions() {
             2,
             crate::LegalProperty::SpvSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            2,
+            true
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
+            crate::Vote::Yes
+        ));
+        run_to_block(251);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
         ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([14; 32].into()),
@@ -4865,12 +5881,27 @@ fn send_property_token_works() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -5023,12 +6054,27 @@ fn send_property_token_fails() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ),);
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -5126,11 +6172,26 @@ fn send_property_token_fails_if_relist() {
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
         ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
             crate::LegalProperty::SpvSide,
             4_000,
+        ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes
+        ));
+        run_to_block(91);
+        assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),

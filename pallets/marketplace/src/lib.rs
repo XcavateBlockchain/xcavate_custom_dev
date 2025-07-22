@@ -277,27 +277,29 @@ pub mod pallet {
 
     /// Mapping of the listing to the real estate developer lawyer proposals.
     #[pallet::storage]
-    pub type ProposedLawyers<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        ListingId,
-        ProposedDeveloperLawyer<T>,
-        OptionQuery,
-    >;
+    pub type ProposedLawyers<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, ProposedDeveloperLawyer<T>, OptionQuery>;
 
     /// Mapping of listing to the ongoing spv lawyer proposal.
     #[pallet::storage]
-    pub type SpvLawyerProposal<T: Config> = StorageMap<
+    pub type SpvLawyerProposal<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, ProposedSpvLawyer<T>, OptionQuery>;
+
+    #[pallet::storage]
+    pub type OngoingLawyerVoting<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, VoteStats, OptionQuery>;
+
+    /// Mapping of a listing id and account id to the vote of a user.
+    #[pallet::storage]
+    pub(super) type UserLawyerVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
         ListingId,
-        ProposedSpvLawyer<T>,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        Vote,
         OptionQuery,
     >;
-
-    #[pallet::storage]
-    pub type OngoingLawyerVoting<T: Config> = 
-        StorageMap<_, Blake2_128Concat, ListingId, VoteStats, OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -435,6 +437,11 @@ pub mod pallet {
             signer: AccountIdOf<T>,
             listing_id: ListingId,
         },
+        VotedOnLawyer {
+            listing_id: ListingId,
+            voter: AccountIdOf<T>,
+            vote: Vote,
+        },
     }
 
     // Errors inform users that something went wrong.
@@ -513,6 +520,8 @@ pub mod pallet {
         TokenOwnerNotFound,
         NoLawyerProposed,
         LawyerProposalOngoing,
+        VotingExpired,
+        VotingStillOngoing,
     }
 
     #[pallet::call]
@@ -1552,13 +1561,40 @@ pub mod pallet {
                 lawyer_region == asset_details.region,
                 Error::<T>::WrongRegion
             );
+
+            let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
+
+            let collected_fee_usdt = property_details
+                .collected_fees
+                .get(&asset_id_usdt)
+                .ok_or(Error::<T>::AssetNotSupported)?;
+            let collected_fee_usdc = property_details
+                .collected_fees
+                .get(&asset_id_usdc)
+                .ok_or(Error::<T>::AssetNotSupported)?;
+            let collected_fees = collected_fee_usdt
+                .checked_add(collected_fee_usdc)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ensure!(collected_fees >= costs, Error::<T>::CostsTooHigh);
             match legal_side {
                 LegalProperty::RealEstateDeveloperSide => {
-                    ensure!(ProposedLawyers::<T>::contains_key(listing_id), Error::<T>::LawyerProposalOngoing);
                     ensure!(
-                        property_lawyer_details.real_estate_developer_lawyer.is_none(),
+                        !ProposedLawyers::<T>::contains_key(listing_id),
+                        Error::<T>::LawyerProposalOngoing
+                    );
+                    ensure!(
+                        property_lawyer_details
+                            .real_estate_developer_lawyer
+                            .is_none(),
                         Error::<T>::LawyerJobTaken
                     );
+                    ensure!(
+                        property_lawyer_details.spv_lawyer.as_ref() != Some(&signer),
+                        Error::<T>::NoPermission
+                    );
+                    if let Some(lawyer_proposal) = SpvLawyerProposal::<T>::get(listing_id) {
+                        ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
+                    }
                     ProposedLawyers::<T>::insert(
                         listing_id,
                         ProposedDeveloperLawyer {
@@ -1568,30 +1604,14 @@ pub mod pallet {
                     );
                 }
                 LegalProperty::SpvSide => {
-                    ensure!(ProposedLawyers::<T>::contains_key(listing_id), Error::<T>::LawyerProposalOngoing);
+                    ensure!(
+                        !SpvLawyerProposal::<T>::contains_key(listing_id),
+                        Error::<T>::LawyerProposalOngoing
+                    );
                     ensure!(
                         property_lawyer_details.spv_lawyer.is_none(),
                         Error::<T>::LawyerJobTaken
                     );
-                    let current_block_number = <frame_system::Pallet<T>>::block_number();
-                    let expiry_block = current_block_number.saturating_add(T::LawyerVotingTime::get());
-                    SpvLawyerProposal::<T>::insert(
-                        listing_id,
-                        ProposedSpvLawyer {
-                            lawyer: signer.clone(),
-                            costs,
-                            expiry_block,
-                        }
-                    );
-
-                    OngoingLawyerVoting::<T>::insert(
-                        listing_id, 
-                        VoteStats {
-                            yes_voting_power: 0,
-                            no_voting_power: 0,
-                        }
-                    );
-/*                     
                     ensure!(
                         property_lawyer_details
                             .real_estate_developer_lawyer
@@ -1599,40 +1619,90 @@ pub mod pallet {
                             != Some(&signer),
                         Error::<T>::NoPermission
                     );
-                    property_lawyer_details.spv_lawyer = Some(signer.clone());
-                    if *collected_fee_usdt >= costs {
-                        property_lawyer_details
-                            .spv_lawyer_costs
-                            .try_insert(asset_id_usdt, costs)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                    } else if *collected_fee_usdc >= costs {
-                        property_lawyer_details
-                            .spv_lawyer_costs
-                            .try_insert(asset_id_usdc, costs)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                    } else {
-                        let remaining_costs = costs
-                            .checked_sub(collected_fee_usdt)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                        ensure!(
-                            *collected_fee_usdc >= remaining_costs,
-                            Error::<T>::CostsTooHigh
-                        );
-                        property_lawyer_details
-                            .spv_lawyer_costs
-                            .try_insert(asset_id_usdt, *collected_fee_usdt)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                        property_lawyer_details
-                            .spv_lawyer_costs
-                            .try_insert(asset_id_usdc, remaining_costs)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                    if let Some(lawyer_proposal) = ProposedLawyers::<T>::get(listing_id) {
+                        ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
                     }
-                    PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone()); */
+                    let current_block_number = <frame_system::Pallet<T>>::block_number();
+                    let expiry_block =
+                        current_block_number.saturating_add(T::LawyerVotingTime::get());
+                    SpvLawyerProposal::<T>::insert(
+                        listing_id,
+                        ProposedSpvLawyer {
+                            lawyer: signer.clone(),
+                            costs,
+                            expiry_block,
+                        },
+                    );
+
+                    OngoingLawyerVoting::<T>::insert(
+                        listing_id,
+                        VoteStats {
+                            yes_voting_power: 0,
+                            no_voting_power: 0,
+                        },
+                    );
                 }
             }
             Self::deposit_event(Event::<T>::LawyerClaimedProperty {
                 lawyer: signer,
                 details: property_lawyer_details,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(29)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        pub fn vote_on_spv_lawyer(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+            vote: Vote,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let proposal_details =
+                SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            ensure!(
+                proposal_details.expiry_block > current_block_number,
+                Error::<T>::VotingExpired
+            );
+            let token_owner_details = TokenOwner::<T>::get(&signer, listing_id);
+            let voting_power = token_owner_details.token_amount;
+            ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
+            OngoingLawyerVoting::<T>::try_mutate(listing_id, |maybe_current_vote| {
+                let current_vote = maybe_current_vote
+                    .as_mut()
+                    .ok_or(Error::<T>::NoLawyerProposed)?;
+                let previous_vote_opt = UserLawyerVote::<T>::get(listing_id, &signer);
+                if let Some(previous_vote) = previous_vote_opt {
+                    match previous_vote {
+                        Vote::Yes => {
+                            current_vote.yes_voting_power =
+                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                        }
+                        Vote::No => {
+                            current_vote.no_voting_power =
+                                current_vote.no_voting_power.saturating_sub(voting_power)
+                        }
+                    }
+                }
+
+                match vote {
+                    Vote::Yes => {
+                        current_vote.yes_voting_power =
+                            current_vote.yes_voting_power.saturating_add(voting_power)
+                    }
+                    Vote::No => {
+                        current_vote.no_voting_power =
+                            current_vote.no_voting_power.saturating_add(voting_power)
+                    }
+                }
+                Ok::<(), DispatchError>(())
+            })?;
+            UserLawyerVote::<T>::insert(listing_id, signer.clone(), vote.clone());
+            Self::deposit_event(Event::VotedOnLawyer {
+                listing_id,
+                voter: signer,
+                vote,
             });
             Ok(())
         }
@@ -1650,12 +1720,15 @@ pub mod pallet {
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 
-            ensure!(signer == property_details.real_estate_developer, Error::<T>::NoPermission);
+            ensure!(
+                signer == property_details.real_estate_developer,
+                Error::<T>::NoPermission
+            );
 
-            let proposal = ProposedLawyers::<T>::get(listing_id)
-                .ok_or(Error::<T>::NoLawyerProposed)?;
+            let proposal =
+                ProposedLawyers::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             if approve {
-                property_lawyer_details.real_estate_developer_lawyer = Some(signer.clone());
+                property_lawyer_details.real_estate_developer_lawyer = Some(proposal.lawyer);
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
                 let collected_fee_usdt = property_details
@@ -1682,7 +1755,8 @@ pub mod pallet {
                         .try_insert(asset_id_usdc, proposal.costs)
                         .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
                 } else {
-                    let remaining_costs = proposal.costs
+                    let remaining_costs = proposal
+                        .costs
                         .checked_sub(collected_fee_usdt)
                         .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     ensure!(
@@ -1701,6 +1775,82 @@ pub mod pallet {
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
             }
             ProposedLawyers::<T>::remove(listing_id);
+            Ok(())
+        }
+
+        #[pallet::call_index(31)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            ensure!(
+                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                Error::<T>::UserNotWhitelisted
+            );
+
+            let proposal =
+                SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            ensure!(
+                proposal.expiry_block <= current_block_number,
+                Error::<T>::VotingStillOngoing
+            );
+            let voting_result =
+                OngoingLawyerVoting::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let mut property_lawyer_details =
+                PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            if voting_result.yes_voting_power > voting_result.no_voting_power {
+                property_lawyer_details.spv_lawyer = Some(proposal.lawyer);
+                let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
+
+                let collected_fee_usdt = property_details
+                    .collected_fees
+                    .get(&asset_id_usdt)
+                    .ok_or(Error::<T>::AssetNotSupported)?;
+                let collected_fee_usdc = property_details
+                    .collected_fees
+                    .get(&asset_id_usdc)
+                    .ok_or(Error::<T>::AssetNotSupported)?;
+                let collected_fees = collected_fee_usdt
+                    .checked_add(collected_fee_usdc)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                ensure!(collected_fees >= proposal.costs, Error::<T>::CostsTooHigh);
+
+                if *collected_fee_usdt >= proposal.costs {
+                    property_lawyer_details
+                        .spv_lawyer_costs
+                        .try_insert(asset_id_usdt, proposal.costs)
+                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                } else if *collected_fee_usdc >= proposal.costs {
+                    property_lawyer_details
+                        .spv_lawyer_costs
+                        .try_insert(asset_id_usdc, proposal.costs)
+                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                } else {
+                    let remaining_costs = proposal
+                        .costs
+                        .checked_sub(collected_fee_usdt)
+                        .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                    ensure!(
+                        *collected_fee_usdc >= remaining_costs,
+                        Error::<T>::CostsTooHigh
+                    );
+                    property_lawyer_details
+                        .spv_lawyer_costs
+                        .try_insert(asset_id_usdt, *collected_fee_usdt)
+                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                    property_lawyer_details
+                        .spv_lawyer_costs
+                        .try_insert(asset_id_usdc, remaining_costs)
+                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                }
+                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
+            }
+            let _ = UserLawyerVote::<T>::clear_prefix(listing_id, u32::MAX, None);
+            SpvLawyerProposal::<T>::remove(listing_id);
+            OngoingLawyerVoting::<T>::remove(listing_id);
+
             Ok(())
         }
 
@@ -2088,7 +2238,7 @@ pub mod pallet {
                     .filter(|(_, funds)| !funds.is_zero())
                 {
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(&asset).unwrap_or(&default);
+                    let paid_tax = token_details.paid_tax.get(asset).unwrap_or(&default);
                     // Calculate investor's fee (1% of paid_funds)
                     let investor_fee = paid_funds
                         .checked_mul(&fee_percent)
