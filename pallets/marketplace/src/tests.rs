@@ -316,6 +316,18 @@ fn buy_property_token_works() {
             AssetsHolder::total_balance_on_hold(1984, &[6; 32].into()),
             312_000_000_000_000_000
         );
+        System::assert_last_event(
+            Event::PropertyTokenBought {
+                listing_index: 0,
+                asset_id: 0,
+                buyer: [6; 32].into(),
+                amount: 30,
+                price: 300_000_000_000_000_000,
+                tax: 9_000_000_000_000_000,
+                payment_asset: 1984,
+            }
+            .into(),
+        );
     })
 }
 
@@ -384,6 +396,18 @@ fn buy_property_token_works_developer_covers_fees() {
                 .get(&1984)
                 .copied(),
             Some(9_000)
+        );
+        System::assert_last_event(
+            Event::PropertyTokenBought {
+                listing_index: 0,
+                asset_id: 0,
+                buyer: [1; 32].into(),
+                amount: 30,
+                price: 300_000,
+                tax: 0,
+                payment_asset: 1984,
+            }
+            .into(),
         );
     })
 }

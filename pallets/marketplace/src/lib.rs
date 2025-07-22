@@ -332,6 +332,7 @@ pub mod pallet {
             buyer: AccountIdOf<T>,
             amount: u32,
             price: <T as pallet::Config>::Balance,
+            tax: <T as pallet::Config>::Balance,
             payment_asset: u32,
         },
         /// Token have been listed.
@@ -797,6 +798,7 @@ pub mod pallet {
             Self::update_map(&mut property_details.collected_fees, payment_asset, fee)?;
 
             let asset_id = property_details.asset_id;
+            let tax_paid_by_developer = property_details.tax_paid_by_developer;
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
             if listed_token == 0 {
                 let initial_funds = Self::create_initial_funds()?;
@@ -821,6 +823,11 @@ pub mod pallet {
                 buyer: signer,
                 amount,
                 price: transfer_price,
+                tax: if !tax_paid_by_developer {
+                    tax
+                } else {
+                    0u128.into()
+                },
                 payment_asset,
             });
             Ok(())
