@@ -183,11 +183,27 @@ fn create_registered_property<T: Config>(
         LegalProperty::RealEstateDeveloperSide,
         400_u32.into()
     ));
+    assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+        RawOrigin::Signed(seller.clone()).into(),
+        0,
+        true
+    ));
     assert_ok!(Marketplace::<T>::lawyer_claim_property(
         RawOrigin::Signed(lawyer_2.clone()).into(),
         0,
         LegalProperty::SpvSide,
         400_u32.into()
+    ));
+    assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+        RawOrigin::Signed(token_owner.clone()).into(),
+        0,
+        pallet_marketplace::types::Vote::Yes
+    ));
+    let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+    frame_system::Pallet::<T>::set_block_number(expiry);
+    assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+        RawOrigin::Signed(token_owner.clone()).into(),
+        0,
     ));
 
     assert_ok!(Marketplace::<T>::lawyer_confirm_documents(

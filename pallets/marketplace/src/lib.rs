@@ -285,6 +285,7 @@ pub mod pallet {
     pub type SpvLawyerProposal<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, ProposedSpvLawyer<T>, OptionQuery>;
 
+    /// Mapping of ongoing lawyer voted.
     #[pallet::storage]
     pub type OngoingLawyerVoting<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, VoteStats, OptionQuery>;
@@ -370,8 +371,9 @@ pub mod pallet {
         },
         /// A lawyer claimed a property.
         LawyerClaimedProperty {
+            listing_id: ListingId,
             lawyer: AccountIdOf<T>,
-            details: PropertyLawyerDetails<T>,
+            costs: <T as pallet::Config>::Balance,
         },
         /// A lawyer stepped back from a legal case.
         LawyerRemovedFromCase {
@@ -438,10 +440,31 @@ pub mod pallet {
             signer: AccountIdOf<T>,
             listing_id: ListingId,
         },
+        /// Someone has voted on a lawyer.
         VotedOnLawyer {
             listing_id: ListingId,
             voter: AccountIdOf<T>,
             vote: Vote,
+        },
+        /// The real estate developer lawyer has been approved.
+        RealEstateLawyerApproved {
+            listing_id: ListingId,
+            lawyer: AccountIdOf<T>,
+        },
+        /// The real estate developer lawyer has been rejected.
+        RealEstateLawyerRejected {
+            listing_id: ListingId,
+            lawyer: AccountIdOf<T>,
+        },
+        /// The spv lawyer has been approved.
+        SpvLawyerApproved {
+            listing_id: ListingId,
+            lawyer: AccountIdOf<T>,
+        },
+        /// The spv lawyer has been rejected.
+        SpvLawyerRejected {
+            listing_id: ListingId,
+            lawyer: AccountIdOf<T>,
         },
     }
 
@@ -519,9 +542,13 @@ pub mod pallet {
         WrongRegion,
         /// TokenOwnerHasNotBeenFound.
         TokenOwnerNotFound,
+        /// No lawyer has been proposed to vote on.
         NoLawyerProposed,
+        /// There is already a lawyer proposal ongoing.
         LawyerProposalOngoing,
+        /// The propal has expired.
         VotingExpired,
+        /// The voting is still ongoing.
         VotingStillOngoing,
     }
 
@@ -1200,16 +1227,16 @@ pub mod pallet {
                 .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
 
             for &asset in T::AcceptedAssets::get().iter() {
-                if let Some(paid_funds) = token_details.paid_funds.get(&asset) {
+                if let Some(paid_funds) = token_details.paid_funds.get(&asset).copied() {
                     if paid_funds.is_zero() {
                         continue;
                     }
 
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(&asset).unwrap_or(&default);
+                    let paid_tax = token_details.paid_tax.get(&asset).copied().unwrap_or(default);
 
                     let refund_amount = paid_funds
-                        .checked_add(paid_tax)
+                        .checked_add(&paid_tax)
                         .ok_or(Error::<T>::ArithmeticOverflow)?;
 
                     // Transfer USDT funds to owner account
@@ -1554,6 +1581,7 @@ pub mod pallet {
             costs: <T as pallet::Config>::Balance,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
+
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
                 .ok_or(Error::<T>::NoPermission)?;
             let property_lawyer_details =
@@ -1563,14 +1591,12 @@ pub mod pallet {
             let asset_details =
                 T::PropertyToken::get_property_asset_info(property_details.asset_id)
                     .ok_or(Error::<T>::NoObjectFound)?;
-
             ensure!(
                 lawyer_region == asset_details.region,
                 Error::<T>::WrongRegion
             );
 
             let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
-
             let collected_fee_usdt = property_details
                 .collected_fees
                 .get(&asset_id_usdt)
@@ -1651,13 +1677,23 @@ pub mod pallet {
                 }
             }
             Self::deposit_event(Event::<T>::LawyerClaimedProperty {
+                listing_id,
                 lawyer: signer,
-                details: property_lawyer_details,
+                costs,
             });
             Ok(())
         }
 
-        #[pallet::call_index(29)]
+        /// Lets token buyer vote for a lawyer to represent the spv.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing from the property.
+        /// - `vote`: Must be either a Yes vote or a No vote.
+        ///
+        /// Emits `VotedOnLawyer` event when succesfful.
+        #[pallet::call_index(15)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn vote_on_spv_lawyer(
             origin: OriginFor<T>,
@@ -1672,15 +1708,13 @@ pub mod pallet {
                 proposal_details.expiry_block > current_block_number,
                 Error::<T>::VotingExpired
             );
-            let token_owner_details = TokenOwner::<T>::get(&signer, listing_id);
-            let voting_power = token_owner_details.token_amount;
+            let voting_power = TokenOwner::<T>::get(&signer, listing_id).token_amount;
             ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
             OngoingLawyerVoting::<T>::try_mutate(listing_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLawyerProposed)?;
-                let previous_vote_opt = UserLawyerVote::<T>::get(listing_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
+                if let Some(previous_vote) = UserLawyerVote::<T>::get(listing_id, &signer) {
                     match previous_vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
@@ -1714,7 +1748,17 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(30)]
+        /// Lets the real estate developer approve or reject a lawyer.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing from the property.
+        /// - `approve`: Approves or rejects the lawyer.
+        ///
+        /// Emits `RealEstateLawyerApproved` event when approved
+        /// or RealEstateLawyerRejected when rejected.
+        #[pallet::call_index(16)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn approve_developer_lawyer(
             origin: OriginFor<T>,
@@ -1722,70 +1766,70 @@ pub mod pallet {
             approve: bool,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let mut property_lawyer_details =
-                PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-
             ensure!(
                 signer == property_details.real_estate_developer,
                 Error::<T>::NoPermission
             );
 
+            let mut property_lawyer_details =
+                PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let proposal =
                 ProposedLawyers::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
-            if approve {
-                property_lawyer_details.real_estate_developer_lawyer = Some(proposal.lawyer);
-                let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
+            if approve {
+                property_lawyer_details.real_estate_developer_lawyer =
+                    Some(proposal.lawyer.clone());
+                let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
                 let collected_fee_usdt = property_details
                     .collected_fees
                     .get(&asset_id_usdt)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let collected_fee_usdc = property_details
                     .collected_fees
                     .get(&asset_id_usdc)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let collected_fees = collected_fee_usdt
-                    .checked_add(collected_fee_usdc)
+                    .checked_add(&collected_fee_usdc)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 ensure!(collected_fees >= proposal.costs, Error::<T>::CostsTooHigh);
 
-                if *collected_fee_usdt >= proposal.costs {
-                    property_lawyer_details
-                        .real_estate_developer_lawyer_costs
-                        .try_insert(asset_id_usdt, proposal.costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                } else if *collected_fee_usdc >= proposal.costs {
-                    property_lawyer_details
-                        .real_estate_developer_lawyer_costs
-                        .try_insert(asset_id_usdc, proposal.costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                } else {
-                    let remaining_costs = proposal
-                        .costs
-                        .checked_sub(collected_fee_usdt)
-                        .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    ensure!(
-                        *collected_fee_usdc >= remaining_costs,
-                        Error::<T>::CostsTooHigh
-                    );
-                    property_lawyer_details
-                        .real_estate_developer_lawyer_costs
-                        .try_insert(asset_id_usdt, *collected_fee_usdt)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                    property_lawyer_details
-                        .real_estate_developer_lawyer_costs
-                        .try_insert(asset_id_usdc, remaining_costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                }
+                Self::allocate_fees(
+                    &mut property_lawyer_details.real_estate_developer_lawyer_costs,
+                    asset_id_usdt,
+                    collected_fee_usdt,
+                    asset_id_usdc,
+                    collected_fee_usdc,
+                    proposal.costs
+                )?;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
+                Self::deposit_event(Event::RealEstateLawyerApproved {
+                    listing_id,
+                    lawyer: proposal.lawyer,
+                });
+            } else {
+                Self::deposit_event(Event::RealEstateLawyerRejected {
+                    listing_id,
+                    lawyer: proposal.lawyer,
+                });
             }
             ProposedLawyers::<T>::remove(listing_id);
             Ok(())
         }
 
-        #[pallet::call_index(31)]
+        /// Finalizes the spv lawyer voting.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing from the property.
+        ///
+        /// Emits `SpvLawyerApproved` event when lawyer is approved
+        /// or SpvLawyerRejected when rejected.
+        #[pallet::call_index(17)]
         #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1801,58 +1845,51 @@ pub mod pallet {
                 proposal.expiry_block <= current_block_number,
                 Error::<T>::VotingStillOngoing
             );
+
             let voting_result =
                 OngoingLawyerVoting::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            
             if voting_result.yes_voting_power > voting_result.no_voting_power {
-                property_lawyer_details.spv_lawyer = Some(proposal.lawyer);
+                property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
                 let collected_fee_usdt = property_details
                     .collected_fees
                     .get(&asset_id_usdt)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let collected_fee_usdc = property_details
                     .collected_fees
                     .get(&asset_id_usdc)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let collected_fees = collected_fee_usdt
-                    .checked_add(collected_fee_usdc)
+                    .checked_add(&collected_fee_usdc)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 ensure!(collected_fees >= proposal.costs, Error::<T>::CostsTooHigh);
 
-                if *collected_fee_usdt >= proposal.costs {
-                    property_lawyer_details
-                        .spv_lawyer_costs
-                        .try_insert(asset_id_usdt, proposal.costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                } else if *collected_fee_usdc >= proposal.costs {
-                    property_lawyer_details
-                        .spv_lawyer_costs
-                        .try_insert(asset_id_usdc, proposal.costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                } else {
-                    let remaining_costs = proposal
-                        .costs
-                        .checked_sub(collected_fee_usdt)
-                        .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    ensure!(
-                        *collected_fee_usdc >= remaining_costs,
-                        Error::<T>::CostsTooHigh
-                    );
-                    property_lawyer_details
-                        .spv_lawyer_costs
-                        .try_insert(asset_id_usdt, *collected_fee_usdt)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                    property_lawyer_details
-                        .spv_lawyer_costs
-                        .try_insert(asset_id_usdc, remaining_costs)
-                        .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                }
+                Self::allocate_fees(
+                    &mut property_lawyer_details.spv_lawyer_costs,
+                    asset_id_usdt,
+                    collected_fee_usdt,
+                    asset_id_usdc,
+                    collected_fee_usdc,
+                    proposal.costs
+                )?;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
+                Self::deposit_event(Event::SpvLawyerApproved {
+                    listing_id,
+                    lawyer: proposal.lawyer,
+                });
+            } else {
+                Self::deposit_event(Event::SpvLawyerRejected {
+                    listing_id,
+                    lawyer: proposal.lawyer,
+                });
             }
             let _ = UserLawyerVote::<T>::clear_prefix(listing_id, u32::MAX, None);
             SpvLawyerProposal::<T>::remove(listing_id);
@@ -1869,7 +1906,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         ///
         /// Emits `LawyerRemovedFromCase` event when succesfful.
-        #[pallet::call_index(15)]
+        #[pallet::call_index(18)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_from_case(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
@@ -1915,7 +1952,7 @@ pub mod pallet {
         /// - `approve`: Approves or Rejects the case.
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
-        #[pallet::call_index(16)]
+        #[pallet::call_index(19)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents())]
         pub fn lawyer_confirm_documents(
             origin: OriginFor<T>,
@@ -2039,7 +2076,7 @@ pub mod pallet {
         /// - `token_amount`: The amount of token the sender wants to send.
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
-        #[pallet::call_index(17)]
+        #[pallet::call_index(20)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::send_property_token())]
         pub fn send_property_token(
             origin: OriginFor<T>,
@@ -2125,22 +2162,27 @@ pub mod pallet {
                 let total_collected_funds = property_details
                     .collected_funds
                     .get(&asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let real_estate_developer_lawyer_costs = property_lawyer_details
                     .real_estate_developer_lawyer_costs
                     .get(&asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let spv_lawyer_costs = property_lawyer_details
                     .spv_lawyer_costs
                     .get(&asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let tax = property_details
                     .collected_tax
                     .get(&asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let collected_fees = property_details
                     .collected_fees
                     .get(&asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
 
                 let fee_percentage = T::MarketplaceFeePercentage::get();
@@ -2161,19 +2203,19 @@ pub mod pallet {
                     .ok_or(Error::<T>::DivisionError)?;
                 if property_details.tax_paid_by_developer {
                     developer_amount = developer_amount
-                        .checked_sub(tax)
+                        .checked_sub(&tax)
                         .ok_or(Error::<T>::ArithmeticUnderflow)?;
                 }
                 let real_estate_developer_amount = tax
-                    .checked_add(real_estate_developer_lawyer_costs)
+                    .checked_add(&real_estate_developer_lawyer_costs)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 let protocol_fees = total_collected_funds
                     .checked_div(&(100u128.into()))
                     .ok_or(Error::<T>::DivisionError)?
-                    .checked_add(collected_fees)
+                    .checked_add(&collected_fees)
                     .ok_or(Error::<T>::ArithmeticOverflow)?
-                    .saturating_sub(*real_estate_developer_lawyer_costs)
-                    .saturating_sub(*spv_lawyer_costs);
+                    .saturating_sub(real_estate_developer_lawyer_costs)
+                    .saturating_sub(spv_lawyer_costs);
 
                 let region_owner_amount = protocol_fees
                     .checked_div(&(2u128.into()))
@@ -2194,7 +2236,7 @@ pub mod pallet {
                     real_estate_developer_amount,
                     asset,
                 )?;
-                Self::transfer_funds(&property_account, &spv_lawyer_id, *spv_lawyer_costs, asset)?;
+                Self::transfer_funds(&property_account, &spv_lawyer_id, spv_lawyer_costs, asset)?;
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
             }
@@ -2245,7 +2287,7 @@ pub mod pallet {
                     .filter(|(_, funds)| !funds.is_zero())
                 {
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(asset).unwrap_or(&default);
+                    let paid_tax = token_details.paid_tax.get(asset).copied().unwrap_or(default);
                     // Calculate investor's fee (1% of paid_funds)
                     let investor_fee = paid_funds
                         .checked_mul(&fee_percent)
@@ -2257,7 +2299,7 @@ pub mod pallet {
                     let total_investor_amount = paid_funds
                         .checked_add(&investor_fee)
                         .ok_or(Error::<T>::ArithmeticOverflow)?
-                        .checked_add(paid_tax)
+                        .checked_add(&paid_tax)
                         .ok_or(Error::<T>::ArithmeticOverflow)?;
 
                     T::ForeignAssetsHolder::release(
@@ -2306,20 +2348,22 @@ pub mod pallet {
                 let fees = property_details
                     .collected_fees
                     .get(asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
                 let lawyer_costs = property_lawyer_details
                     .spv_lawyer_costs
                     .get(asset)
+                    .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
 
                 // Calculate treasury amount
                 let treasury_amount = fees
-                    .checked_sub(lawyer_costs)
+                    .checked_sub(&lawyer_costs)
                     .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
                 // Perform fund transfers
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, *asset)?;
-                Self::transfer_funds(&property_account, &spv_lawyer_id, *lawyer_costs, *asset)?;
+                Self::transfer_funds(&property_account, &spv_lawyer_id, lawyer_costs, *asset)?;
             }
             T::PropertyToken::clear_token_owners(property_details.asset_id)?;
             TokenBuyer::<T>::remove(listing_id);
@@ -2368,17 +2412,17 @@ pub mod pallet {
             signer: &AccountIdOf<T>,
         ) -> DispatchResult {
             for asset in T::AcceptedAssets::get().iter() {
-                if let Some(paid_funds) = token_details.paid_funds.get(asset) {
+                if let Some(paid_funds) = token_details.paid_funds.get(asset).copied() {
                     if paid_funds.is_zero() {
                         continue;
                     }
 
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(asset).unwrap_or(&default);
+                    let paid_tax = token_details.paid_tax.get(asset).copied().unwrap_or(default);
 
                     // Calculate refund and investor fee (1% of paid funds)
                     let refund_amount = paid_funds
-                        .checked_add(paid_tax)
+                        .checked_add(&paid_tax)
                         .ok_or(Error::<T>::ArithmeticOverflow)?;
                     let investor_fee = paid_funds
                         .checked_div(&(100u128.into()))
@@ -2397,12 +2441,12 @@ pub mod pallet {
                     )?;
                     if let Some(funds) = property_details.collected_funds.get_mut(asset) {
                         *funds = funds
-                            .checked_sub(paid_funds)
+                            .checked_sub(&paid_funds)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     }
                     if let Some(tax) = property_details.collected_tax.get_mut(asset) {
                         *tax = tax
-                            .checked_sub(paid_tax)
+                            .checked_sub(&paid_tax)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;
                     }
                     if let Some(fee) = property_details.collected_fees.get_mut(asset) {
@@ -2486,6 +2530,40 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
             } else {
                 map.try_insert(asset, value)
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+            }
+            Ok(())
+        }
+
+        fn allocate_fees(
+            costs_map: &mut BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+            asset_id_usdt: u32,
+            collected_fee_usdt: <T as pallet::Config>::Balance,
+            asset_id_usdc: u32,
+            collected_fee_usdc: <T as pallet::Config>::Balance,
+            costs: <T as pallet::Config>::Balance,
+        ) -> DispatchResult {
+            if collected_fee_usdt >= costs {
+                costs_map
+                    .try_insert(asset_id_usdt, costs)
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+            } else if collected_fee_usdc >= costs {
+                costs_map
+                    .try_insert(asset_id_usdc, costs)
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+            } else {
+                let remaining_costs = costs
+                    .checked_sub(&collected_fee_usdt)
+                    .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                ensure!(
+                    collected_fee_usdc >= remaining_costs,
+                    Error::<T>::CostsTooHigh
+                );
+                costs_map
+                    .try_insert(asset_id_usdt, collected_fee_usdt)
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                costs_map
+                    .try_insert(asset_id_usdc, remaining_costs)
                     .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
             }
             Ok(())

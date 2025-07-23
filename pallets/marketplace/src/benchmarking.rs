@@ -170,11 +170,27 @@ fn create_registered_property<T: Config>(
         crate::LegalProperty::RealEstateDeveloperSide,
         400_u32.into()
     ));
+    assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+        RawOrigin::Signed(seller.clone()).into(),
+        0,
+        true
+    ));
     assert_ok!(Marketplace::<T>::lawyer_claim_property(
         RawOrigin::Signed(lawyer_2.clone()).into(),
         0,
         crate::LegalProperty::SpvSide,
         400_u32.into()
+    ));
+    assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+        RawOrigin::Signed(token_owner.clone()).into(),
+        0,
+        types::Vote::Yes
+    ));
+    let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+    frame_system::Pallet::<T>::set_block_number(expiry);
+    assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+        RawOrigin::Signed(token_owner.clone()).into(),
+        0,
     ));
 
     assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
@@ -794,11 +810,27 @@ mod benchmarks {
             crate::LegalProperty::RealEstateDeveloperSide,
             400_u32.into()
         ));
+        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+            RawOrigin::Signed(seller).into(),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::<T>::lawyer_claim_property(
             RawOrigin::Signed(lawyer_2.clone()).into(),
             0,
             crate::LegalProperty::SpvSide,
             400_u32.into()
+        ));
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(buyer.clone()).into(),
+            0,
+            types::Vote::Yes,
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+            RawOrigin::Signed(buyer.clone()).into(),
+            0,
         ));
 
         assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
@@ -1047,10 +1079,87 @@ mod benchmarks {
         lawyer_claim_property(
             RawOrigin::Signed(lawyer.clone()),
             0,
-            crate::LegalProperty::RealEstateDeveloperSide,
+            crate::LegalProperty::SpvSide,
             400_u32.into(),
         );
 
+        assert_eq!(
+            SpvLawyerProposal::<T>::get(0)
+                .unwrap()
+                .lawyer,
+            lawyer
+        );
+    }
+
+    #[benchmark]
+    fn vote_on_spv_lawyer() {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
+
+        let lawyer: T::AccountId = account("lawyer", 0, 0);
+        assert_ok!(Regions::<T>::register_lawyer(
+            RawOrigin::Signed(seller.clone()).into(),
+            region_id,
+            lawyer.clone()
+        ));
+
+        assert_ok!(Marketplace::<T>::lawyer_claim_property(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            0,
+            crate::LegalProperty::SpvSide,
+            400_u32.into(),
+        ));
+
+        #[extrinsic_call]
+        vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder),
+            0,
+            types::Vote::Yes
+        );
+
+        assert_eq!(
+            SpvLawyerProposal::<T>::get(0)
+                .unwrap()
+                .lawyer,
+            lawyer
+        );
+        assert_eq!(
+            OngoingLawyerVoting::<T>::get(0)
+                .unwrap()
+                .yes_voting_power,
+            1
+        );
+    }
+
+    #[benchmark]
+    fn approve_developer_lawyer() {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let _ = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
+
+        let lawyer: T::AccountId = account("lawyer", 0, 0);
+        assert_ok!(Regions::<T>::register_lawyer(
+            RawOrigin::Signed(seller.clone()).into(),
+            region_id,
+            lawyer.clone()
+        ));
+
+        assert_ok!(Marketplace::<T>::lawyer_claim_property(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            0,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            400_u32.into(),
+        ));
+
+        #[extrinsic_call]
+        approve_developer_lawyer(
+            RawOrigin::Signed(seller),
+            0,
+            true
+        );
+
+        assert!(ProposedLawyers::<T>::get(0).is_none());
         assert_eq!(
             PropertyLawyer::<T>::get(0)
                 .unwrap()
@@ -1063,7 +1172,7 @@ mod benchmarks {
     fn remove_from_case() {
         let seller: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone());
-        let _ = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
+        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
 
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
@@ -1084,11 +1193,27 @@ mod benchmarks {
             crate::LegalProperty::RealEstateDeveloperSide,
             400_u32.into()
         ));
+        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+            RawOrigin::Signed(seller).into(),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::<T>::lawyer_claim_property(
             RawOrigin::Signed(lawyer_2.clone()).into(),
             0,
             crate::LegalProperty::SpvSide,
             400_u32.into()
+        ));
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+            types::Vote::Yes,
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+            RawOrigin::Signed(token_holder).into(),
+            0,
         ));
 
         #[extrinsic_call]
@@ -1101,7 +1226,7 @@ mod benchmarks {
     fn lawyer_confirm_documents() {
         let seller: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone());
-        let _ = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
+        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
 
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
@@ -1124,11 +1249,27 @@ mod benchmarks {
             crate::LegalProperty::RealEstateDeveloperSide,
             400_u32.into()
         ));
+        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+            RawOrigin::Signed(seller).into(),
+            0,
+            true
+        ));
         assert_ok!(Marketplace::<T>::lawyer_claim_property(
             RawOrigin::Signed(lawyer_2.clone()).into(),
             listing_id,
             crate::LegalProperty::SpvSide,
             400_u32.into()
+        ));
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+            types::Vote::Yes,
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+            RawOrigin::Signed(token_holder).into(),
+            0,
         ));
 
         assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
