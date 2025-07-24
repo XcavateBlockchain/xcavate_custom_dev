@@ -53,6 +53,7 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub item_id: NftId,
     pub collection_id: NftCollectionId,
     pub token_amount: u32,
+    pub listed_token_amount: u32,
     pub tax_paid_by_developer: bool,
     pub listing_expiry: BlockNumberFor<T>,
 }

@@ -601,7 +601,7 @@ impl pallet_asset_tx_payment::Config for Runtime {
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const MinPropertyTokens: u32 = 100;
-    pub const MaxPropertyTokens: u32 = 250;
+    pub const MaxPropertyTokens: u32 = 100;
     pub const ListingDepositAmount: Balance = 10 * UNIT;
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PropertyFundingAmount: Balance = 10 * UNIT;

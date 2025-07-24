@@ -56,21 +56,6 @@ pub mod pallet {
         SalesAgent,
     }
 
-    /*     #[cfg(feature = "runtime-benchmarks")]
-    pub struct AssetHelper;
-
-    #[cfg(feature = "runtime-benchmarks")]
-    pub trait BenchmarkHelper<AssetId, T> {
-        fn to_asset(i: u32) -> AssetId;
-    }
-
-    #[cfg(feature = "runtime-benchmarks")]
-    impl<T: Config> BenchmarkHelper<AssetId<T>, T> for AssetHelper {
-        fn to_asset(i: u32) -> AssetId<T> {
-            i.into()
-        }
-    } */
-
     /// Info for the letting agent.
     #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -128,12 +113,6 @@ pub mod pallet {
         /// The property management's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
         type MarketplacePalletId: Get<PalletId>;
-
-        /*         #[cfg(feature = "runtime-benchmarks")]
-        type Helper: crate::BenchmarkHelper<
-            <Self as pallet_assets::Config<Instance1>>::AssetId,
-            Self,
-        >; */
 
         /// Origin who can set a new letting agent.
         type AgentOrigin: EnsureOrigin<Self::RuntimeOrigin>;

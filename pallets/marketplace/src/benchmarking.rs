@@ -243,15 +243,11 @@ mod benchmarks {
     use super::*;
     #[benchmark]
     fn list_object(
-        t: Linear<
-            { <T as pallet::Config>::MinPropertyToken::get() },
-            { <T as pallet::Config>::MaxPropertyToken::get() },
-        >,
         m: Linear<0, { <T as pallet_nfts::Config>::StringLimit::get() }>,
     ) {
         let signer: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(signer.clone());
-        let token_amount: u32 = t;
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
@@ -279,7 +275,7 @@ mod benchmarks {
 
         let listing_id = 0;
         assert!(OngoingObjectListing::<T>::contains_key(listing_id));
-        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), token_amount);
+        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, token_amount);
         assert_eq!(ListingDeposits::<T>::get(listing_id).unwrap().0, signer);
         let listing = OngoingObjectListing::<T>::get(listing_id).unwrap();
         assert_eq!(listing.token_price, token_price);
@@ -348,10 +344,7 @@ mod benchmarks {
             payment_asset,
         );
 
-        assert_eq!(
-            ListedToken::<T>::get(listing_id).unwrap(),
-            token_amount - amount - b
-        );
+        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, token_amount - amount - b);
         assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
         let token_owner = TokenOwner::<T>::get(&buyer, listing_id);
         assert_eq!(token_owner.token_amount, amount);
@@ -420,7 +413,7 @@ mod benchmarks {
             payment_asset,
         );
 
-        assert_eq!(ListedToken::<T>::get(listing_id), None);
+        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 0);
         assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
         let token_owner = TokenOwner::<T>::get(&buyer, listing_id);
         assert_eq!(token_owner.token_amount, amount);
@@ -569,13 +562,13 @@ mod benchmarks {
             payment_asset,
         ));
 
-        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), 1);
+        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 1);
         assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
 
         #[extrinsic_call]
         cancel_property_purchase(RawOrigin::Signed(buyer.clone()), 0);
 
-        assert_eq!(ListedToken::<T>::get(listing_id).unwrap(), 2);
+        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 2);
         assert!(!TokenBuyer::<T>::get(listing_id).contains(&buyer));
     }
 
@@ -963,7 +956,7 @@ mod benchmarks {
 
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
         assert!(ListingDeposits::<T>::get(listing_id).is_none());
-        assert!(ListedToken::<T>::get(listing_id).is_none());
+        assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
         assert_eq!(TokenBuyer::<T>::get(listing_id).len(), 0);
     }
 
@@ -1083,12 +1076,7 @@ mod benchmarks {
             400_u32.into(),
         );
 
-        assert_eq!(
-            SpvLawyerProposal::<T>::get(0)
-                .unwrap()
-                .lawyer,
-            lawyer
-        );
+        assert_eq!(SpvLawyerProposal::<T>::get(0).unwrap().lawyer, lawyer);
     }
 
     #[benchmark]
@@ -1112,22 +1100,11 @@ mod benchmarks {
         ));
 
         #[extrinsic_call]
-        vote_on_spv_lawyer(
-            RawOrigin::Signed(token_holder),
-            0,
-            types::Vote::Yes
-        );
+        vote_on_spv_lawyer(RawOrigin::Signed(token_holder), 0, types::Vote::Yes);
 
+        assert_eq!(SpvLawyerProposal::<T>::get(0).unwrap().lawyer, lawyer);
         assert_eq!(
-            SpvLawyerProposal::<T>::get(0)
-                .unwrap()
-                .lawyer,
-            lawyer
-        );
-        assert_eq!(
-            OngoingLawyerVoting::<T>::get(0)
-                .unwrap()
-                .yes_voting_power,
+            OngoingLawyerVoting::<T>::get(0).unwrap().yes_voting_power,
             1
         );
     }
@@ -1153,17 +1130,52 @@ mod benchmarks {
         ));
 
         #[extrinsic_call]
-        approve_developer_lawyer(
-            RawOrigin::Signed(seller),
-            0,
-            true
-        );
+        approve_developer_lawyer(RawOrigin::Signed(seller), 0, true);
 
         assert!(ProposedLawyers::<T>::get(0).is_none());
         assert_eq!(
             PropertyLawyer::<T>::get(0)
                 .unwrap()
                 .real_estate_developer_lawyer,
+            Some(lawyer.clone())
+        );
+    }
+
+    #[benchmark]
+    fn finalize_spv_lawyer() {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
+
+        let lawyer: T::AccountId = account("lawyer", 0, 0);
+        assert_ok!(Regions::<T>::register_lawyer(
+            RawOrigin::Signed(seller.clone()).into(),
+            region_id,
+            lawyer.clone()
+        ));
+
+        assert_ok!(Marketplace::<T>::lawyer_claim_property(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            0,
+            crate::LegalProperty::SpvSide,
+            400_u32.into(),
+        ));
+
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+            types::Vote::Yes
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        #[extrinsic_call]
+        finalize_spv_lawyer(RawOrigin::Signed(token_holder), 0);
+
+        assert!(SpvLawyerProposal::<T>::get(0).is_none());
+        assert!(OngoingLawyerVoting::<T>::get(0).is_none());
+        assert_eq!(
+            PropertyLawyer::<T>::get(0).unwrap().spv_lawyer,
             Some(lawyer.clone())
         );
     }
@@ -1284,7 +1296,7 @@ mod benchmarks {
         assert!(PropertyLawyer::<T>::get(listing_id).is_none());
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
     }
-
+ 
     #[benchmark]
     fn send_property_token() {
         let seller: T::AccountId = create_whitelisted_user::<T>();

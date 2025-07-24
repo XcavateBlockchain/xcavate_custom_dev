@@ -1,6 +1,6 @@
 use crate::{mock::*, Error, Event, *};
 use crate::{
-    ListedToken, OngoingObjectListing, OngoingOffers, PropertyLawyer, RefundToken, TokenBuyer,
+    OngoingObjectListing, OngoingOffers, PropertyLawyer, RefundToken, TokenBuyer,
     TokenListings, TokenOwner,
 };
 use frame_support::{
@@ -165,7 +165,7 @@ fn list_object_works() {
             Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())),
             100_000
         );
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 100);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 100);
         assert_eq!(NextNftId::<Test>::get(0), 1);
         assert_eq!(NextNftId::<Test>::get(1), 0);
         assert_eq!(NextAssetId::<Test>::get(), 1);
@@ -297,7 +297,7 @@ fn buy_property_token_works() {
             30,
             1984
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 70);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([6; 32].into(), 0).token_amount,
             30
@@ -368,7 +368,7 @@ fn buy_property_token_works_developer_covers_fees() {
             30,
             1984
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 70);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             30
@@ -677,9 +677,9 @@ fn listing_and_selling_multiple_objects() {
             1,
             true,
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 67);
-        assert_eq!(ListedToken::<Test>::get(2).unwrap(), 50);
-        assert_eq!(ListedToken::<Test>::get(3).unwrap(), 100);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 67);
+        assert_eq!(OngoingObjectListing::<Test>::get(2).unwrap().listed_token_amount, 50);
+        assert_eq!(OngoingObjectListing::<Test>::get(3).unwrap().listed_token_amount, 100);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([2; 32].into(), 2).token_amount,
             30
@@ -2012,7 +2012,7 @@ fn distributes_nfts_and_funds() {
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 12_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -2142,7 +2142,7 @@ fn distributes_nfts_and_funds_2() {
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 34_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 4_000);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -2336,7 +2336,7 @@ fn distributes_nfts_and_funds_3() {
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 13_000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -2525,7 +2525,7 @@ fn reject_contract_and_refund() {
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4000);
         assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -2858,7 +2858,7 @@ fn second_attempt_works() {
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_490_000);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -4643,7 +4643,7 @@ fn upgrade_object_and_distribute_works() {
         assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 110_000);
 
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
     })
 }
 
@@ -4817,7 +4817,7 @@ fn upgrade_object_fails() {
         ));
         assert_noop!(
             Marketplace::upgrade_object(RuntimeOrigin::signed([0; 32].into()), 0, 300),
-            Error::<Test>::TokenNotForSale
+            Error::<Test>::PropertyAlreadySold
         );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
@@ -5365,7 +5365,7 @@ fn cancel_property_purchase_works() {
             30,
             1984
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 40);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 40);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             30
@@ -5408,7 +5408,7 @@ fn cancel_property_purchase_works() {
                 .copied(),
             Some(300_000)
         );
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 70);
         assert_eq!(
             AssetsHolder::total_balance_on_hold(1984, &[1; 32].into()),
             0
@@ -5578,7 +5578,7 @@ fn withdraw_expired_works() {
             30,
             1984
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 70);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             30
@@ -5606,7 +5606,7 @@ fn withdraw_expired_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -5676,7 +5676,7 @@ fn withdraw_expired_works_2() {
             4,
             1984
         ));
-        assert_eq!(ListedToken::<Test>::get(0).unwrap(), 46);
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 46);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             30
@@ -5711,7 +5711,7 @@ fn withdraw_expired_works_2() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
-        assert_eq!(ListedToken::<Test>::get(0), Some(76));
+        assert_eq!(OngoingObjectListing::<Test>::get(0).unwrap().listed_token_amount, 76);
         assert_eq!(
             TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount,
             0
@@ -6317,7 +6317,7 @@ fn withdraw_deposit_unsold_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0
         ));
-        assert_eq!(ListedToken::<Test>::get(0), None);
+        assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())),

@@ -62,14 +62,6 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
-    /*     #[cfg(feature = "runtime-benchmarks")]
-    pub struct NftHelper;
-
-    #[cfg(feature = "runtime-benchmarks")]
-    pub trait BenchmarkHelper<AssetId, T> {
-        fn to_asset(i: u32) -> AssetId;
-    } */
-
     #[pallet::composite_enum]
     pub enum HoldReason {
         #[codec(index = 0)]
@@ -140,12 +132,6 @@ pub mod pallet {
         #[pallet::constant]
         type PalletId: Get<PalletId>;
 
-        /*         #[cfg(feature = "runtime-benchmarks")]
-        type Helper: crate::BenchmarkHelper<
-            <Self as pallet_assets::Config<Instance1>>::AssetId,
-            Self,
-        >; */
-
         /// The minimum amount of token of a property.
         #[pallet::constant]
         type MinPropertyToken: Get<u32>;
@@ -210,11 +196,6 @@ pub mod pallet {
     #[pallet::storage]
     pub(super) type OngoingObjectListing<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, PropertyListingDetailsType<T>, OptionQuery>;
-
-    /// Mapping of the listing id to the amount of listed token.
-    #[pallet::storage]
-    pub(super) type ListedToken<T: Config> =
-        StorageMap<_, Blake2_128Concat, ListingId, u32, OptionQuery>;
 
     /// Mapping of the listing to a vec of buyer of the sold token.
     #[pallet::storage]
@@ -651,11 +632,11 @@ pub mod pallet {
                 item_id,
                 collection_id: region_info.collection_id,
                 token_amount,
+                listed_token_amount: token_amount,
                 tax_paid_by_developer,
                 listing_expiry,
             };
             OngoingObjectListing::<T>::insert(listing_id, property_details);
-            ListedToken::<T>::insert(listing_id, token_amount);
 
             <T as pallet::Config>::NativeCurrency::hold(
                 &HoldReason::ListingDepositReserve.into(),
@@ -716,11 +697,12 @@ pub mod pallet {
                 Error::<T>::PaymentAssetNotSupported
             );
 
-            let mut listed_token =
-                ListedToken::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
-            ensure!(listed_token >= amount, Error::<T>::NotEnoughTokenAvailable);
             let mut property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
+            ensure!(
+                property_details.listed_token_amount >= amount,
+                Error::<T>::NotEnoughTokenAvailable
+            );
             ensure!(
                 property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingExpired
@@ -771,7 +753,8 @@ pub mod pallet {
                 total_transfer_price,
             )?;
 
-            listed_token = listed_token
+            property_details.listed_token_amount = property_details
+                .listed_token_amount
                 .checked_sub(amount)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
@@ -826,6 +809,7 @@ pub mod pallet {
 
             let asset_id = property_details.asset_id;
             let tax_paid_by_developer = property_details.tax_paid_by_developer;
+            let listed_token = property_details.listed_token_amount;
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
             if listed_token == 0 {
                 let initial_funds = Self::create_initial_funds()?;
@@ -840,9 +824,6 @@ pub mod pallet {
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                 Self::token_distribution(listing_id, property_details)?;
-                ListedToken::<T>::remove(listing_id);
-            } else {
-                ListedToken::<T>::insert(listing_id, listed_token);
             }
             Self::deposit_event(Event::<T>::PropertyTokenBought {
                 listing_index: listing_id,
@@ -1007,16 +988,11 @@ pub mod pallet {
 
             // Process refunds
             Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
+            property_details.listed_token_amount = property_details
+                .listed_token_amount
+                .checked_add(token_details.token_amount)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-            ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
-                let listed_token = maybe_listed_token
-                    .as_mut()
-                    .ok_or(Error::<T>::TokenNotForSale)?;
-                *listed_token = listed_token
-                    .checked_add(token_details.token_amount)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
-                Ok::<(), DispatchError>(())
-            })?;
             TokenBuyer::<T>::try_mutate(property_details.asset_id, |buyer_list| {
                 let index = buyer_list
                     .iter()
@@ -1233,7 +1209,11 @@ pub mod pallet {
                     }
 
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(&asset).copied().unwrap_or(default);
+                    let paid_tax = token_details
+                        .paid_tax
+                        .get(&asset)
+                        .copied()
+                        .unwrap_or(default);
 
                     let refund_amount = paid_funds
                         .checked_add(&paid_tax)
@@ -1271,6 +1251,7 @@ pub mod pallet {
                         Preservation::Expendable,
                     )?;
                 }
+                OngoingObjectListing::<T>::remove(listing_id);
             } else {
                 RefundToken::<T>::insert(listing_id, refund_infos);
             }
@@ -1312,56 +1293,47 @@ pub mod pallet {
             // Process refunds for supported assets (USDT and USDC)
             Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
 
-            // Update ListedToken
-            ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
-                let listed_token = maybe_listed_token
-                    .as_mut()
-                    .ok_or(Error::<T>::TokenNotForSale)?;
-                *listed_token = listed_token
-                    .checked_add(token_details.token_amount)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+            property_details.listed_token_amount = property_details
+                .listed_token_amount
+                .checked_add(token_details.token_amount)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-                // Check if all tokens are returned
-                if *listed_token >= property_details.token_amount {
-                    // Listing is over, burn and clean everything
-                    T::PropertyToken::burn_property_token(property_details.asset_id)?;
-                    let (depositor, deposit_amount) =
-                        ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-                    <T as pallet::Config>::NativeCurrency::release(
-                        &HoldReason::ListingDepositReserve.into(),
-                        &depositor,
-                        deposit_amount,
-                        Precision::Exact,
+            // Check if all tokens are returned
+            if property_details.listed_token_amount >= property_details.token_amount {
+                // Listing is over, burn and clean everything
+                T::PropertyToken::burn_property_token(property_details.asset_id)?;
+                let (depositor, deposit_amount) =
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                <T as pallet::Config>::NativeCurrency::release(
+                    &HoldReason::ListingDepositReserve.into(),
+                    &depositor,
+                    deposit_amount,
+                    Precision::Exact,
+                )?;
+                let property_account = Self::property_account_id(property_details.asset_id);
+                let native_balance =
+                    <T as pallet::Config>::NativeCurrency::balance(&property_account);
+                if !native_balance.is_zero() {
+                    <T as pallet::Config>::NativeCurrency::transfer(
+                        &property_account,
+                        &property_details.real_estate_developer,
+                        native_balance,
+                        Preservation::Expendable,
                     )?;
-                    let property_account = Self::property_account_id(property_details.asset_id);
-                    let native_balance =
-                        <T as pallet::Config>::NativeCurrency::balance(&property_account);
-                    if !native_balance.is_zero() {
-                        <T as pallet::Config>::NativeCurrency::transfer(
-                            &property_account,
-                            &property_details.real_estate_developer,
-                            native_balance,
-                            Preservation::Expendable,
-                        )?;
-                    }
-                    OngoingObjectListing::<T>::remove(listing_id);
-                    ListedToken::<T>::remove(listing_id);
-                    TokenBuyer::<T>::remove(listing_id);
-                    *maybe_listed_token = None;
-                } else {
-                    TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
-                        let index = buyers
-                            .iter()
-                            .position(|b| b == &signer)
-                            .ok_or(Error::<T>::InvalidIndex)?;
-                        buyers.swap_remove(index);
-                        Ok::<(), DispatchError>(())
-                    })?;
-                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
                 }
-
-                Ok::<(), DispatchError>(())
-            })?;
+                OngoingObjectListing::<T>::remove(listing_id);
+                TokenBuyer::<T>::remove(listing_id);
+            } else {
+                TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
+                    let index = buyers
+                        .iter()
+                        .position(|b| b == &signer)
+                        .ok_or(Error::<T>::InvalidIndex)?;
+                    buyers.swap_remove(index);
+                    Ok::<(), DispatchError>(())
+                })?;
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
+            }
             Self::deposit_event(Event::<T>::ExpiredFundsWithdrawn { signer, listing_id });
             Ok(())
         }
@@ -1396,45 +1368,33 @@ pub mod pallet {
                 PropertyLawyer::<T>::get(listing_id).is_none(),
                 Error::<T>::PropertyAlreadySold
             );
-
-            // Update ListedToken
-            ListedToken::<T>::try_mutate(listing_id, |maybe_listed_token| {
-                let listed_token = maybe_listed_token
-                    .as_mut()
-                    .ok_or(Error::<T>::TokenNotForSale)?;
-
-                // Check if all tokens are returned
-                ensure!(
-                    *listed_token >= property_details.token_amount,
-                    Error::<T>::TokenNotReturned
-                );
-                // Listing is over, burn and clean everything
-                T::PropertyToken::burn_property_token(property_details.asset_id)?;
-                let (depositor, deposit_amount) =
-                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-                <T as pallet::Config>::NativeCurrency::release(
-                    &HoldReason::ListingDepositReserve.into(),
-                    &depositor,
-                    deposit_amount,
-                    Precision::Exact,
+            // Check if all tokens are returned
+            ensure!(
+                property_details.listed_token_amount >= property_details.token_amount,
+                Error::<T>::TokenNotReturned
+            );
+            // Listing is over, burn and clean everything
+            T::PropertyToken::burn_property_token(property_details.asset_id)?;
+            let (depositor, deposit_amount) =
+                ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            <T as pallet::Config>::NativeCurrency::release(
+                &HoldReason::ListingDepositReserve.into(),
+                &depositor,
+                deposit_amount,
+                Precision::Exact,
+            )?;
+            let property_account = Self::property_account_id(property_details.asset_id);
+            let native_balance = <T as pallet::Config>::NativeCurrency::balance(&property_account);
+            if !native_balance.is_zero() {
+                <T as pallet::Config>::NativeCurrency::transfer(
+                    &property_account,
+                    &property_details.real_estate_developer,
+                    native_balance,
+                    Preservation::Expendable,
                 )?;
-                let property_account = Self::property_account_id(property_details.asset_id);
-                let native_balance =
-                    <T as pallet::Config>::NativeCurrency::balance(&property_account);
-                if !native_balance.is_zero() {
-                    <T as pallet::Config>::NativeCurrency::transfer(
-                        &property_account,
-                        &property_details.real_estate_developer,
-                        native_balance,
-                        Preservation::Expendable,
-                    )?;
-                }
-                OngoingObjectListing::<T>::remove(listing_id);
-                ListedToken::<T>::remove(listing_id);
-                TokenBuyer::<T>::remove(listing_id);
-                *maybe_listed_token = None;
-                Ok::<(), DispatchError>(())
-            })?;
+            }
+            OngoingObjectListing::<T>::remove(listing_id);
+            TokenBuyer::<T>::remove(listing_id);
             Self::deposit_event(Event::<T>::DepositWithdrawnUnsold { signer, listing_id });
             Ok(())
         }
@@ -1497,17 +1457,13 @@ pub mod pallet {
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
-                ListedToken::<T>::contains_key(listing_id),
-                Error::<T>::TokenNotForSale
-            );
-            ensure!(
                 PropertyLawyer::<T>::get(listing_id).is_none(),
                 Error::<T>::PropertyAlreadySold
             );
             OngoingObjectListing::<T>::try_mutate(listing_id, |maybe_property_details| {
                 let property_details = maybe_property_details
                     .as_mut()
-                    .ok_or(Error::<T>::InvalidIndex)?;
+                    .ok_or(Error::<T>::TokenNotForSale)?;
                 ensure!(
                     property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                     Error::<T>::ListingExpired
@@ -1694,7 +1650,7 @@ pub mod pallet {
         ///
         /// Emits `VotedOnLawyer` event when succesfful.
         #[pallet::call_index(15)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_spv_lawyer())]
         pub fn vote_on_spv_lawyer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1759,7 +1715,7 @@ pub mod pallet {
         /// Emits `RealEstateLawyerApproved` event when approved
         /// or RealEstateLawyerRejected when rejected.
         #[pallet::call_index(16)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_developer_lawyer())]
         pub fn approve_developer_lawyer(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1803,7 +1759,7 @@ pub mod pallet {
                     collected_fee_usdt,
                     asset_id_usdc,
                     collected_fee_usdc,
-                    proposal.costs
+                    proposal.costs,
                 )?;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
                 Self::deposit_event(Event::RealEstateLawyerApproved {
@@ -1830,7 +1786,7 @@ pub mod pallet {
         /// Emits `SpvLawyerApproved` event when lawyer is approved
         /// or SpvLawyerRejected when rejected.
         #[pallet::call_index(17)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_spv_lawyer())]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -1852,7 +1808,7 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            
+
             if voting_result.yes_voting_power > voting_result.no_voting_power {
                 property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
@@ -1878,7 +1834,7 @@ pub mod pallet {
                     collected_fee_usdt,
                     asset_id_usdc,
                     collected_fee_usdc,
-                    proposal.costs
+                    proposal.costs,
                 )?;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
                 Self::deposit_event(Event::SpvLawyerApproved {
@@ -2287,7 +2243,11 @@ pub mod pallet {
                     .filter(|(_, funds)| !funds.is_zero())
                 {
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(asset).copied().unwrap_or(default);
+                    let paid_tax = token_details
+                        .paid_tax
+                        .get(asset)
+                        .copied()
+                        .unwrap_or(default);
                     // Calculate investor's fee (1% of paid_funds)
                     let investor_fee = paid_funds
                         .checked_mul(&fee_percent)
@@ -2418,7 +2378,11 @@ pub mod pallet {
                     }
 
                     let default = Default::default();
-                    let paid_tax = token_details.paid_tax.get(asset).copied().unwrap_or(default);
+                    let paid_tax = token_details
+                        .paid_tax
+                        .get(asset)
+                        .copied()
+                        .unwrap_or(default);
 
                     // Calculate refund and investor fee (1% of paid funds)
                     let refund_amount = paid_funds
@@ -2536,7 +2500,11 @@ pub mod pallet {
         }
 
         fn allocate_fees(
-            costs_map: &mut BoundedBTreeMap<u32, <T as pallet::Config>::Balance, <T as pallet::Config>::MaxPropertyToken>,
+            costs_map: &mut BoundedBTreeMap<
+                u32,
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::MaxPropertyToken,
+            >,
             asset_id_usdt: u32,
             collected_fee_usdt: <T as pallet::Config>::Balance,
             asset_id_usdc: u32,
