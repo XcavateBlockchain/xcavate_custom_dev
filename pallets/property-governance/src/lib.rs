@@ -392,19 +392,6 @@ pub mod pallet {
     pub type PropertySale<T: Config> =
         StorageMap<_, Blake2_128Concat, u32, PropertySaleInfo<T>, OptionQuery>;
 
-    /// Stored funds of token holder from sales.
-    #[pallet::storage]
-    pub type SaleFunds<T: Config> = StorageNMap<
-        _,
-        (
-            NMapKey<Blake2_128Concat, AccountIdOf<T>>,
-            NMapKey<Blake2_128Concat, u32>,
-            NMapKey<Blake2_128Concat, u32>,
-        ),
-        <T as pallet::Config>::Balance,
-        ValueQuery,
-    >;
-
     /// Mapping of asset id to infos about an auction.
     #[pallet::storage]
     pub type SaleAuctions<T: Config> =
@@ -417,6 +404,18 @@ pub mod pallet {
         Blake2_128Concat,
         BlockNumberFor<T>,
         BoundedVec<u32, T::MaxVotesForBlock>,
+        ValueQuery,
+    >;
+
+    /// Stores the funds from a property sale.
+    #[pallet::storage]
+    pub type PropertySaleFunds<T: Config> = StorageDoubleMap<
+        _,
+        Blake2_128Concat,
+        u32, 
+        Blake2_128Concat,
+        u32, 
+        <T as pallet::Config>::Balance,
         ValueQuery,
     >;
 
@@ -1331,14 +1330,11 @@ pub mod pallet {
                 let property_account = Self::property_account_id(asset_id);
                 let treasury_account = Self::treasury_account_id();
 
-                let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
                 let property_info =
                     <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
                         .ok_or(Error::<T>::NoObjectFound)?;
                 let region_info = pallet_regions::RegionDetails::<T>::get(property_info.region)
                     .ok_or(Error::<T>::RegionUnknown)?;
-
-                let total_token = property_info.token_amount;
 
                 let total_fees = sales_price
                     .checked_mul(&2u128.into())
@@ -1390,63 +1386,8 @@ pub mod pallet {
                     payment_asset,
                 )?;
 
-                let mut remaining_payment = expected_buyer_amount;
-                let mut remaining_reserve = reserve_released;
-
-                // Store the shares of the token holder
-                for owner in owner_list {
-                    let property_token_amount =
-                        <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &owner);
-
-                    let owner_share = net_amount
-                        .checked_mul(&(property_token_amount as u128).into())
-                        .ok_or(Error::<T>::MultiplyError)?
-                        .checked_div(&(total_token as u128).into())
-                        .ok_or(Error::<T>::DivisionError)?;
-                    if remaining_payment >= owner_share {
-                        // Enough funds in payment_asset to cover full owner_share
-                        SaleFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
-                            *stored = stored
-                                .checked_add(&owner_share)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?;
-                            Ok::<(), DispatchError>(())
-                        })?;
-                        remaining_payment = remaining_payment
-                            .checked_sub(&owner_share)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    } else {
-                        // Not enough payment_asset funds, split owner_share
-                        if remaining_payment > 0u128.into() {
-                            // Pay what is left from payment_asset
-                            SaleFunds::<T>::try_mutate(
-                                (&owner, asset_id, payment_asset),
-                                |stored| {
-                                    *stored = stored
-                                        .checked_add(&remaining_payment)
-                                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-                                    Ok::<(), DispatchError>(())
-                                },
-                            )?;
-                        }
-
-                        let leftover = owner_share
-                            .checked_sub(&remaining_payment)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                        remaining_payment = 0u128.into();
-
-                        // Pay the leftover from reserve_asset
-                        SaleFunds::<T>::try_mutate((&owner, asset_id, reserve_asset), |stored| {
-                            *stored = stored
-                                .checked_add(&leftover)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?;
-                            Ok::<(), DispatchError>(())
-                        })?;
-
-                        remaining_reserve = remaining_reserve
-                            .checked_sub(&leftover)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
-                }
+                PropertySaleFunds::<T>::insert(asset_id, payment_asset, expected_buyer_amount);
+                PropertySaleFunds::<T>::insert(asset_id, reserve.payment_asset, reserve_released);
 
                 sale_info.finalized = true;
                 Self::deposit_event(Event::SaleFinalized {
@@ -1479,12 +1420,65 @@ pub mod pallet {
             let mut property_sale_info =
                 PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
             ensure!(property_sale_info.finalized, Error::<T>::SaleNotFinalized);
-            let amount = SaleFunds::<T>::take((&signer, asset_id, payment_asset));
-            ensure!(amount > 0u128.into(), Error::<T>::NoFundsToClaim);
-            let property_account = Self::property_account_id(asset_id);
-            Self::transfer_funds(&property_account, &signer, amount, payment_asset)?;
+            let mut property_sale_amount = PropertySaleFunds::<T>::get(asset_id, payment_asset);
+            let property_info =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::NoObjectFound)?;
+
+            let sales_price = property_sale_info.price.ok_or(Error::<T>::NoPriceSet)?;
+            let total_fees = sales_price
+                .checked_mul(&2u128.into())
+                .ok_or(Error::<T>::MultiplyError)?
+                .checked_div(&100u128.into())
+                .ok_or(Error::<T>::DivisionError)?;
+
+            let net_amount = sales_price
+                .checked_sub(&total_fees)
+                .ok_or(Error::<T>::ArithmeticUnderflow)?;
+
+            let total_token = property_info.token_amount;
             let property_token_amount =
                 <T as pallet::Config>::PropertyToken::take_property_token(asset_id, &signer);
+            ensure!(!property_token_amount.is_zero(), Error::<T>::NoFundsToClaim);
+
+            let mut owner_share = net_amount
+                .checked_mul(&(property_token_amount as u128).into())
+                .ok_or(Error::<T>::MultiplyError)?
+                .checked_div(&(total_token as u128).into())
+                .ok_or(Error::<T>::DivisionError)?;
+            let property_account = Self::property_account_id(asset_id);
+            if property_sale_amount >= owner_share {
+                Self::transfer_funds(&property_account, &signer, owner_share, payment_asset)?;
+                property_sale_amount = property_sale_amount
+                    .checked_sub(&owner_share)
+                    .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                if property_sale_amount.is_zero() {
+                    PropertySaleFunds::<T>::remove(asset_id, payment_asset);
+                } else {
+                    PropertySaleFunds::<T>::insert(asset_id, payment_asset, property_sale_amount);
+                }           
+            } else {
+                for (payment_asset, mut funds_amount) in PropertySaleFunds::<T>::iter_prefix(asset_id) {
+                    if funds_amount >= owner_share {
+                        Self::transfer_funds(&property_account, &signer, owner_share, payment_asset)?;
+                        funds_amount = funds_amount
+                            .checked_sub(&owner_share)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;                 
+                        if funds_amount.is_zero() {
+                            PropertySaleFunds::<T>::remove(asset_id, payment_asset);
+                        } else {
+                            PropertySaleFunds::<T>::insert(asset_id, payment_asset, funds_amount);
+                        }        
+                        break;
+                    } else {
+                        Self::transfer_funds(&property_account, &signer, funds_amount, payment_asset)?;
+                        owner_share = owner_share
+                            .checked_sub(&funds_amount)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                        PropertySaleFunds::<T>::remove(asset_id, payment_asset);
+                    }
+                }
+            }
             <T as pallet::Config>::LocalCurrency::transfer(
                 asset_id,
                 &signer,
@@ -1505,7 +1499,7 @@ pub mod pallet {
             Self::deposit_event(Event::SaleFundsClaimed {
                 claimer: signer,
                 asset_id,
-                amount,
+                amount: owner_share,
                 payment_asset,
             });
             Ok(())

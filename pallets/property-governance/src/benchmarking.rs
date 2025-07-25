@@ -862,15 +862,7 @@ mod benchmarks {
         finalize_sale(RawOrigin::Signed(lawyer_2.clone()), asset_id, payment_asset);
 
         assert!(PropertySale::<T>::get(asset_id).unwrap().finalized);
-        let net_amount = auction_amount.saturating_mul(98u128.into()) / 100u128.into();
-        for owner in owner_list.iter() {
-            let owner_share = net_amount
-                / (<T as pallet_marketplace::Config>::MaxPropertyToken::get() as u128).into();
-            assert_eq!(
-                SaleFunds::<T>::get((owner, asset_id, payment_asset)),
-                owner_share
-            );
-        }
+        assert!(PropertySaleFunds::<T>::contains_key(asset_id, payment_asset));
     }
 
     #[benchmark]
@@ -1000,7 +992,7 @@ mod benchmarks {
 
         assert!(PropertySale::<T>::get(asset_id).is_none());
         assert_eq!(
-            SaleFunds::<T>::get((&token_owner, asset_id, payment_asset)),
+            PropertySaleFunds::<T>::get(asset_id, payment_asset),
             0u128.into()
         );
         assert_eq!(

@@ -61,7 +61,6 @@ pub mod pallet {
     #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
     #[scale_info(skip_type_params(T))]
     pub struct LettingAgentInfo<T: Config> {
-        pub account: AccountIdOf<T>,
         pub region: u16,
         pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
         pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
@@ -272,7 +271,6 @@ pub mod pallet {
                 Error::<T>::LettingAgentExists
             );
             let mut letting_info = LettingAgentInfo {
-                account: letting_agent.clone(),
                 region,
                 locations: Default::default(),
                 assigned_properties: Default::default(),

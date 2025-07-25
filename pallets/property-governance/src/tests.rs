@@ -11,7 +11,7 @@ use frame_support::{
 
 use crate::{
     ChallengeRoundsExpiring, Challenges, OngoingChallengeVotes, OngoingProposalVotes,
-    OngoingSaleProposalVotes, PropertySale, Proposals, Reserve, SaleAuctions, SaleFunds,
+    OngoingSaleProposalVotes, PropertySale, Proposals, Reserve, SaleAuctions, PropertySaleFunds,
     SaleProposals, UserProposalVote, UserSaleProposalVote,
 };
 
@@ -3395,22 +3395,8 @@ fn finalize_sale_works() {
             1337
         ));
         assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
-            161_700
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
-            29_400
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)),
-            72_900
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)),
-            30_000
-        );
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1337), 264_000);
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1984), 30_000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             30_000
@@ -3521,22 +3507,8 @@ fn finalize_sale_works_2() {
             1337
         ));
         assert_eq!(PropertySale::<Test>::get(0).unwrap().finalized, true);
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
-            161_700
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
-            29_400
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1337)),
-            72_900
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([3; 32].into(), 0, 1984)),
-            30_000
-        );
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1337), 264_000);
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1984), 30_000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             30_000
@@ -3766,22 +3738,8 @@ fn claim_sale_funds_works() {
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             30_000
         );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
-            264_000
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
-            600
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1337)),
-            0
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)),
-            29_400
-        );
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1337), 264_000);
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1984), 30_000);
         assert_eq!(
             LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)),
             0
@@ -3791,48 +3749,30 @@ fn claim_sale_funds_works() {
             0,
             1984
         ));
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1337), 29_400);
+        assert_eq!(PropertySaleFunds::<Test>::get(0, 1984), 0);
         assert_eq!(
             LocalAssets::balance(0, &PropertyGovernance::property_account_id(0)),
             90
         );
+        assert_eq!(
+            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
+            29_400
+        );
+        assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 594_000);
+        assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 234_600);
+        assert_eq!(LocalAssets::total_issuance(0), 100);
         assert_ok!(PropertyGovernance::claim_sale_funds(
-            RuntimeOrigin::signed([1; 32].into()),
+            RuntimeOrigin::signed([2; 32].into()),
             0,
             1337
         ));
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
-            29_400
-        );
-        assert_eq!(
-            ForeignAssets::balance(1337, &PropertyGovernance::property_account_id(0)),
             0
         );
-        assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 564_600);
-        assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 264_000);
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1337)),
-            0
-        );
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([1; 32].into(), 0, 1984)),
-            0
-        );
-        assert_eq!(LocalAssets::total_issuance(0), 100);
-        assert_ok!(PropertyGovernance::claim_sale_funds(
-            RuntimeOrigin::signed([2; 32].into()),
-            0,
-            1984
-        ));
-        assert_eq!(
-            SaleFunds::<Test>::get::<(AccountId, u32, u32)>(([2; 32].into(), 0, 1984)),
-            0
-        );
-        assert_eq!(
-            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
-            0
-        );
-        assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_075_400);
+        assert_eq!(ForeignAssets::balance(1337, &[2; 32].into()), 29_400);
+        assert_eq!(ForeignAssets::balance(1984, &[2; 32].into()), 1_046_000);
         assert_eq!(Nfts::owner(0, 0).is_none(), true);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).is_none(), true);
         assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);

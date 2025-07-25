@@ -407,7 +407,6 @@ mod benchmarks {
                     (1..max_props).map(|i| i).collect::<Vec<_>>(),
                 )
                 .unwrap(),
-                account: letting_agent.clone(),
                 region: region_id,
                 locations: Default::default(),
                 deposited: true,
