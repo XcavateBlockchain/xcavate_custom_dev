@@ -162,6 +162,10 @@ pub mod pallet {
         #[pallet::constant]
         type AcceptedAssets: Get<[u32; 2]>;
 
+        /// The maximum amount of accepted assets.
+        #[pallet::constant]
+        type MaxAcceptedAssets: Get<u32>;
+
         type PropertyToken: PropertyTokenManage<Self>
             + PropertyTokenOwnership<Self>
             + PropertyTokenSpvControl<Self>
@@ -197,16 +201,6 @@ pub mod pallet {
     pub(super) type OngoingObjectListing<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, PropertyListingDetailsType<T>, OptionQuery>;
 
-    /// Mapping of the listing to a vec of buyer of the sold token.
-    #[pallet::storage]
-    pub(super) type TokenBuyer<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        ListingId,
-        BoundedVec<AccountIdOf<T>, <T as pallet::Config>::MaxPropertyToken>,
-        ValueQuery,
-    >;
-
     /// Double mapping of the account id of the token owner
     /// and the listing to the amount of token.
     #[pallet::storage]
@@ -217,7 +211,7 @@ pub mod pallet {
         Blake2_128Concat,
         ListingId,
         TokenOwnerDetails<T>,
-        ValueQuery,
+        OptionQuery,
     >;
 
     /// Mapping of the listing id to the listing details of a token listing.
@@ -447,6 +441,12 @@ pub mod pallet {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
         },
+        PropertyTokenClaimed {
+            listing_id: ListingId,
+            asset_id: u32,
+            owner: AccountIdOf<T>,
+            amount: u32,
+        }
     }
 
     // Errors inform users that something went wrong.
@@ -470,8 +470,6 @@ pub mod pallet {
         ArithmeticOverflow,
         /// The token is not for sale.
         TokenNotForSale,
-        /// There are already too many token buyer.
-        TooManyTokenBuyer,
         /// This Region is not known.
         RegionUnknown,
         /// The location is not registered.
@@ -531,6 +529,8 @@ pub mod pallet {
         VotingExpired,
         /// The voting is still ongoing.
         VotingStillOngoing,
+        /// Property has not been sold yet.
+        PropertyHasNotBeenSoldYet,
     }
 
     #[pallet::call]
@@ -551,7 +551,6 @@ pub mod pallet {
         /// Emits `ObjectListed` event when succesfful
         #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object(
-            <T as pallet::Config>::MaxPropertyToken::get(),
             <T as pallet_nfts::Config>::StringLimit::get()
         ))]
         pub fn list_object(
@@ -634,7 +633,9 @@ pub mod pallet {
                 token_amount,
                 listed_token_amount: token_amount,
                 tax_paid_by_developer,
+                tax: region_info.tax,
                 listing_expiry,
+                investor_funds: Default::default(),
             };
             OngoingObjectListing::<T>::insert(listing_id, property_details);
 
@@ -758,15 +759,6 @@ pub mod pallet {
                 .checked_sub(amount)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
-            TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
-                if !buyers.contains(&signer) {
-                    buyers
-                        .try_push(signer.clone())
-                        .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
-                }
-                Ok::<(), DispatchError>(())
-            })?;
-
             TokenOwner::<T>::try_mutate_exists(&signer, listing_id, |maybe_token_owner_details| {
                 if maybe_token_owner_details.is_none() {
                     let initial_funds = Self::create_initial_funds()?;
@@ -791,6 +783,40 @@ pub mod pallet {
                     payment_asset,
                     transfer_price,
                 )?;
+
+                let potential_refund = if property_details.tax_paid_by_developer {
+                    transfer_price
+                } else {
+                    transfer_price
+                        .checked_add(&tax)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?
+                };
+
+                match property_details.investor_funds.get_mut(&signer) {
+                    Some(token_funds) => {
+                        let paid_funds = &mut token_funds.paid_funds;
+                        if let Some(existing) = paid_funds.get_mut(&payment_asset) {
+                            *existing = existing
+                                .checked_add(&potential_refund)
+                                .ok_or(Error::<T>::ArithmeticOverflow)?;
+                        } else {
+                            paid_funds
+                                .try_insert(payment_asset, potential_refund)
+                                .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                        }
+                    }
+                    None => {
+                        let mut paid_funds = BoundedBTreeMap::new();
+                        paid_funds
+                            .try_insert(payment_asset, potential_refund)
+                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+
+                        let new_entry = TokenOwnerFunds { paid_funds };
+                        property_details.investor_funds
+                            .try_insert(signer.clone(), new_entry)
+                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                    }
+                }
 
                 if !property_details.tax_paid_by_developer {
                     Self::update_map(&mut token_owner_details.paid_tax, payment_asset, tax)?;
@@ -823,7 +849,6 @@ pub mod pallet {
                     second_attempt: false,
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
-                Self::token_distribution(listing_id, property_details)?;
             }
             Self::deposit_event(Event::<T>::PropertyTokenBought {
                 listing_index: listing_id,
@@ -837,6 +862,89 @@ pub mod pallet {
                     0u128.into()
                 },
                 payment_asset,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(35)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_property_token_all_token(
+            <T as pallet::Config>::MaxPropertyToken::get(),
+            <T as pallet::Config>::AcceptedAssets::get().len() as u32
+        ))]
+        pub fn claim_property_token(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            ensure!(
+                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                Error::<T>::UserNotWhitelisted
+            );
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
+            ensure!(
+                PropertyLawyer::<T>::get(listing_id).is_some(),
+                Error::<T>::PropertyHasNotBeenSoldYet
+            );
+            let token_details = TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
+            let property_account = Self::property_account_id(property_details.asset_id);
+            let fee_percent = T::MarketplaceFeePercentage::get();
+            ensure!(
+                fee_percent < 100u128.into(),
+                Error::<T>::InvalidFeePercentage
+            );
+
+            // Process each payment asset
+            for (asset, paid_funds) in token_details
+                .paid_funds
+                .iter()
+                .filter(|(_, funds)| !funds.is_zero())
+            {
+                let default = Default::default();
+                let paid_tax = token_details
+                    .paid_tax
+                    .get(asset)
+                    .copied()
+                    .unwrap_or(default);
+                // Calculate investor's fee (1% of paid_funds)
+                let investor_fee = paid_funds
+                    .checked_mul(&fee_percent)
+                    .ok_or(Error::<T>::MultiplyError)?
+                    .checked_div(&100u128.into())
+                    .ok_or(Error::<T>::DivisionError)?;
+
+                // Total amount to unfreeze (paid_funds + fee + tax)
+                let total_investor_amount = paid_funds
+                    .checked_add(&investor_fee)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?
+                    .checked_add(&paid_tax)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                T::ForeignAssetsHolder::release(
+                    *asset,
+                    &MarketplaceHoldReason::Marketplace,
+                    &signer,
+                    total_investor_amount,
+                    Precision::Exact,
+                )?;
+
+                // Transfer funds to property account
+                Self::transfer_funds(&signer, &property_account, total_investor_amount, *asset)?;
+            }
+
+            // Distribute property tokens
+            let token_amount = token_details.token_amount;
+
+            T::PropertyToken::distribute_property_token_to_owner(
+                property_details.asset_id,
+                &signer,
+                token_amount,
+            )?;
+            Self::deposit_event(Event::<T>::PropertyTokenClaimed {
+                listing_id,
+                asset_id: property_details.asset_id,
+                owner: signer,
+                amount: token_amount,
             });
             Ok(())
         }
@@ -980,7 +1088,7 @@ pub mod pallet {
                 Error::<T>::PropertyAlreadySold
             );
 
-            let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id);
+            let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
             ensure!(
                 !token_details.token_amount.is_zero(),
                 Error::<T>::NoTokenBought
@@ -993,14 +1101,6 @@ pub mod pallet {
                 .checked_add(token_details.token_amount)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
 
-            TokenBuyer::<T>::try_mutate(property_details.asset_id, |buyer_list| {
-                let index = buyer_list
-                    .iter()
-                    .position(|x| x == &signer)
-                    .ok_or(Error::<T>::InvalidIndex)?;
-                buyer_list.remove(index);
-                Ok::<(), DispatchError>(())
-            })?;
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
 
             Self::deposit_event(Event::<T>::BuyCancelled {
@@ -1190,11 +1290,10 @@ pub mod pallet {
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_rejected())]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let token_details: TokenOwnerDetails<T> = TokenOwner::<T>::take(&signer, listing_id);
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let property_account = Self::property_account_id(property_details.asset_id);
-            let token_amount = token_details.token_amount;
+            let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(property_details.asset_id, &signer);
             let mut refund_infos =
                 RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
             refund_infos.refund_amount = refund_infos
@@ -1203,24 +1302,11 @@ pub mod pallet {
                 .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
 
             for &asset in T::AcceptedAssets::get().iter() {
-                if let Some(paid_funds) = token_details.paid_funds.get(&asset).copied() {
-                    if paid_funds.is_zero() {
-                        continue;
-                    }
-
-                    let default = Default::default();
-                    let paid_tax = token_details
-                        .paid_tax
-                        .get(&asset)
-                        .copied()
-                        .unwrap_or(default);
-
-                    let refund_amount = paid_funds
-                        .checked_add(&paid_tax)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-
-                    // Transfer USDT funds to owner account
-                    Self::transfer_funds(&property_account, &signer, refund_amount, asset)?;
+                if let Some(investor_funds) = property_details.investor_funds.get(&signer).cloned() {
+                    if let Some(paid_funds) = investor_funds.paid_funds.get(&asset).copied() {
+                        // Transfer USDT funds to owner account
+                        Self::transfer_funds(&property_account, &signer, paid_funds, asset)?;
+                    } 
                 }
             }
             <T as pallet::Config>::LocalCurrency::transfer(
@@ -1284,7 +1370,7 @@ pub mod pallet {
                 Error::<T>::PropertyAlreadySold
             );
 
-            let token_details = TokenOwner::<T>::take(&signer, listing_id);
+            let token_details = TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
             ensure!(
                 !token_details.token_amount.is_zero(),
                 Error::<T>::NoTokenBought,
@@ -1322,16 +1408,7 @@ pub mod pallet {
                     )?;
                 }
                 OngoingObjectListing::<T>::remove(listing_id);
-                TokenBuyer::<T>::remove(listing_id);
             } else {
-                TokenBuyer::<T>::try_mutate(listing_id, |buyers| {
-                    let index = buyers
-                        .iter()
-                        .position(|b| b == &signer)
-                        .ok_or(Error::<T>::InvalidIndex)?;
-                    buyers.swap_remove(index);
-                    Ok::<(), DispatchError>(())
-                })?;
                 OngoingObjectListing::<T>::insert(listing_id, &property_details);
             }
             Self::deposit_event(Event::<T>::ExpiredFundsWithdrawn { signer, listing_id });
@@ -1394,7 +1471,6 @@ pub mod pallet {
                 )?;
             }
             OngoingObjectListing::<T>::remove(listing_id);
-            TokenBuyer::<T>::remove(listing_id);
             Self::deposit_event(Event::<T>::DepositWithdrawnUnsold { signer, listing_id });
             Ok(())
         }
@@ -1618,6 +1694,7 @@ pub mod pallet {
                         listing_id,
                         ProposedSpvLawyer {
                             lawyer: signer.clone(),
+                            asset_id: property_details.asset_id,
                             costs,
                             expiry_block,
                         },
@@ -1664,7 +1741,7 @@ pub mod pallet {
                 proposal_details.expiry_block > current_block_number,
                 Error::<T>::VotingExpired
             );
-            let voting_power = TokenOwner::<T>::get(&signer, listing_id).token_amount;
+            let voting_power = T::PropertyToken::get_token_balance(proposal_details.asset_id, &signer);
             ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
             OngoingLawyerVoting::<T>::try_mutate(listing_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
@@ -2196,10 +2273,6 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
             }
-            let list = TokenBuyer::<T>::take(listing_id);
-            for owner in list {
-                TokenOwner::<T>::remove(&owner, listing_id);
-            }
 
             // Update registered property details to mark SPV as created
             T::PropertyToken::register_spv(property_details.asset_id)?;
@@ -2215,76 +2288,6 @@ pub mod pallet {
             Self::deposit_event(Event::<T>::PropertySuccessfullySold {
                 listing_id,
                 item_index: property_details.item_id,
-                asset_id: property_details.asset_id,
-            });
-            Ok(())
-        }
-
-        fn token_distribution(
-            listing_id: u32,
-            property_details: PropertyListingDetailsType<T>,
-        ) -> DispatchResult {
-            let list = TokenBuyer::<T>::get(listing_id);
-            let property_account = Self::property_account_id(property_details.asset_id);
-            let fee_percent = T::MarketplaceFeePercentage::get();
-            ensure!(
-                fee_percent < 100u128.into(),
-                Error::<T>::InvalidFeePercentage
-            );
-
-            // Process each investor once for all assets and token distribution
-            for owner in list {
-                let token_details = TokenOwner::<T>::get(&owner, listing_id);
-
-                // Process each payment asset
-                for (asset, paid_funds) in token_details
-                    .paid_funds
-                    .iter()
-                    .filter(|(_, funds)| !funds.is_zero())
-                {
-                    let default = Default::default();
-                    let paid_tax = token_details
-                        .paid_tax
-                        .get(asset)
-                        .copied()
-                        .unwrap_or(default);
-                    // Calculate investor's fee (1% of paid_funds)
-                    let investor_fee = paid_funds
-                        .checked_mul(&fee_percent)
-                        .ok_or(Error::<T>::MultiplyError)?
-                        .checked_div(&100u128.into())
-                        .ok_or(Error::<T>::DivisionError)?;
-
-                    // Total amount to unfreeze (paid_funds + fee + tax)
-                    let total_investor_amount = paid_funds
-                        .checked_add(&investor_fee)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?
-                        .checked_add(&paid_tax)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-
-                    T::ForeignAssetsHolder::release(
-                        *asset,
-                        &MarketplaceHoldReason::Marketplace,
-                        &owner,
-                        total_investor_amount,
-                        Precision::Exact,
-                    )?;
-
-                    // Transfer funds to property account
-                    Self::transfer_funds(&owner, &property_account, total_investor_amount, *asset)?;
-                }
-
-                // Distribute property tokens
-                let token_amount = token_details.token_amount;
-
-                T::PropertyToken::distribute_property_token_to_owner(
-                    property_details.asset_id,
-                    &owner,
-                    token_amount,
-                )?;
-            }
-            Self::deposit_event(Event::<T>::PropertyTokenSent {
-                listing_id,
                 asset_id: property_details.asset_id,
             });
             Ok(())
@@ -2326,7 +2329,6 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &spv_lawyer_id, lawyer_costs, *asset)?;
             }
             T::PropertyToken::clear_token_owners(property_details.asset_id)?;
-            TokenBuyer::<T>::remove(listing_id);
             Ok(())
         }
 
@@ -2467,7 +2469,7 @@ pub mod pallet {
             BoundedBTreeMap<
                 u32,
                 <T as pallet::Config>::Balance,
-                <T as pallet::Config>::MaxPropertyToken,
+                <T as pallet::Config>::MaxAcceptedAssets,
             >,
             DispatchError,
         > {
@@ -2483,7 +2485,7 @@ pub mod pallet {
             map: &mut BoundedBTreeMap<
                 u32,
                 <T as pallet::Config>::Balance,
-                <T as pallet::Config>::MaxPropertyToken,
+                <T as pallet::Config>::MaxAcceptedAssets,
             >,
             asset: u32,
             value: <T as pallet::Config>::Balance,
@@ -2503,7 +2505,7 @@ pub mod pallet {
             costs_map: &mut BoundedBTreeMap<
                 u32,
                 <T as pallet::Config>::Balance,
-                <T as pallet::Config>::MaxPropertyToken,
+                <T as pallet::Config>::MaxAcceptedAssets,
             >,
             asset_id_usdt: u32,
             collected_fee_usdt: <T as pallet::Config>::Balance,

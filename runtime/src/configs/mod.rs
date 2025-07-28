@@ -601,11 +601,12 @@ impl pallet_asset_tx_payment::Config for Runtime {
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const MinPropertyTokens: u32 = 100;
-    pub const MaxPropertyTokens: u32 = 100;
+    pub const MaxPropertyTokens: u32 = 250;
     pub const ListingDepositAmount: Balance = 10 * UNIT;
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PropertyFundingAmount: Balance = 10 * UNIT;
     pub const MarketplaceFeePercent: Balance = 1;
+    pub const MaximumAcceptedAssets: u32 = 2;
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const LawyerVotingDuration: BlockNumber = 30;
 }
@@ -628,6 +629,7 @@ impl pallet_marketplace::Config for Runtime {
     type ListingDeposit = ListingDepositAmount;
     type MarketplaceFeePercentage = MarketplaceFeePercent;
     type AcceptedAssets = AcceptedPaymentAssets;
+    type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
 }

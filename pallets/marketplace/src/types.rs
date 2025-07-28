@@ -37,17 +37,17 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub collected_funds: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub collected_tax: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub collected_fees: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub asset_id: u32,
     pub item_id: NftId,
@@ -55,7 +55,13 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub token_amount: u32,
     pub listed_token_amount: u32,
     pub tax_paid_by_developer: bool,
+    pub tax: Permill,
     pub listing_expiry: BlockNumberFor<T>,
+    pub investor_funds: BoundedBTreeMap<
+        AccountIdOf<T>,
+        TokenOwnerFunds<T>,
+        <T as pallet::Config>::MaxPropertyToken,
+    >
 }
 
 /// Infos regarding the listing of a token.
@@ -101,12 +107,12 @@ pub struct PropertyLawyerDetails<T: Config> {
     pub real_estate_developer_lawyer_costs: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub spv_lawyer_costs: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub second_attempt: bool,
 }
@@ -120,12 +126,24 @@ pub struct TokenOwnerDetails<T: Config> {
     pub paid_funds: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
     pub paid_tax: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
-        <T as pallet::Config>::MaxPropertyToken,
+        <T as pallet::Config>::MaxAcceptedAssets,
+    >,
+}
+
+#[derive(
+    Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, DefaultNoBound,
+)]
+#[scale_info(skip_type_params(T))]
+pub struct TokenOwnerFunds<T: Config> {
+    pub paid_funds: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxAcceptedAssets,
     >,
 }
 
@@ -160,6 +178,7 @@ pub struct ProposedDeveloperLawyer<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct ProposedSpvLawyer<T: Config> {
     pub lawyer: AccountIdOf<T>,
+    pub asset_id: u32,
     pub costs: <T as pallet::Config>::Balance,
     pub expiry_block: BlockNumberFor<T>,
 }
