@@ -142,6 +142,11 @@ fn list_and_sell_property<T: Config>(
         1,
         payment_asset,
     ));
+    assert_ok!(Marketplace::<T>::claim_property_token(
+        RawOrigin::Signed(buyer.clone()).into(),
+        listing_id,
+    ));
+    claim_buyers_property_token::<T>(token_amount - 1, listing_id);
     buyer
 }
 
@@ -234,6 +239,19 @@ fn add_buyers_to_listing<T: Config>(
             0,
             1,
             payment_asset_buyers
+        ));
+    }
+}
+
+fn claim_buyers_property_token<T: Config>(
+    buyers: u32,
+    listing_id: ListingId
+) {
+    for i in 1..=buyers {
+        let buyer: T::AccountId = account("buyer", i, i);
+        assert_ok!(Marketplace::<T>::claim_property_token(
+            RawOrigin::Signed(buyer).into(),
+            listing_id
         ));
     }
 }
@@ -350,7 +368,7 @@ mod benchmarks {
         assert!(PropertyLawyer::<T>::get(listing_id).is_none());
     }
 
-    /* #[benchmark]
+    #[benchmark]
     fn buy_property_token_all_token(
         b: Linear<1, { <T as pallet::Config>::MaxPropertyToken::get() }>,
         n: Linear<1, { <T as pallet::Config>::AcceptedAssets::get().len() as u32 }>,
@@ -413,13 +431,89 @@ mod benchmarks {
         );
 
         assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 0);
-        assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
-        let token_owner = TokenOwner::<T>::get(&buyer, listing_id);
+        //assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
+        let token_owner = TokenOwner::<T>::get(&buyer, listing_id).unwrap();
         assert_eq!(token_owner.token_amount, amount);
         let property_lawyer = PropertyLawyer::<T>::get(listing_id).unwrap();
         assert_eq!(
             property_lawyer.real_estate_developer_status,
             DocumentStatus::Pending
+        );
+    }
+    
+    #[benchmark]
+    fn claim_property_token() {
+        let seller: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone());
+
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount = property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &seller,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+
+        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+            BoundedVec::truncate_from(vec![
+                42u8;
+                <T as pallet_nfts::Config>::StringLimit::get() as usize
+            ]);
+
+        let tax_paid_by_developer = true;
+        assert_ok!(Marketplace::<T>::list_object(
+            RawOrigin::Signed(seller).into(),
+            region_id,
+            location,
+            token_price,
+            token_amount,
+            metadata,
+            tax_paid_by_developer,
+        ));
+        let listing_id = 0;
+        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let buyer: T::AccountId = account("buyer", 0, 0);
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::add_to_whitelist(
+            RawOrigin::Root.into(),
+            buyer.clone()
+        ));
+        add_buyers_to_listing::<T>(token_amount - 1, payment_asset, property_price);
+
+        assert_ok!(Marketplace::<T>::buy_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+            1,
+            payment_asset,
+        ));
+        claim_buyers_property_token::<T>(token_amount - 1, listing_id);
+
+        #[extrinsic_call]
+        claim_property_token(
+            RawOrigin::Signed(buyer.clone()),
+            listing_id
+        );
+
+        assert!(TokenOwner::<T>::get(&buyer, listing_id).is_none());
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id).unwrap()
+                .investor_funds
+                .get(&buyer)
+                .clone()
+                .unwrap()
+                .paid_funds
+                .get(&payment_asset),
+            Some(token_price).as_ref()
         );
     }
 
@@ -562,13 +656,13 @@ mod benchmarks {
         ));
 
         assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 1);
-        assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
+        //assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
 
         #[extrinsic_call]
         cancel_property_purchase(RawOrigin::Signed(buyer.clone()), 0);
 
         assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 2);
-        assert!(!TokenBuyer::<T>::get(listing_id).contains(&buyer));
+        //assert!(!TokenBuyer::<T>::get(listing_id).contains(&buyer));
     }
 
     #[benchmark]
@@ -782,6 +876,10 @@ mod benchmarks {
             token_amount,
             payment_asset,
         ));
+        assert_ok!(Marketplace::<T>::claim_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+        ));
 
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
@@ -841,7 +939,7 @@ mod benchmarks {
         #[extrinsic_call]
         withdraw_rejected(RawOrigin::Signed(buyer.clone()), listing_id);
 
-        assert_eq!(TokenOwner::<T>::get(&buyer, listing_id).token_amount, 0);
+        //assert_eq!(TokenOwner::<T>::get(&buyer, listing_id).token_amount, 0);
         assert!(RefundToken::<T>::get(listing_id).is_none());
         assert!(ListingDeposits::<T>::get(listing_id).is_none());
     }
@@ -908,7 +1006,7 @@ mod benchmarks {
         #[extrinsic_call]
         withdraw_expired(RawOrigin::Signed(buyer.clone()), listing_id);
 
-        assert_eq!(TokenOwner::<T>::get(&buyer, listing_id).token_amount, 0);
+        //assert_eq!(TokenOwner::<T>::get(&buyer, listing_id).token_amount, 0);
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
         assert!(ListingDeposits::<T>::get(listing_id).is_none());
     }
@@ -956,7 +1054,7 @@ mod benchmarks {
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
         assert!(ListingDeposits::<T>::get(listing_id).is_none());
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
-        assert_eq!(TokenBuyer::<T>::get(listing_id).len(), 0);
+        //assert_eq!(TokenBuyer::<T>::get(listing_id).len(), 0);
     }
 
     #[benchmark]
@@ -1290,6 +1388,11 @@ mod benchmarks {
             token_amount - a + 1,
             payment_asset,
         ));
+        assert_ok!(Marketplace::<T>::claim_property_token(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            listing_id,
+        ));
+        claim_buyers_property_token::<T>(a - 1, listing_id);
 
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
@@ -1387,7 +1490,7 @@ mod benchmarks {
         );
         assert!(pallet_real_estate_asset::PropertyOwner::<T>::get(asset_id).contains(&new_owner));
         assert!(!pallet_real_estate_asset::PropertyOwner::<T>::get(asset_id).contains(&seller));
-    } */
+    }
 
     impl_benchmark_test_suite!(Marketplace, crate::mock::new_test_ext(), crate::mock::Test);
 }

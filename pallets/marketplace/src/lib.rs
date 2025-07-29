@@ -784,40 +784,6 @@ pub mod pallet {
                     transfer_price,
                 )?;
 
-                let potential_refund = if property_details.tax_paid_by_developer {
-                    transfer_price
-                } else {
-                    transfer_price
-                        .checked_add(&tax)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?
-                };
-
-                match property_details.investor_funds.get_mut(&signer) {
-                    Some(token_funds) => {
-                        let paid_funds = &mut token_funds.paid_funds;
-                        if let Some(existing) = paid_funds.get_mut(&payment_asset) {
-                            *existing = existing
-                                .checked_add(&potential_refund)
-                                .ok_or(Error::<T>::ArithmeticOverflow)?;
-                        } else {
-                            paid_funds
-                                .try_insert(payment_asset, potential_refund)
-                                .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                        }
-                    }
-                    None => {
-                        let mut paid_funds = BoundedBTreeMap::new();
-                        paid_funds
-                            .try_insert(payment_asset, potential_refund)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-
-                        let new_entry = TokenOwnerFunds { paid_funds };
-                        property_details.investor_funds
-                            .try_insert(signer.clone(), new_entry)
-                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-                    }
-                }
-
                 if !property_details.tax_paid_by_developer {
                     Self::update_map(&mut token_owner_details.paid_tax, payment_asset, tax)?;
                 }
@@ -867,10 +833,7 @@ pub mod pallet {
         }
 
         #[pallet::call_index(35)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_property_token_all_token(
-            <T as pallet::Config>::MaxPropertyToken::get(),
-            <T as pallet::Config>::AcceptedAssets::get().len() as u32
-        ))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_property_token())]
         pub fn claim_property_token(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -880,7 +843,7 @@ pub mod pallet {
                 pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
                 Error::<T>::UserNotWhitelisted
             );
-            let property_details =
+            let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(
                 PropertyLawyer::<T>::get(listing_id).is_some(),
@@ -930,19 +893,51 @@ pub mod pallet {
 
                 // Transfer funds to property account
                 Self::transfer_funds(&signer, &property_account, total_investor_amount, *asset)?;
+
+                let investor_net_contribution = paid_funds
+                    .checked_add(&paid_tax)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                match property_details.investor_funds.get_mut(&signer) {
+                    Some(token_funds) => {
+                        let paid_funds = &mut token_funds.paid_funds;
+                        if let Some(existing) = paid_funds.get_mut(&asset) {
+                            *existing = existing
+                                .checked_add(&investor_net_contribution)
+                                .ok_or(Error::<T>::ArithmeticOverflow)?;
+                        } else {
+                            paid_funds
+                                .try_insert(*asset, investor_net_contribution)
+                                .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                        }
+                    }
+                    None => {
+                        let mut paid_funds = BoundedBTreeMap::new();
+                        paid_funds
+                            .try_insert(*asset, investor_net_contribution)
+                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+
+                        let new_entry = TokenOwnerFunds { paid_funds };
+                        property_details.investor_funds
+                            .try_insert(signer.clone(), new_entry)
+                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                    }
+                }
             }
 
             // Distribute property tokens
             let token_amount = token_details.token_amount;
+            let asset_id = property_details.asset_id;
 
             T::PropertyToken::distribute_property_token_to_owner(
-                property_details.asset_id,
+                asset_id,
                 &signer,
                 token_amount,
             )?;
+            OngoingObjectListing::<T>::insert(listing_id, property_details);
             Self::deposit_event(Event::<T>::PropertyTokenClaimed {
                 listing_id,
-                asset_id: property_details.asset_id,
+                asset_id,
                 owner: signer,
                 amount: token_amount,
             });
@@ -1294,6 +1289,7 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(property_details.asset_id, &signer);
+            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
             let mut refund_infos =
                 RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
             refund_infos.refund_amount = refund_infos
@@ -1986,7 +1982,9 @@ pub mod pallet {
         ///
         /// Emits `DocumentsConfirmed` event when succesfful.
         #[pallet::call_index(19)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents())]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents(
+            <T as pallet::Config>::MaxPropertyToken::get(),
+        ))]
         pub fn lawyer_confirm_documents(
             origin: OriginFor<T>,
             listing_id: ListingId,
