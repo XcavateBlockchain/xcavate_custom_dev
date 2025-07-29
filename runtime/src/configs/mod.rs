@@ -651,6 +651,7 @@ parameter_types! {
     pub const MaxProperty: u32 = 1000;
     pub const MaxLettingAgent: u32 = 100;
     pub const MaxLocation: u32 = 100;
+    pub const LettingAgentVotingDuration: BlockNumber = 30;
 }
 
 /// Configure the pallet-property-management in pallets/property-management.
@@ -669,6 +670,7 @@ impl pallet_property_management::Config for Runtime {
     type MaxLocations = MaxLocation;
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
+    type LettingAgentVotingTime = LettingAgentVotingDuration;
 }
 
 parameter_types! {

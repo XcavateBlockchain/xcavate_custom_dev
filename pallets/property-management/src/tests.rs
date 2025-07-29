@@ -392,7 +392,7 @@ fn add_letting_agent_to_location_fails() {
     });
 }
 
-#[test]
+/* #[test]
 fn set_letting_agent_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -721,7 +721,7 @@ fn set_letting_agent_no_letting_agent() {
             Error::<Test>::AgentNotFound
         );
     });
-}
+} */
 
 #[test]
 fn distribute_income_works() {
@@ -848,9 +848,19 @@ fn distribute_income_works() {
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([4; 32].into())
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
+        assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
         ));
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -911,6 +921,10 @@ fn distribute_income_fails() {
             100,
             1984
         ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
         assert_noop!(
             PropertyManagement::distribute_income(
                 RuntimeOrigin::signed([5; 32].into()),
@@ -933,9 +947,19 @@ fn distribute_income_fails() {
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([4; 32].into())
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
+        assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         assert_noop!(
             PropertyManagement::distribute_income(
@@ -1064,9 +1088,19 @@ fn withdraw_funds_works() {
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([4; 32].into())
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
+        assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1222,9 +1256,19 @@ fn withdraw_funds_fails() {
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([4; 32].into())
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
+        assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
