@@ -23,7 +23,10 @@ use frame_support::{
     PalletId,
 };
 
-use frame_support::sp_runtime::{traits::{AccountIdConversion, Zero}, Saturating};
+use frame_support::sp_runtime::{
+    traits::{AccountIdConversion, Zero},
+    Saturating,
+};
 
 use codec::Codec;
 
@@ -80,7 +83,6 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct ProposedLettingAgent<T: Config> {
         pub letting_agent: AccountIdOf<T>,
-        pub asset_id: u32,
         pub expiry_block: BlockNumberFor<T>,
     }
 
@@ -226,16 +228,24 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// A new letting agent got set.
-        LettingAgentAdded { region: u16, who: T::AccountId },
+        LettingAgentAdded {
+            region: u16,
+            who: T::AccountId,
+        },
         /// A letting agent deposited the necessary funds.
-        Deposited { who: T::AccountId },
+        Deposited {
+            who: T::AccountId,
+        },
         /// A letting agent has been added to a location.
         LettingAgentAddedToLocation {
             who: T::AccountId,
             location: LocationId<T>,
         },
         /// A letting agent has been added to a property.
-        LettingAgentSet { asset_id: u32, who: T::AccountId },
+        LettingAgentSet {
+            asset_id: u32,
+            who: T::AccountId,
+        },
         /// The rental income has been distributed.
         IncomeDistributed {
             asset_id: u32,
@@ -260,7 +270,7 @@ pub mod pallet {
         LettingAgentRejected {
             asset_id: u32,
             letting_agent: T::AccountId,
-        }
+        },
     }
 
     #[pallet::error]
@@ -319,6 +329,8 @@ pub mod pallet {
         UserNotWhitelisted,
         /// The voting is still ongoing.
         VotingStillOngoing,
+        /// There is already a letting agent proposal ongoing.
+        LettingAgentProposalOngoing,
     }
 
     #[pallet::call]
@@ -459,16 +471,20 @@ pub mod pallet {
                 LettingStorage::<T>::get(asset_id).is_none(),
                 Error::<T>::LettingAgentAlreadySet
             );
-            LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
+            ensure!(
+                !LettingAgentProposal::<T>::contains_key(asset_id),
+                Error::<T>::LettingAgentProposalOngoing
+            );
+            let letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
+            ensure!(letting_info.deposited, Error::<T>::NotDeposited);
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::LettingAgentVotingTime::get());
             LettingAgentProposal::<T>::insert(
                 asset_id,
                 ProposedLettingAgent {
-                        letting_agent: signer.clone(),
-                        asset_id,
-                        expiry_block,
+                    letting_agent: signer.clone(),
+                    expiry_block,
                 },
             );
             OngoingLettingAgentVoting::<T>::insert(
@@ -493,8 +509,8 @@ pub mod pallet {
             vote: Vote,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let proposal_details =
-                LettingAgentProposal::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let proposal_details = LettingAgentProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,
@@ -549,19 +565,19 @@ pub mod pallet {
                 Error::<T>::UserNotWhitelisted
             );
 
-            let proposal =
-                LettingAgentProposal::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let proposal = LettingAgentProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal.expiry_block <= current_block_number,
                 Error::<T>::VotingStillOngoing
             );
 
-            let voting_result =
-                OngoingLettingAgentVoting::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let voting_result = OngoingLettingAgentVoting::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
 
             if voting_result.yes_voting_power > voting_result.no_voting_power {
-                LettingInfo::<T>::try_mutate(&proposal.letting_agent, |maybe_letting_info| {
+                LettingInfo::<T>::try_mutate(proposal.letting_agent.clone(), |maybe_letting_info| {
                     let letting_info = maybe_letting_info
                         .as_mut()
                         .ok_or(Error::<T>::AgentNotFound)?;
@@ -569,17 +585,24 @@ pub mod pallet {
                         LettingStorage::<T>::get(asset_id).is_none(),
                         Error::<T>::LettingAgentAlreadySet
                     );
-                    LettingStorage::<T>::insert(asset_id, proposal.letting_agent.clone());
-                    letting_info
-                        .assigned_properties
-                        .try_push(asset_id)
-                        .map_err(|_| Error::<T>::TooManyAssignedProperties)?;
+                    match letting_info.assigned_properties.try_push(asset_id) {
+                        Ok(()) => {
+                            LettingStorage::<T>::insert(asset_id, proposal.letting_agent.clone());
+                            Self::deposit_event(Event::<T>::LettingAgentSet {
+                                asset_id,
+                                who: proposal.letting_agent,
+                            });
+                        }
+                        Err(_) => {
+                            Self::deposit_event(Event::LettingAgentRejected {
+                                asset_id,
+                                letting_agent: proposal.letting_agent,
+                            });
+                        }
+                    }
                     Ok::<(), DispatchError>(())
                 })?;
-                Self::deposit_event(Event::<T>::LettingAgentSet {
-                    asset_id,
-                    who: proposal.letting_agent,
-                });
+
             } else {
                 Self::deposit_event(Event::LettingAgentRejected {
                     asset_id,

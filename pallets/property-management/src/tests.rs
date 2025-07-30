@@ -6,7 +6,10 @@ use frame_support::{
     traits::{OnFinalize, OnInitialize},
 };
 
-use crate::{InvestorFunds, LettingInfo, LettingStorage};
+use crate::{
+    InvestorFunds, LettingAgentProposal, LettingInfo, LettingStorage, OngoingLettingAgentVoting,
+    UserLettingAgentVote,
+};
 
 use sp_runtime::{Permill, TokenError};
 
@@ -392,8 +395,8 @@ fn add_letting_agent_to_location_fails() {
     });
 }
 
-/* #[test]
-fn set_letting_agent_works() {
+#[test]
+fn letting_agent_propose_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -429,33 +432,280 @@ fn set_letting_agent_works() {
             100,
             1984
         ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10],
+            [4; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([4; 32].into())
+        ));
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_eq!(
+            LettingAgentProposal::<Test>::get(0).unwrap().letting_agent,
+            [4; 32].into()
+        );
+        assert_eq!(
+            OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 0,
+                no_voting_power: 0,
+            },
+        );
+    });
+}
+
+#[test]
+fn letting_agent_propose_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
+            Error::<Test>::NoObjectFound
+        );
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
-            1_000,
+            10_000,
             100,
             bvec![22, 22],
             false
         ));
         assert_ok!(Marketplace::buy_property_token(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             100,
             1984
         ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10],
+            [4; 32].into(),
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
+            Error::<Test>::NotDeposited
+        );
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([4; 32].into())
+        ));
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
+            Error::<Test>::LettingAgentProposalOngoing
+        );
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
+            Error::<Test>::LettingAgentAlreadySet
+        );
+    });
+}
+
+#[test]
+fn vote_on_letting_agent_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
-            1_000,
+            10_000,
             100,
             bvec![22, 22],
             false
         ));
         assert_ok!(Marketplace::buy_property_token(
             RuntimeOrigin::signed([1; 32].into()),
-            2,
+            0,
+            70,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10],
+            [4; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([4; 32].into())
+        ));
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_eq!(
+            OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 0,
+                no_voting_power: 0,
+            },
+        );
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        assert_eq!(
+            OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 70,
+                no_voting_power: 0,
+            },
+        );
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No,
+        ));
+        assert_eq!(
+            OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 0,
+                no_voting_power: 70,
+            },
+        );
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        assert_eq!(
+            OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 30,
+                no_voting_power: 70,
+            },
+        );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
+            crate::Vote::No
+        );
+    });
+}
+
+#[test]
+fn vote_on_letting_agent_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_noop!(
+            PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+            ),
+            Error::<Test>::NoLettingAgentProposed
+        );
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
             100,
             1984
         ));
@@ -463,7 +713,147 @@ fn set_letting_agent_works() {
             RuntimeOrigin::signed([6; 32].into()),
             3,
             bvec![10, 10],
-            [2; 32].into(),
+            [4; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([4; 32].into())
+        ));
+        assert_noop!(
+            PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+            ),
+            Error::<Test>::NoLettingAgentProposed
+        );
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+            ),
+            Error::<Test>::NoPermission
+        );
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([2; 32].into()),
+                0,
+                crate::Vote::Yes,
+            ),
+            Error::<Test>::NoPermission
+        );
+        run_to_block(91);
+        assert_noop!(
+            PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+            ),
+            Error::<Test>::VotingExpired
+        );
+    });
+}
+
+#[test]
+fn finalize_letting_agent_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [6; 32].into()
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [0; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [1; 32].into()
+        ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            1_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::list_object(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            1_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            70,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            100,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            2,
+            100,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            2
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
             RuntimeOrigin::signed([6; 32].into()),
@@ -478,51 +868,66 @@ fn set_letting_agent_works() {
             [4; 32].into(),
         ));
         assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([2; 32].into())
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([3; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([4; 32].into())
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
-            RuntimeOrigin::signed([2; 32].into()),
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
             0
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
-            RuntimeOrigin::signed([3; 32].into()),
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        run_to_block(91);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([4; 32].into())
+                .unwrap()
+                .assigned_properties
+                .len(),
+            1
+        );
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
             1
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
-            RuntimeOrigin::signed([4; 32].into()),
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            crate::Vote::Yes,
+        ));
+        run_to_block(121);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+        ));
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([3; 32].into()),
             2
         ));
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10],
-            1_000,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::buy_property_token(
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
-            3,
-            100,
-            1984
+            2,
+            crate::Vote::Yes,
         ));
-        assert_ok!(PropertyManagement::set_letting_agent(
+        run_to_block(151);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
-            3
+            2,
         ));
-        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-        assert_eq!(LettingStorage::<Test>::get(1).unwrap(), [3; 32].into());
-        assert_eq!(LettingStorage::<Test>::get(2).unwrap(), [4; 32].into());
-        assert_eq!(LettingStorage::<Test>::get(3).unwrap(), [2; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(1).unwrap(), [4; 32].into());
+        assert_eq!(LettingStorage::<Test>::get(2).unwrap(), [3; 32].into());
         assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([2; 32].into())
+            LettingInfo::<Test>::get::<AccountId>([4; 32].into())
                 .unwrap()
                 .assigned_properties
                 .len(),
@@ -535,152 +940,17 @@ fn set_letting_agent_works() {
                 .len(),
             1
         );
+        assert!(LettingAgentProposal::<Test>::get(0).is_none());
+        assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
         assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([4; 32].into())
-                .unwrap()
-                .assigned_properties
-                .len(),
-            1
+            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            None
         );
     });
 }
 
 #[test]
-fn set_letting_agent_fails() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [0; 32].into()
-        ));
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [0; 32].into()
-        ));
-        assert_ok!(Regions::propose_new_region(
-            RuntimeOrigin::signed([0; 32].into()),
-            RegionIdentifier::Japan
-        ));
-        assert_ok!(Regions::vote_on_region_proposal(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            pallet_regions::Vote::Yes
-        ));
-        run_to_block(31);
-        assert_ok!(Regions::bid_on_region(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            100_000
-        ));
-        run_to_block(61);
-        assert_ok!(Regions::create_new_region(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            30,
-            Permill::from_percent(3)
-        ));
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10]
-        ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
-            RuntimeOrigin::root(),
-            [1; 32].into()
-        ));
-        assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10],
-            [0; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([0; 32].into())
-        ));
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_889_900);
-        assert_noop!(
-            PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0),
-            Error::<Test>::NoObjectFound
-        );
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10],
-            100,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            0,
-            100,
-            1984
-        ));
-        assert_ok!(PropertyManagement::set_letting_agent(
-            RuntimeOrigin::signed([0; 32].into()),
-            0
-        ));
-        assert_noop!(
-            PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0),
-            Error::<Test>::LettingAgentAlreadySet
-        );
-        for x in 1..100 {
-            assert_ok!(Marketplace::list_object(
-                RuntimeOrigin::signed([0; 32].into()),
-                3,
-                bvec![10, 10],
-                1_000,
-                100,
-                bvec![22, 22],
-                false
-            ));
-            assert_ok!(XcavateWhitelist::add_to_whitelist(
-                RuntimeOrigin::root(),
-                [(x + 1); 32].into()
-            ));
-            Balances::make_free_balance_be(&[x + 1; 32].into(), 100_000);
-            assert_ok!(ForeignAssets::mint(
-                RuntimeOrigin::signed([0; 32].into()),
-                1984.into(),
-                sp_runtime::MultiAddress::Id([(x + 1); 32].into()),
-                1_000_000,
-            ));
-            assert_ok!(Marketplace::buy_property_token(
-                RuntimeOrigin::signed([(x + 1); 32].into()),
-                (x as u32).into(),
-                100,
-                1984
-            ));
-            assert_ok!(PropertyManagement::set_letting_agent(
-                RuntimeOrigin::signed([0; 32].into()),
-                x.into()
-            ));
-        }
-        assert_ok!(Marketplace::list_object(
-            RuntimeOrigin::signed([0; 32].into()),
-            3,
-            bvec![10, 10],
-            10_000,
-            100,
-            bvec![22, 22],
-            false
-        ));
-        assert_ok!(Marketplace::buy_property_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            100,
-            100,
-            1984
-        ));
-        assert_noop!(
-            PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 100),
-            Error::<Test>::TooManyAssignedProperties
-        );
-    });
-}
-
-#[test]
-fn set_letting_agent_no_letting_agent() {
+fn finalize_letting_agent_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -701,6 +971,10 @@ fn set_letting_agent_no_letting_agent() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
+        assert_ok!(XcavateWhitelist::add_to_whitelist(
+            RuntimeOrigin::root(),
+            [2; 32].into()
+        ));
         assert_ok!(Marketplace::list_object(
             RuntimeOrigin::signed([0; 32].into()),
             3,
@@ -713,15 +987,117 @@ fn set_letting_agent_no_letting_agent() {
         assert_ok!(Marketplace::buy_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            20,
+            70,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            30,
             1984
         ));
         assert_noop!(
-            PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0),
-            Error::<Test>::AgentNotFound
+            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
+            Error::<Test>::NoLettingAgentProposed
+        );
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10],
+            [4; 32].into(),
+        ));
+        assert_ok!(PropertyManagement::letting_agent_deposit(
+            RuntimeOrigin::signed([4; 32].into())
+        ));
+        assert_noop!(
+            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
+            Error::<Test>::NoLettingAgentProposed
+        );
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+        ));
+        assert_noop!(
+            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
+            Error::<Test>::VotingStillOngoing
+        );
+        run_to_block(91);
+        assert_noop!(
+            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([3; 32].into()), 0,),
+            Error::<Test>::UserNotWhitelisted
+        );
+        for x in 1..=MaxProperty::get(){
+            assert_ok!(Marketplace::list_object(
+                RuntimeOrigin::signed([0; 32].into()),
+                3,
+                bvec![10, 10],
+                1_000,
+                100,
+                bvec![22, 22],
+                false
+            ));
+            assert_ok!(Marketplace::buy_property_token(
+                RuntimeOrigin::signed([0; 32].into()),
+                x,
+                100,
+                1984
+            ));
+            assert_ok!(Marketplace::claim_property_token(
+                RuntimeOrigin::signed([0; 32].into()),
+                x
+            ));
+            assert_ok!(PropertyManagement::letting_agent_propose(
+                RuntimeOrigin::signed([4; 32].into()),
+                x
+            ));
+            assert_ok!(PropertyManagement::vote_on_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                x,
+                crate::Vote::Yes,
+            ));
+            let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+            frame_system::Pallet::<Test>::set_block_number(expiry);
+            assert_ok!(PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([0; 32].into()), x));
+        }
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([4; 32].into())
+                .unwrap()
+                .assigned_properties
+                .len(),
+            MaxProperty::get() as usize
+        );
+        assert_ok!(
+            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([1; 32].into()), 0),
+        );
+        assert!(LettingStorage::<Test>::get(0).is_none());
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([4; 32].into())
+                .unwrap()
+                .assigned_properties
+                .len(),
+            MaxProperty::get() as usize
+        );
+        assert!(LettingAgentProposal::<Test>::get(0).is_none());
+        assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            None
         );
     });
-} */
+}
 
 #[test]
 fn distribute_income_works() {

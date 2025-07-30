@@ -901,7 +901,7 @@ pub mod pallet {
                 match property_details.investor_funds.get_mut(&signer) {
                     Some(token_funds) => {
                         let paid_funds = &mut token_funds.paid_funds;
-                        if let Some(existing) = paid_funds.get_mut(&asset) {
+                        if let Some(existing) = paid_funds.get_mut(asset) {
                             *existing = existing
                                 .checked_add(&investor_net_contribution)
                                 .ok_or(Error::<T>::ArithmeticOverflow)?;
