@@ -243,10 +243,7 @@ fn add_buyers_to_listing<T: Config>(
     }
 }
 
-fn claim_buyers_property_token<T: Config>(
-    buyers: u32,
-    listing_id: ListingId
-) {
+fn claim_buyers_property_token<T: Config>(buyers: u32, listing_id: ListingId) {
     for i in 1..=buyers {
         let buyer: T::AccountId = account("buyer", i, i);
         assert_ok!(Marketplace::<T>::claim_property_token(
@@ -260,9 +257,7 @@ fn claim_buyers_property_token<T: Config>(
 mod benchmarks {
     use super::*;
     #[benchmark]
-    fn list_object(
-        m: Linear<0, { <T as pallet_nfts::Config>::StringLimit::get() }>,
-    ) {
+    fn list_object(m: Linear<0, { <T as pallet_nfts::Config>::StringLimit::get() }>) {
         let signer: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(signer.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
@@ -293,7 +288,12 @@ mod benchmarks {
 
         let listing_id = 0;
         assert!(OngoingObjectListing::<T>::contains_key(listing_id));
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, token_amount);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            token_amount
+        );
         assert_eq!(ListingDeposits::<T>::get(listing_id).unwrap().0, signer);
         let listing = OngoingObjectListing::<T>::get(listing_id).unwrap();
         assert_eq!(listing.token_price, token_price);
@@ -362,7 +362,12 @@ mod benchmarks {
             payment_asset,
         );
 
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, token_amount - amount - b);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            token_amount - amount - b
+        );
         let token_owner = TokenOwner::<T>::get(&buyer, listing_id).unwrap();
         assert_eq!(token_owner.token_amount, amount);
         assert!(PropertyLawyer::<T>::get(listing_id).is_none());
@@ -430,7 +435,12 @@ mod benchmarks {
             payment_asset,
         );
 
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 0);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            0
+        );
         //assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
         let token_owner = TokenOwner::<T>::get(&buyer, listing_id).unwrap();
         assert_eq!(token_owner.token_amount, amount);
@@ -440,7 +450,7 @@ mod benchmarks {
             DocumentStatus::Pending
         );
     }
-    
+
     #[benchmark]
     fn claim_property_token() {
         let seller: T::AccountId = create_whitelisted_user::<T>();
@@ -449,7 +459,8 @@ mod benchmarks {
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
         let property_price = token_price.saturating_mul((token_amount as u128).into());
-        let deposit_amount = property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        let deposit_amount =
+            property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
             &seller,
             deposit_amount.saturating_mul(20u32.into())
@@ -499,14 +510,12 @@ mod benchmarks {
         claim_buyers_property_token::<T>(token_amount - 1, listing_id);
 
         #[extrinsic_call]
-        claim_property_token(
-            RawOrigin::Signed(buyer.clone()),
-            listing_id
-        );
+        claim_property_token(RawOrigin::Signed(buyer.clone()), listing_id);
 
         assert!(TokenOwner::<T>::get(&buyer, listing_id).is_none());
         assert_eq!(
-            OngoingObjectListing::<T>::get(listing_id).unwrap()
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
                 .investor_funds
                 .get(&buyer)
                 .clone()
@@ -655,13 +664,23 @@ mod benchmarks {
             payment_asset,
         ));
 
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 1);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            1
+        );
         //assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
 
         #[extrinsic_call]
         cancel_property_purchase(RawOrigin::Signed(buyer.clone()), 0);
 
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 2);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            2
+        );
         //assert!(!TokenBuyer::<T>::get(listing_id).contains(&buyer));
     }
 
@@ -1332,16 +1351,15 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn lawyer_confirm_documents(
-        a: Linear<1, { <T as pallet::Config>::MaxPropertyToken::get() }>,
-    ) {
+    fn lawyer_confirm_documents(a: Linear<1, { <T as pallet::Config>::MaxPropertyToken::get() }>) {
         let seller: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
 
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
         let property_price = token_price.saturating_mul((token_amount as u128).into());
-        let deposit_amount = property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        let deposit_amount =
+            property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
             &seller,
             deposit_amount.saturating_mul(20u32.into())
@@ -1450,7 +1468,7 @@ mod benchmarks {
         assert!(PropertyLawyer::<T>::get(listing_id).is_none());
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
     }
- 
+
     #[benchmark]
     fn send_property_token() {
         let seller: T::AccountId = create_whitelisted_user::<T>();

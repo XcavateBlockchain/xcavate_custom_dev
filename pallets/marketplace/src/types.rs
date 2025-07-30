@@ -61,7 +61,7 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
         AccountIdOf<T>,
         TokenOwnerFunds<T>,
         <T as pallet::Config>::MaxPropertyToken,
-    >
+    >,
 }
 
 /// Infos regarding the listing of a token.

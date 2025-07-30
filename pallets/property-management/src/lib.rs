@@ -459,8 +459,8 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(35)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::set_letting_agent())]
+        #[pallet::call_index(3)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_propose())]
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -501,8 +501,8 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(36)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::call_index(4)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent())]
         pub fn vote_on_letting_agent(
             origin: OriginFor<T>,
             asset_id: u32,
@@ -556,8 +556,8 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(37)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::call_index(5)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_letting_agent())]
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
@@ -577,32 +577,37 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
 
             if voting_result.yes_voting_power > voting_result.no_voting_power {
-                LettingInfo::<T>::try_mutate(proposal.letting_agent.clone(), |maybe_letting_info| {
-                    let letting_info = maybe_letting_info
-                        .as_mut()
-                        .ok_or(Error::<T>::AgentNotFound)?;
-                    ensure!(
-                        LettingStorage::<T>::get(asset_id).is_none(),
-                        Error::<T>::LettingAgentAlreadySet
-                    );
-                    match letting_info.assigned_properties.try_push(asset_id) {
-                        Ok(()) => {
-                            LettingStorage::<T>::insert(asset_id, proposal.letting_agent.clone());
-                            Self::deposit_event(Event::<T>::LettingAgentSet {
-                                asset_id,
-                                who: proposal.letting_agent,
-                            });
+                LettingInfo::<T>::try_mutate(
+                    proposal.letting_agent.clone(),
+                    |maybe_letting_info| {
+                        let letting_info = maybe_letting_info
+                            .as_mut()
+                            .ok_or(Error::<T>::AgentNotFound)?;
+                        ensure!(
+                            LettingStorage::<T>::get(asset_id).is_none(),
+                            Error::<T>::LettingAgentAlreadySet
+                        );
+                        match letting_info.assigned_properties.try_push(asset_id) {
+                            Ok(()) => {
+                                LettingStorage::<T>::insert(
+                                    asset_id,
+                                    proposal.letting_agent.clone(),
+                                );
+                                Self::deposit_event(Event::<T>::LettingAgentSet {
+                                    asset_id,
+                                    who: proposal.letting_agent,
+                                });
+                            }
+                            Err(_) => {
+                                Self::deposit_event(Event::LettingAgentRejected {
+                                    asset_id,
+                                    letting_agent: proposal.letting_agent,
+                                });
+                            }
                         }
-                        Err(_) => {
-                            Self::deposit_event(Event::LettingAgentRejected {
-                                asset_id,
-                                letting_agent: proposal.letting_agent,
-                            });
-                        }
-                    }
-                    Ok::<(), DispatchError>(())
-                })?;
-
+                        Ok::<(), DispatchError>(())
+                    },
+                )?;
             } else {
                 Self::deposit_event(Event::LettingAgentRejected {
                     asset_id,
@@ -625,7 +630,7 @@ pub mod pallet {
         /// - `amount`: The amount of funds that should be distributed.
         ///
         /// Emits `IncomeDistributed` event when succesfful.
-        #[pallet::call_index(4)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::distribute_income())]
         pub fn distribute_income(
             origin: OriginFor<T>,
@@ -684,8 +689,8 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Emits `WithdrawFunds` event when succesfful.
-        #[pallet::call_index(5)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+        #[pallet::call_index(7)]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
         pub fn withdraw_funds(
             origin: OriginFor<T>,
             asset_id: u32,

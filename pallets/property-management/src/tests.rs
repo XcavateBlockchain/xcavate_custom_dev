@@ -1039,7 +1039,7 @@ fn finalize_letting_agent_fails() {
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([3; 32].into()), 0,),
             Error::<Test>::UserNotWhitelisted
         );
-        for x in 1..=MaxProperty::get(){
+        for x in 1..=MaxProperty::get() {
             assert_ok!(Marketplace::list_object(
                 RuntimeOrigin::signed([0; 32].into()),
                 3,
@@ -1068,9 +1068,13 @@ fn finalize_letting_agent_fails() {
                 x,
                 crate::Vote::Yes,
             ));
-            let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+            let expiry =
+                frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
             frame_system::Pallet::<Test>::set_block_number(expiry);
-            assert_ok!(PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([0; 32].into()), x));
+            assert_ok!(PropertyManagement::finalize_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                x
+            ));
         }
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
@@ -1079,9 +1083,10 @@ fn finalize_letting_agent_fails() {
                 .len(),
             MaxProperty::get() as usize
         );
-        assert_ok!(
-            PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([1; 32].into()), 0),
-        );
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ),);
         assert!(LettingStorage::<Test>::get(0).is_none());
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())

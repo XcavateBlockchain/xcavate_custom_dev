@@ -11,7 +11,7 @@ use frame_support::{
 
 use crate::{
     ChallengeRoundsExpiring, Challenges, OngoingChallengeVotes, OngoingProposalVotes,
-    OngoingSaleProposalVotes, PropertySale, Proposals, Reserve, SaleAuctions, PropertySaleFunds,
+    OngoingSaleProposalVotes, PropertySale, PropertySaleFunds, Proposals, Reserve, SaleAuctions,
     SaleProposals, UserProposalVote, UserSaleProposalVote,
 };
 
@@ -191,8 +191,8 @@ fn propose_works() {
             1984
         ));
         assert_ok!(Marketplace::claim_property_token(
-           RuntimeOrigin::signed([1; 32].into()),
-           0, 
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -223,8 +223,8 @@ fn proposal_with_low_amount_works() {
             1984
         ));
         assert_ok!(Marketplace::claim_property_token(
-           RuntimeOrigin::signed([1; 32].into()),
-           0, 
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         setting_letting_agent([4; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
@@ -274,8 +274,8 @@ fn propose_fails() {
             Error::<Test>::NoLettingAgentFound
         );
         assert_ok!(Marketplace::claim_property_token(
-           RuntimeOrigin::signed([1; 32].into()),
-           0, 
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         setting_letting_agent([0; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
@@ -305,7 +305,7 @@ fn challenge_against_letting_agent_works() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));        
+        ));
         lawyer_process();
         setting_letting_agent([0; 32].into(), [1; 32].into());
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
@@ -330,7 +330,7 @@ fn challenge_against_letting_agent_fails() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
@@ -402,15 +402,15 @@ fn vote_on_proposal_works() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([0; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
@@ -505,7 +505,7 @@ fn proposal_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Regions::register_lawyer(
             RuntimeOrigin::signed([6; 32].into()),
             3,
@@ -609,7 +609,7 @@ fn proposal_pass_2() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [4; 32].into()
@@ -665,7 +665,7 @@ fn proposal_not_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(XcavateWhitelist::add_to_whitelist(
             RuntimeOrigin::root(),
             [4; 32].into()
@@ -737,11 +737,11 @@ fn proposal_not_pass_2() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([4; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
@@ -801,7 +801,7 @@ fn vote_on_proposal_fails() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([0; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
@@ -891,15 +891,15 @@ fn vote_on_challenge_works() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([0; 32].into(), [1; 32].into());
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
@@ -983,11 +983,11 @@ fn challenge_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
@@ -998,7 +998,8 @@ fn challenge_pass() {
             0,
             pallet_property_management::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         frame_system::Pallet::<Test>::set_block_number(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1025,7 +1026,8 @@ fn challenge_pass() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
         assert_eq!(
@@ -1053,7 +1055,8 @@ fn challenge_pass() {
         ));
         assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 900);
         assert_eq!(Balances::total_issuance(), 57_464_901);
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -1122,7 +1125,8 @@ fn challenge_pass() {
             0,
             pallet_property_management::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1200,11 +1204,11 @@ fn challenge_does_not_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1215,7 +1219,8 @@ fn challenge_does_not_pass() {
             0,
             pallet_property_management::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         frame_system::Pallet::<Test>::set_block_number(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1237,7 +1242,8 @@ fn challenge_does_not_pass() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
@@ -1250,7 +1256,8 @@ fn challenge_does_not_pass() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         System::assert_last_event(
             Event::ChallengeThresHoldNotReached {
@@ -1310,11 +1317,11 @@ fn challenge_pass_only_one_agent() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1325,7 +1332,8 @@ fn challenge_pass_only_one_agent() {
             0,
             pallet_property_management::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         frame_system::Pallet::<Test>::set_block_number(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1347,7 +1355,8 @@ fn challenge_pass_only_one_agent() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
@@ -1365,7 +1374,8 @@ fn challenge_pass_only_one_agent() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1402,7 +1412,7 @@ fn challenge_not_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
@@ -1422,7 +1432,8 @@ fn challenge_not_pass() {
             crate::Vote::No
         ));
         assert_eq!(Challenges::<Test>::get(0).is_some(), true);
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         System::assert_last_event(Event::ChallengeRejected { asset_id: 0 }.into());
         assert_eq!(Challenges::<Test>::get(0).is_none(), true);
@@ -1443,7 +1454,7 @@ fn vote_on_challenge_fails() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
@@ -1538,15 +1549,15 @@ fn different_proposals() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([4; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
@@ -1577,7 +1588,8 @@ fn different_proposals() {
             UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
             true
         );
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(
             UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
@@ -1606,7 +1618,8 @@ fn different_proposals() {
             1,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
@@ -1635,7 +1648,8 @@ fn different_proposals() {
             2,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
@@ -1676,7 +1690,8 @@ fn different_proposals() {
             3,
             crate::Vote::No
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 300);
         assert_eq!(
@@ -1705,7 +1720,7 @@ fn propose_property_sale_works() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -1762,7 +1777,7 @@ fn propose_property_sale_fails() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
@@ -1787,7 +1802,8 @@ fn propose_property_sale_fails() {
             0,
             crate::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_noop!(
@@ -1831,15 +1847,15 @@ fn vote_on_property_sale_works() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -1979,15 +1995,15 @@ fn auction_starts() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -2018,7 +2034,8 @@ fn auction_starts() {
                 .yes_voting_power,
             95
         );
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
@@ -2067,15 +2084,15 @@ fn proposal_does_not_pass() {
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([1; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
             0
-        ));  
+        ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([3; 32].into()),
             0
-        ));  
+        ));
         lawyer_process();
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
@@ -2106,7 +2123,8 @@ fn proposal_does_not_pass() {
                 .yes_voting_power,
             85
         );
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
         System::assert_last_event(Event::PropertySaleProposalRejected { asset_id: 0 }.into());

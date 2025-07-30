@@ -412,9 +412,9 @@ pub mod pallet {
     pub type PropertySaleFunds<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        u32, 
+        u32,
         Blake2_128Concat,
-        u32, 
+        u32,
         <T as pallet::Config>::Balance,
         ValueQuery,
     >;
@@ -1456,22 +1456,34 @@ pub mod pallet {
                     PropertySaleFunds::<T>::remove(asset_id, payment_asset);
                 } else {
                     PropertySaleFunds::<T>::insert(asset_id, payment_asset, property_sale_amount);
-                }           
+                }
             } else {
-                for (payment_asset, mut funds_amount) in PropertySaleFunds::<T>::iter_prefix(asset_id) {
+                for (payment_asset, mut funds_amount) in
+                    PropertySaleFunds::<T>::iter_prefix(asset_id)
+                {
                     if funds_amount >= owner_share {
-                        Self::transfer_funds(&property_account, &signer, owner_share, payment_asset)?;
+                        Self::transfer_funds(
+                            &property_account,
+                            &signer,
+                            owner_share,
+                            payment_asset,
+                        )?;
                         funds_amount = funds_amount
                             .checked_sub(&owner_share)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;                 
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
                         if funds_amount.is_zero() {
                             PropertySaleFunds::<T>::remove(asset_id, payment_asset);
                         } else {
                             PropertySaleFunds::<T>::insert(asset_id, payment_asset, funds_amount);
-                        }        
+                        }
                         break;
                     } else {
-                        Self::transfer_funds(&property_account, &signer, funds_amount, payment_asset)?;
+                        Self::transfer_funds(
+                            &property_account,
+                            &signer,
+                            funds_amount,
+                            payment_asset,
+                        )?;
                         owner_share = owner_share
                             .checked_sub(&funds_amount)
                             .ok_or(Error::<T>::ArithmeticUnderflow)?;

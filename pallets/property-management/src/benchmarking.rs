@@ -6,7 +6,6 @@ use super::*;
 use crate::Pallet as PropertyManagement;
 use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
-/* use pallet_marketplace::Pallet as Marketplace; */
 use frame_support::sp_runtime::{Permill, Saturating};
 use frame_support::traits::fungible::Mutate;
 use frame_support::BoundedVec;
@@ -155,6 +154,11 @@ fn list_and_sell_property<T: Config>(
         1,
         payment_asset,
     ));
+    claim_buyers_property_token::<T>(token_amount - 1, listing_id);
+    assert_ok!(Marketplace::<T>::claim_property_token(
+        RawOrigin::Signed(buyer.clone()).into(),
+        listing_id,
+    ));
     buyer
 }
 
@@ -253,6 +257,16 @@ fn add_buyers_to_listing<T: Config + pallet_marketplace::Config>(
             0,
             1,
             payment_asset_buyers
+        ));
+    }
+}
+
+fn claim_buyers_property_token<T: Config>(buyers: u32, listing_id: pallet_marketplace::ListingId) {
+    for i in 1..=buyers {
+        let buyer: T::AccountId = account("buyer", i, i);
+        assert_ok!(Marketplace::<T>::claim_property_token(
+            RawOrigin::Signed(buyer).into(),
+            listing_id
         ));
     }
 }
@@ -383,7 +397,7 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn set_letting_agent() {
+    fn letting_agent_propose() {
         let region_owner: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let _ = create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
@@ -417,8 +431,146 @@ mod benchmarks {
         let asset_id = 0;
 
         #[extrinsic_call]
-        set_letting_agent(RawOrigin::Signed(letting_agent.clone()), 0);
+        letting_agent_propose(RawOrigin::Signed(letting_agent.clone()), asset_id);
 
+        assert_eq!(
+            LettingAgentProposal::<T>::get(asset_id)
+                .unwrap()
+                .letting_agent,
+            letting_agent
+        );
+        assert_eq!(
+            OngoingLettingAgentVoting::<T>::get(asset_id).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 0,
+                no_voting_power: 0,
+            },
+        );
+    }
+
+    #[benchmark]
+    fn vote_on_letting_agent() {
+        let region_owner: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
+        let token_owner =
+            create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
+
+        let letting_agent: T::AccountId = account("letting_agent", 0, 0);
+        assert_ok!(Whitelist::<T>::add_to_whitelist(
+            RawOrigin::Root.into(),
+            letting_agent.clone()
+        ));
+        let deposit = T::LettingAgentDeposit::get().saturating_mul(20u32.into());
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &letting_agent,
+            deposit
+        ));
+
+        let max_props = T::MaxProperties::get();
+        LettingInfo::<T>::insert(
+            &letting_agent,
+            LettingAgentInfo {
+                assigned_properties: BoundedVec::try_from(
+                    (1..max_props).map(|i| i).collect::<Vec<_>>(),
+                )
+                .unwrap(),
+                region: region_id,
+                locations: Default::default(),
+                deposited: true,
+                active_strikes: Default::default(),
+            },
+        );
+
+        let asset_id = 0;
+
+        assert_ok!(PropertyManagement::<T>::letting_agent_propose(
+            RawOrigin::Signed(letting_agent.clone()).into(),
+            asset_id
+        ));
+
+        assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
+            asset_id,
+            crate::Vote::No,
+        ));
+
+        #[extrinsic_call]
+        vote_on_letting_agent(
+            RawOrigin::Signed(token_owner.clone()),
+            asset_id,
+            crate::Vote::Yes,
+        );
+
+        assert_eq!(
+            UserLettingAgentVote::<T>::get(asset_id, token_owner).unwrap(),
+            crate::Vote::Yes
+        );
+        assert_eq!(
+            OngoingLettingAgentVoting::<T>::get(asset_id).unwrap(),
+            crate::VoteStats {
+                yes_voting_power: 1,
+                no_voting_power: 0,
+            },
+        );
+    }
+
+    #[benchmark]
+    fn finalize_letting_agent() {
+        let region_owner: T::AccountId = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
+        let token_owner =
+            create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
+
+        let letting_agent: T::AccountId = account("letting_agent", 0, 0);
+        assert_ok!(Whitelist::<T>::add_to_whitelist(
+            RawOrigin::Root.into(),
+            letting_agent.clone()
+        ));
+        let deposit = T::LettingAgentDeposit::get().saturating_mul(20u32.into());
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &letting_agent,
+            deposit
+        ));
+
+        let max_props = T::MaxProperties::get();
+        LettingInfo::<T>::insert(
+            &letting_agent,
+            LettingAgentInfo {
+                assigned_properties: BoundedVec::try_from(
+                    (1..max_props).map(|i| i).collect::<Vec<_>>(),
+                )
+                .unwrap(),
+                region: region_id,
+                locations: Default::default(),
+                deposited: true,
+                active_strikes: Default::default(),
+            },
+        );
+
+        let asset_id = 0;
+
+        assert_ok!(PropertyManagement::<T>::letting_agent_propose(
+            RawOrigin::Signed(letting_agent.clone()).into(),
+            asset_id
+        ));
+
+        assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
+            asset_id,
+            crate::Vote::Yes
+        ));
+
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LettingAgentVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        #[extrinsic_call]
+        finalize_letting_agent(
+            RawOrigin::Signed(token_owner.clone()),
+            asset_id,
+        );
+
+        assert!(LettingAgentProposal::<T>::get(asset_id).is_none());
+        assert!(OngoingLettingAgentVoting::<T>::get(asset_id).is_none());
         assert_eq!(
             LettingStorage::<T>::get(asset_id),
             Some(letting_agent.clone())
@@ -456,8 +608,19 @@ mod benchmarks {
         assert_ok!(PropertyManagement::<T>::letting_agent_deposit(
             RawOrigin::Signed(letting_agent.clone()).into()
         ));
-        assert_ok!(PropertyManagement::<T>::set_letting_agent(
+        assert_ok!(PropertyManagement::<T>::letting_agent_propose(
             RawOrigin::Signed(letting_agent.clone()).into(),
+            0
+        ));
+        assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
+            0,
+            crate::Vote::Yes
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LettingAgentVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_ok!(PropertyManagement::<T>::finalize_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
             0
         ));
 
@@ -513,8 +676,19 @@ mod benchmarks {
         assert_ok!(PropertyManagement::<T>::letting_agent_deposit(
             RawOrigin::Signed(letting_agent.clone()).into()
         ));
-        assert_ok!(PropertyManagement::<T>::set_letting_agent(
+        assert_ok!(PropertyManagement::<T>::letting_agent_propose(
             RawOrigin::Signed(letting_agent.clone()).into(),
+            0
+        ));
+        assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
+            0,
+            crate::Vote::Yes
+        ));
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LettingAgentVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_ok!(PropertyManagement::<T>::finalize_letting_agent(
+            RawOrigin::Signed(token_owner.clone()).into(),
             0
         ));
 
