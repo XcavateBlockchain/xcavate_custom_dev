@@ -267,13 +267,15 @@ pub mod pallet {
 
     /// Mapping of a listing id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserLawyerVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserLawyerVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         ListingId,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        Vote,
+        BoundedBTreeMap<
+            AccountIdOf<T>,
+            Vote,
+            <T as pallet::Config>::MaxPropertyToken,
+        >,
         OptionQuery,
     >;
 
@@ -832,6 +834,14 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Claim purchased property token once all token are sold.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing that the investor wants to claim token from.
+        ///
+        /// Emits `PropertyTokenClaimed` event when succesfful.
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_property_token())]
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1745,32 +1755,40 @@ pub mod pallet {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLawyerProposed)?;
-                if let Some(previous_vote) = UserLawyerVote::<T>::get(listing_id, &signer) {
-                    match previous_vote {
+                
+                UserLawyerVote::<T>::try_mutate(listing_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    map.try_insert(signer.clone(), vote.clone())
+                        .map_err(|_| Error::<T>::TooManyToken)?;
+                    Ok::<(), DispatchError>(())
+                })?;          
+                
                 Ok::<(), DispatchError>(())
             })?;
-            UserLawyerVote::<T>::insert(listing_id, signer.clone(), vote.clone());
             Self::deposit_event(Event::VotedOnLawyer {
                 listing_id,
                 voter: signer,
@@ -1922,7 +1940,7 @@ pub mod pallet {
                     lawyer: proposal.lawyer,
                 });
             }
-            let _ = UserLawyerVote::<T>::clear_prefix(listing_id, u32::MAX, None);
+            UserLawyerVote::<T>::remove(listing_id);
             SpvLawyerProposal::<T>::remove(listing_id);
             OngoingLawyerVoting::<T>::remove(listing_id);
 

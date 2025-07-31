@@ -1215,14 +1215,32 @@ mod benchmarks {
             400_u32.into(),
         ));
 
+        for i in 1..<T as pallet::Config>::MaxPropertyToken::get() {
+            let buyer: T::AccountId = account("buyer", i, i);
+            assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+                RawOrigin::Signed(buyer.clone()).into(),
+                0,
+                crate::Vote::Yes
+            ));
+            assert!(UserLawyerVote::<T>::get(0).is_some());
+        }
+
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+            crate::Vote::No
+        ));
+        assert_eq!(UserLawyerVote::<T>::get(0).unwrap().get(&token_holder), Some(crate::Vote::No).as_ref());
+
         #[extrinsic_call]
-        vote_on_spv_lawyer(RawOrigin::Signed(token_holder), 0, types::Vote::Yes);
+        vote_on_spv_lawyer(RawOrigin::Signed(token_holder.clone()), 0, types::Vote::Yes);
 
         assert_eq!(SpvLawyerProposal::<T>::get(0).unwrap().lawyer, lawyer);
         assert_eq!(
             OngoingLawyerVoting::<T>::get(0).unwrap().yes_voting_power,
-            1
+            <T as pallet::Config>::MaxPropertyToken::get()
         );
+        assert_eq!(UserLawyerVote::<T>::get(0).unwrap().get(&token_holder), Some(crate::Vote::Yes).as_ref());
     }
 
     #[benchmark]
@@ -1282,6 +1300,15 @@ mod benchmarks {
             0,
             types::Vote::Yes
         ));
+        for i in 1..<T as pallet::Config>::MaxPropertyToken::get() {
+            let buyer: T::AccountId = account("buyer", i, i);
+            assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+                RawOrigin::Signed(buyer.clone()).into(),
+                0,
+                crate::Vote::Yes
+            ));
+            assert!(UserLawyerVote::<T>::get(0).is_some());
+        }
         let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);
 
@@ -1294,6 +1321,7 @@ mod benchmarks {
             PropertyLawyer::<T>::get(0).unwrap().spv_lawyer,
             Some(lawyer.clone())
         );
+        assert!(UserLawyerVote::<T>::get(0).is_none());
     }
 
     #[benchmark]

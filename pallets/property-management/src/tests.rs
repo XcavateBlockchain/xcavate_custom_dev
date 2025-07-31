@@ -654,8 +654,8 @@ fn vote_on_letting_agent_works() {
             },
         );
         assert_eq!(
-            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
-            crate::Vote::No
+            UserLettingAgentVote::<Test>::get(0).unwrap().get(&[1; 32].into()).clone(),
+            Some(&crate::Vote::No)
         );
     });
 }
@@ -943,7 +943,7 @@ fn finalize_letting_agent_works() {
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
         assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
         assert_eq!(
-            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            UserLettingAgentVote::<Test>::get(0),
             None
         );
     });
@@ -1098,7 +1098,7 @@ fn finalize_letting_agent_fails() {
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
         assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
         assert_eq!(
-            UserLettingAgentVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()),
+            UserLettingAgentVote::<Test>::get(0),
             None
         );
     });

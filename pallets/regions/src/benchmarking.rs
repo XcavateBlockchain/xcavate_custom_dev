@@ -29,6 +29,10 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 1000u32.into());
 
         LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Regions::<T>::add_regional_operator(
+            RawOrigin::Root.into(),
+            signer.clone()
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -37,10 +41,6 @@ mod benchmarks {
             RawOrigin::Signed(signer.clone()).into(),
             region_id,
             Vote::Yes
-        ));
-        assert_ok!(Regions::<T>::add_regional_operator(
-            RawOrigin::Root.into(),
-            signer.clone()
         ));
 
         let auction_amount = T::MinimumRegionDeposit::get();
@@ -84,6 +84,10 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
 
         LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Regions::<T>::add_regional_operator(
+            RawOrigin::Root.into(),
+            signer.clone()
+        ));
 
         #[extrinsic_call]
         propose_new_region(RawOrigin::Signed(signer.clone()), region.clone());
@@ -113,6 +117,10 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
 
         LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Regions::<T>::add_regional_operator(
+            RawOrigin::Root.into(),
+            signer.clone()
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -144,6 +152,10 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 1000u32.into());
 
         LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Regions::<T>::add_regional_operator(
+            RawOrigin::Root.into(),
+            signer.clone()
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -153,10 +165,17 @@ mod benchmarks {
             region_id,
             Vote::Yes
         ));
-        assert_ok!(Regions::<T>::add_regional_operator(
-            RawOrigin::Root.into(),
-            signer.clone()
-        ));
+
+        for i in 0..400{
+            let voter: T::AccountId = account("voter", i, i);
+            let _ = T::NativeCurrency::mint_into(&voter, deposit * 1000u32.into());
+            Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), voter.clone()).unwrap();
+            assert_ok!(Regions::<T>::vote_on_region_proposal(
+                RawOrigin::Signed(voter.clone()).into(),
+                region_id,
+                Vote::Yes
+            ));
+        }
 
         let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);
@@ -175,11 +194,11 @@ mod benchmarks {
             RawOrigin::Root.into(),
             first_bidder.clone()
         ));
-        assert_ok!(Regions::<T>::bid_on_region(
+/*         assert_ok!(Regions::<T>::bid_on_region(
             RawOrigin::Signed(first_bidder).into(),
             region_id,
             first_bid_amount
-        ));
+        )); */
 
         #[extrinsic_call]
         bid_on_region(RawOrigin::Signed(signer.clone()), region_id, bid_amount);
@@ -201,6 +220,10 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 1000u32.into());
 
         LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Regions::<T>::add_regional_operator(
+            RawOrigin::Root.into(),
+            signer.clone()
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -209,10 +232,6 @@ mod benchmarks {
             RawOrigin::Signed(signer.clone()).into(),
             region_id,
             Vote::Yes
-        ));
-        assert_ok!(Regions::<T>::add_regional_operator(
-            RawOrigin::Root.into(),
-            signer.clone()
         ));
 
         let auction_amount = T::MinimumRegionDeposit::get();

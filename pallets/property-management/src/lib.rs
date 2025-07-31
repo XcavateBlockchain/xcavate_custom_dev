@@ -214,13 +214,15 @@ pub mod pallet {
 
     /// Mapping of a asset id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserLettingAgentVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserLettingAgentVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         u32,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        Vote,
+        BoundedBTreeMap<
+            AccountIdOf<T>,
+            Vote,
+            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
+        >,
         OptionQuery,
     >;
 
@@ -256,6 +258,7 @@ pub mod pallet {
             who: T::AccountId,
             amount: <T as pallet::Config>::Balance,
         },
+        /// A letting agent has been proposed for a property.
         LettingAgentProposed {
             asset_id: u32,
             who: T::AccountId,
@@ -331,6 +334,8 @@ pub mod pallet {
         VotingStillOngoing,
         /// There is already a letting agent proposal ongoing.
         LettingAgentProposalOngoing,
+        /// There are already too many voters for this voting.
+        TooManyVoters,
     }
 
     #[pallet::call]
@@ -459,6 +464,14 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Propose a letting agent for a property.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `asset_id`: The asset id of the property.
+        ///
+        /// Emits `LettingAgentProposed` event when succesfful.
         #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_propose())]
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
@@ -501,6 +514,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Vote for a letting agent.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `asset_id`: The asset id of the property.
+        /// - `vote`: Must be either a Yes vote or a No vote.
+        ///
+        /// Emits `VotedOnLettingAgent` event when succesfful.
         #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent())]
         pub fn vote_on_letting_agent(
@@ -522,32 +544,38 @@ pub mod pallet {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLettingAgentProposed)?;
-                if let Some(previous_vote) = UserLettingAgentVote::<T>::get(asset_id, &signer) {
-                    match previous_vote {
+                UserLettingAgentVote::<T>::try_mutate(asset_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    map.try_insert(signer.clone(), vote.clone())
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?;
                 Ok::<(), DispatchError>(())
             })?;
-            UserLettingAgentVote::<T>::insert(asset_id, signer.clone(), vote.clone());
             Self::deposit_event(Event::VotedOnLettingAgent {
                 asset_id,
                 voter: signer,
@@ -556,6 +584,15 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets someone finalize the letting agent process.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `asset_id`: The asset id of the property.
+        ///
+        /// Emits `LettingAgentSet` event when vote successful.
+        /// Emits `LettingAgentRejected` event when vote unsuccessful.
         #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_letting_agent())]
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
@@ -614,7 +651,7 @@ pub mod pallet {
                     letting_agent: proposal.letting_agent,
                 });
             }
-            let _ = UserLettingAgentVote::<T>::clear_prefix(asset_id, u32::MAX, None);
+            UserLettingAgentVote::<T>::remove(asset_id);
             LettingAgentProposal::<T>::remove(asset_id);
             OngoingLettingAgentVoting::<T>::remove(asset_id);
 

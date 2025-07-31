@@ -494,6 +494,15 @@ mod benchmarks {
             crate::Vote::No,
         ));
 
+        for i in 1..<T as pallet_marketplace::Config>::MaxPropertyToken::get() {
+            let buyer: T::AccountId = account("buyer", i, i);
+            assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+                RawOrigin::Signed(buyer).into(),
+                asset_id,
+                crate::Vote::Yes
+            ));
+        }
+
         #[extrinsic_call]
         vote_on_letting_agent(
             RawOrigin::Signed(token_owner.clone()),
@@ -501,14 +510,11 @@ mod benchmarks {
             crate::Vote::Yes,
         );
 
-        assert_eq!(
-            UserLettingAgentVote::<T>::get(asset_id, token_owner).unwrap(),
-            crate::Vote::Yes
-        );
+        assert_eq!(UserLettingAgentVote::<T>::get(0).unwrap().get(&token_owner), Some(crate::Vote::Yes).as_ref());
         assert_eq!(
             OngoingLettingAgentVoting::<T>::get(asset_id).unwrap(),
             crate::VoteStats {
-                yes_voting_power: 1,
+                yes_voting_power: <T as pallet_marketplace::Config>::MaxPropertyToken::get(),
                 no_voting_power: 0,
             },
         );
@@ -559,6 +565,15 @@ mod benchmarks {
             asset_id,
             crate::Vote::Yes
         ));
+
+        for i in 1..<T as pallet_marketplace::Config>::MaxPropertyToken::get() {
+            let buyer: T::AccountId = account("buyer", i, i);
+            assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
+                RawOrigin::Signed(buyer).into(),
+                asset_id,
+                crate::Vote::Yes
+            ));
+        }
 
         let expiry = frame_system::Pallet::<T>::block_number() + T::LettingAgentVotingTime::get();
         frame_system::Pallet::<T>::set_block_number(expiry);

@@ -1609,8 +1609,8 @@ fn vote_on_spv_lawyer_works() {
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
-            crate::Vote::No
+            UserLawyerVote::<Test>::get(0).unwrap().get(&[1; 32].into()).clone(),
+            Some(&crate::Vote::No)
         );
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1625,8 +1625,8 @@ fn vote_on_spv_lawyer_works() {
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
-            crate::Vote::Yes
+            UserLawyerVote::<Test>::get(0).unwrap().get(&[1; 32].into()).clone(),
+            Some(&crate::Vote::Yes)
         );
     })
 }
@@ -1820,7 +1820,7 @@ fn finalize_spv_lawyer_works() {
         ));
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_none(),
+            UserLawyerVote::<Test>::get(0).is_none(),
             true
         );
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
@@ -1848,7 +1848,7 @@ fn finalize_spv_lawyer_works() {
         ));
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_none(),
+            UserLawyerVote::<Test>::get(0).is_none(),
             true
         );
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
