@@ -313,13 +313,15 @@ pub mod pallet {
 
     /// Mapping of a proposal id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserProposalVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserProposalVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         ProposalIndex,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        Vote,
+        BoundedBTreeMap<
+            AccountIdOf<T>,
+            Vote,
+            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
+        >,
         OptionQuery,
     >;
 
@@ -330,13 +332,15 @@ pub mod pallet {
 
     /// Mapping of a proposal id and account id to the vote of the user.
     #[pallet::storage]
-    pub(super) type UserSaleProposalVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserSaleProposalVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         u32,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        Vote,
+        BoundedBTreeMap<
+            AccountIdOf<T>,
+            Vote,
+            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
+        >,
         OptionQuery,
     >;
 
@@ -347,13 +351,15 @@ pub mod pallet {
 
     /// Mapping of a proposal id and account id to the vote of the user.
     #[pallet::storage]
-    pub(super) type UserChallengeVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserChallengeVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         u32,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        Vote,
+        BoundedBTreeMap<
+            AccountIdOf<T>,
+            Vote,
+            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
+        >,
         OptionQuery,
     >;
 
@@ -623,6 +629,8 @@ pub mod pallet {
         TooManyAssignedProperties,
         /// A challenge against a letting agent is already ongoing.
         ChallengeAlreadyOngoing,
+        /// There are already too many voters for this voting.
+        TooManyVoters,
     }
 
     #[pallet::hooks]
@@ -634,7 +642,7 @@ pub mod pallet {
             // checks if there is a voting for a proposal ending in this block.
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(4, 3));
-                let _ = UserProposalVote::<T>::clear_prefix(item, u32::MAX, None);
+                UserProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_proposal(*item) {
                     Self::deposit_event(Event::ProposalProcessingFailed {
                         proposal_id: *item,
@@ -647,7 +655,7 @@ pub mod pallet {
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 4));
-                let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
+                UserSaleProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_sale_proposal(*item) {
                     Self::deposit_event(Event::SaleProposalProcessingFailed {
                         asset_id: *item,
@@ -660,7 +668,7 @@ pub mod pallet {
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(3, 3));
-                let _ = UserSaleProposalVote::<T>::clear_prefix(item, u32::MAX, None);
+                UserSaleProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_auction(*item) {
                     Self::deposit_event(Event::AuctionProcessingFailed {
                         asset_id: *item,
@@ -673,7 +681,7 @@ pub mod pallet {
             // checks if there is a voting for an challenge ending in this block.
             ended_challenge_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(7, 9));
-                let _ = UserChallengeVote::<T>::clear_prefix(item, u32::MAX, None);
+                UserChallengeVote::<T>::remove(item);
                 if let Err(e) = Self::finish_challenge(*item) {
                     Self::deposit_event(Event::ChallengeProcessingFailed {
                         asset_id: *item,
@@ -832,33 +840,38 @@ pub mod pallet {
                 <T as pallet::Config>::PropertyToken::get_token_balance(proposal.asset_id, &signer);
             OngoingProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                let previous_vote_opt = UserProposalVote::<T>::get(proposal_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
-                    match previous_vote {
+                UserProposalVote::<T>::try_mutate(proposal_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
-                Ok::<(), DispatchError>(())
+                    map.try_insert(signer.clone(), vote.clone())
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?; 
+                Ok::<(), DispatchError>(())  
             })?;
-            UserProposalVote::<T>::insert(proposal_id, &signer, vote.clone());
             Self::deposit_event(Event::VotedOnProposal {
                 proposal_id,
                 voter: signer,
@@ -894,33 +907,38 @@ pub mod pallet {
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             OngoingChallengeVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                let previous_vote_opt = UserChallengeVote::<T>::get(asset_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
-                    match previous_vote {
+                UserChallengeVote::<T>::try_mutate(asset_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    map.try_insert(signer.clone(), vote.clone())
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?; 
                 Ok::<(), DispatchError>(())
             })?;
-            UserChallengeVote::<T>::insert(asset_id, &signer, vote.clone());
             Self::deposit_event(Event::VotedOnChallenge {
                 asset_id,
                 voter: signer,
@@ -1007,33 +1025,38 @@ pub mod pallet {
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             OngoingSaleProposalVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                let previous_vote_opt = UserSaleProposalVote::<T>::get(asset_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
-                    match previous_vote {
+                UserSaleProposalVote::<T>::try_mutate(asset_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    map.try_insert(signer.clone(), vote.clone())
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?; 
                 Ok::<(), DispatchError>(())
             })?;
-            UserSaleProposalVote::<T>::insert(asset_id, &signer, vote.clone());
             Self::deposit_event(Event::VotedOnPropertySaleProposal {
                 asset_id,
                 voter: signer,

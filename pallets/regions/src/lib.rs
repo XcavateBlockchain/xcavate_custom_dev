@@ -273,6 +273,10 @@ pub mod pallet {
         /// Minimum voting amount.
         #[pallet::constant]
         type MinimumVotingAmount: Get<Self::Balance>;
+
+        /// The maximum amount of voters for a region.
+        #[pallet::constant]
+        type MaxRegionVoters: Get<u32>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -308,13 +312,15 @@ pub mod pallet {
 
     /// User votes on region proposals.
     #[pallet::storage]
-    pub(super) type UserRegionVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserRegionVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         RegionId,
-        Blake2_128Concat,
-        T::AccountId,
-        VoteRecord<T>,
+        BoundedBTreeMap<
+            T::AccountId,
+            VoteRecord<T>,
+            <T as pallet::Config>::MaxRegionVoters,
+        >,
         OptionQuery,
     >;
 
@@ -355,13 +361,15 @@ pub mod pallet {
         StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
 
     #[pallet::storage]
-    pub(super) type UserRegionOwnerVote<T: Config> = StorageDoubleMap<
+    pub(super) type UserRegionOwnerVote<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         RegionId,
-        Blake2_128Concat,
-        T::AccountId,
-        VoteRecord<T>,
+        BoundedBTreeMap<
+            T::AccountId,
+            VoteRecord<T>,
+            <T as pallet::Config>::MaxRegionVoters,
+        >,
         OptionQuery,
     >;
 
@@ -573,6 +581,8 @@ pub mod pallet {
         RegionHasNoWinningBidder,
         /// The lawyer has already been registered.
         LawyerAlreadyRegistered,
+        /// There are already too many voters for this voting.
+        TooManyVoters,
     }
 
     #[pallet::hooks]
@@ -584,7 +594,7 @@ pub mod pallet {
             // checks if there is a voting for an proposal ending in this block.
             ended_region_owner_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 6));
-                let _ = UserRegionOwnerVote::<T>::clear_prefix(item, u32::MAX, None);
+                UserRegionOwnerVote::<T>::remove(item);
                 if let Err(e) = Self::finish_region_owner_proposal(*item) {
                     Self::deposit_event(Event::RegionOwnerProposalFailed {
                         region_id: *item,
@@ -713,39 +723,42 @@ pub mod pallet {
             );
             OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                let previous_vote_opt = UserRegionVote::<T>::get(region_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
-                    match previous_vote.vote {
+                UserRegionVote::<T>::try_mutate(region_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote.vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(previous_vote.power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(previous_vote.power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
-                            current_vote.yes_voting_power = current_vote
-                                .yes_voting_power
-                                .saturating_sub(previous_vote.power)
+                            current_vote.yes_voting_power =
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
-                            current_vote.no_voting_power = current_vote
-                                .no_voting_power
-                                .saturating_sub(previous_vote.power)
+                            current_vote.no_voting_power =
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
+                    let vote_record = VoteRecord {
+                        vote: vote.clone(),
+                        power: voting_power,
+                    };
 
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    map.try_insert(signer.clone(), vote_record)
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?;
                 Ok::<(), DispatchError>(())
             })?;
-            let vote_record = VoteRecord {
-                vote: vote.clone(),
-                power: voting_power,
-            };
-            UserRegionVote::<T>::insert(region_id, &signer, vote_record);
             Self::deposit_event(Event::VotedOnRegionProposal {
                 region_id,
                 voter: signer,
@@ -1147,38 +1160,42 @@ pub mod pallet {
             );
             OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                let previous_vote_opt = UserRegionOwnerVote::<T>::get(region_id, &signer);
-                if let Some(previous_vote) = previous_vote_opt {
-                    match previous_vote.vote {
+                UserRegionOwnerVote::<T>::try_mutate(region_id, |maybe_map| {
+                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
+                    if let Some(previous_vote) = map.get(&signer) {
+                        match previous_vote.vote {
+                            Vote::Yes => {
+                                current_vote.yes_voting_power =
+                                    current_vote.yes_voting_power.saturating_sub(previous_vote.power)
+                            }
+                            Vote::No => {
+                                current_vote.no_voting_power =
+                                    current_vote.no_voting_power.saturating_sub(previous_vote.power)
+                            }
+                        }
+                    }
+
+                    match vote {
                         Vote::Yes => {
-                            current_vote.yes_voting_power = current_vote
-                                .yes_voting_power
-                                .saturating_sub(previous_vote.power)
+                            current_vote.yes_voting_power =
+                                current_vote.yes_voting_power.saturating_add(voting_power)
                         }
                         Vote::No => {
-                            current_vote.no_voting_power = current_vote
-                                .no_voting_power
-                                .saturating_sub(previous_vote.power)
+                            current_vote.no_voting_power =
+                                current_vote.no_voting_power.saturating_add(voting_power)
                         }
                     }
-                }
-                match vote {
-                    Vote::Yes => {
-                        current_vote.yes_voting_power =
-                            current_vote.yes_voting_power.saturating_add(voting_power)
-                    }
-                    Vote::No => {
-                        current_vote.no_voting_power =
-                            current_vote.no_voting_power.saturating_add(voting_power)
-                    }
-                }
+                    let vote_record = VoteRecord {
+                        vote: vote.clone(),
+                        power: voting_power,
+                    };
+
+                    map.try_insert(signer.clone(), vote_record)
+                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    Ok::<(), DispatchError>(())
+                })?;
                 Ok::<(), DispatchError>(())
             })?;
-            let vote_record = VoteRecord {
-                vote: vote.clone(),
-                power: voting_power,
-            };
-            UserRegionOwnerVote::<T>::insert(region_id, &signer, vote_record);
             Self::deposit_event(Event::VotedOnRegionOwnerProposal {
                 region_id,
                 voter: signer,
@@ -1431,7 +1448,7 @@ pub mod pallet {
             let voting_results =
                 OngoingRegionProposalVotes::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let proposal = RegionProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-            let _ = UserRegionVote::<T>::clear_prefix(region_id, u32::MAX, None);
+            UserRegionVote::<T>::remove(region_id);
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results
                 .yes_voting_power

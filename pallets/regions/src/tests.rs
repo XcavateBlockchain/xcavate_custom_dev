@@ -402,11 +402,11 @@ fn vote_on_region_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into()).unwrap(),
-            crate::VoteRecord {
+            UserRegionVote::<Test>::get(3).unwrap().get(&[2; 32].into()).clone(),
+            Some(&crate::VoteRecord {
                 vote: crate::Vote::Yes,
                 power: 300_000
-            }
+            })
         );
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
@@ -448,11 +448,11 @@ fn vote_on_region_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into()).unwrap(),
-            crate::VoteRecord {
+            UserRegionVote::<Test>::get(3).unwrap().get(&[2; 32].into()).clone(),
+            Some(&crate::VoteRecord {
                 vote: crate::Vote::No,
                 power: 300_000
-            }
+            })
         );
     })
 }
@@ -1230,11 +1230,11 @@ fn vote_on_remove_owner_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u16, AccountId>(3, [0; 32].into()).unwrap(),
-            crate::VoteRecord {
+            UserRegionOwnerVote::<Test>::get(3).unwrap().get(&[0; 32].into()).clone(),
+            Some(&crate::VoteRecord {
                 vote: crate::Vote::Yes,
                 power: 199_000
-            }
+            })
         );
     })
 }
@@ -1466,7 +1466,7 @@ fn remove_owner_proposal_doesnt_pass() {
             true
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u16, AccountId>(3, [0; 32].into()).is_none(),
+            UserRegionOwnerVote::<Test>::get(3).is_none(),
             true
         );
         assert_eq!(
@@ -1526,7 +1526,7 @@ fn remove_owner_proposal_doesnt_pass() {
             true
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u16, AccountId>(3, [0; 32].into()).is_none(),
+            UserRegionOwnerVote::<Test>::get(3).is_none(),
             true
         );
         assert_eq!(
@@ -1541,7 +1541,7 @@ fn remove_owner_proposal_doesnt_pass() {
             true
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u16, AccountId>(3, [0; 32].into()).is_none(),
+            UserRegionOwnerVote::<Test>::get(3).is_none(),
             true
         );
         assert_ok!(Regions::propose_remove_regional_operator(
@@ -1598,7 +1598,7 @@ fn remove_owner_proposal_doesnt_pass() {
             true
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get::<u16, AccountId>(3, [0; 32].into()).is_none(),
+            UserRegionOwnerVote::<Test>::get(3).is_none(),
             true
         );
         assert_eq!(RegionDetails::<Test>::get(3).unwrap().active_strikes, 1);

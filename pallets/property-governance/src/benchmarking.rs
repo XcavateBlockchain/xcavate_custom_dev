@@ -436,8 +436,8 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserProposalVote::<T>::get(proposal_id, token_owner).unwrap(),
-            crate::Vote::Yes
+            UserProposalVote::<T>::get(proposal_id).unwrap().get(&token_owner).unwrap(),
+            &crate::Vote::Yes
         );
     }
 
@@ -474,8 +474,8 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserChallengeVote::<T>::get(asset_id, token_owner).unwrap(),
-            crate::Vote::Yes
+            UserChallengeVote::<T>::get(asset_id).unwrap().get(&token_owner).unwrap(),
+            &crate::Vote::Yes
         );
     }
 
@@ -538,8 +538,8 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserSaleProposalVote::<T>::get(asset_id, token_owner).unwrap(),
-            crate::Vote::Yes
+            UserSaleProposalVote::<T>::get(asset_id).unwrap().get(&token_owner).unwrap(),
+            &crate::Vote::Yes
         );
     }
 

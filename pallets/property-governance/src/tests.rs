@@ -1585,14 +1585,14 @@ fn different_proposals() {
             3000
         );
         assert_eq!(
-            UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            UserProposalVote::<Test>::get(0).unwrap().get(&[1; 32].into()).is_some(),
             true
         );
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_eq!(
-            UserProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            UserProposalVote::<Test>::get(0).is_some(),
             false
         );
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
@@ -1893,8 +1893,8 @@ fn vote_on_property_sale_works() {
             35
         );
         assert_eq!(
-            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
-            crate::Vote::Yes
+            UserSaleProposalVote::<Test>::get(0).unwrap().get(&[1; 32].into()).clone(),
+            Some(&crate::Vote::Yes)
         );
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1914,8 +1914,8 @@ fn vote_on_property_sale_works() {
             75
         );
         assert_eq!(
-            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).unwrap(),
-            crate::Vote::No
+            UserSaleProposalVote::<Test>::get(0).unwrap().get(&[1; 32].into()).clone(),
+            Some(&crate::Vote::No)
         );
     });
 }
@@ -2041,7 +2041,7 @@ fn auction_starts() {
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
         assert_eq!(
-            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            UserSaleProposalVote::<Test>::get(0).is_some(),
             false
         );
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
@@ -2131,7 +2131,7 @@ fn proposal_does_not_pass() {
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
         assert_eq!(
-            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            UserSaleProposalVote::<Test>::get(0).is_some(),
             false
         );
         assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
@@ -4288,7 +4288,7 @@ fn claim_sale_funds_fails() {
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
         assert_eq!(
-            UserSaleProposalVote::<Test>::get::<u32, AccountId>(0, [1; 32].into()).is_some(),
+            UserSaleProposalVote::<Test>::get(0).is_some(),
             false
         );
         assert_ok!(PropertyGovernance::bid_on_sale(
