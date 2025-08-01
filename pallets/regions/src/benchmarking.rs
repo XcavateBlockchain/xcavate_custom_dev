@@ -11,6 +11,10 @@ use pallet_xcavate_whitelist::Pallet as Whitelist;
 use scale_info::prelude::vec;
 use sp_runtime::Permill;
 
+pub trait Config: pallet_xcavate_whitelist::Config + crate::Config {}
+
+impl<T: crate::Config + pallet_xcavate_whitelist::Config> Config for T {}
+
 #[benchmarks]
 mod benchmarks {
     use super::*;

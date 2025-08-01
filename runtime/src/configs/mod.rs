@@ -69,7 +69,7 @@ use super::{
     ParachainSystem, RealEstateAsset, RealEstateAssets, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
     System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS, EXISTENTIAL_DEPOSIT, HOURS,
-    MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, UNIT, VERSION,
+    MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, UNIT, VERSION, XcavateWhitelist,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use pallet_nfts::PalletFeatures;
@@ -632,6 +632,7 @@ impl pallet_marketplace::Config for Runtime {
     type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
+    type Whitelist = XcavateWhitelist;
 }
 
 parameter_types! {
@@ -671,6 +672,7 @@ impl pallet_property_management::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
+    type Whitelist = XcavateWhitelist;
 }
 
 parameter_types! {
@@ -710,6 +712,7 @@ impl pallet_property_governance::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type TreasuryId = TreasuryPalletId;
     type PropertyToken = RealEstateAsset;
+    type Whitelist = XcavateWhitelist;
 }
 
 parameter_types! {
@@ -763,6 +766,7 @@ impl pallet_regions::Config for Runtime {
     type RegionProposalDeposit = RegionProposalDepositAmount;
     type MinimumVotingAmount = MinimumVotingPower;
     type MaxRegionVoters = MaximumRegionVoters;
+    type Whitelist = XcavateWhitelist;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

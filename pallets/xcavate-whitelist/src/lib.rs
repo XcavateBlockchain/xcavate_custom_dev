@@ -39,10 +39,10 @@ pub mod pallet {
         type MaxUsersInWhitelist: Get<u32>;
     }
 
-    /// Mapping of an account to a bool.
+    /// Mapping of the whitelisted accounts.
     #[pallet::storage]
     pub type WhitelistedAccounts<T: Config> =
-        StorageMap<_, Blake2_128Concat, AccountIdOf<T>, bool, ValueQuery>;
+        StorageMap<_, Blake2_128Concat, AccountIdOf<T>, (), ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -79,10 +79,10 @@ pub mod pallet {
         pub fn add_to_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
-                !WhitelistedAccounts::<T>::get(&user),
+                !WhitelistedAccounts::<T>::contains_key(&user),
                 Error::<T>::AccountAlreadyWhitelisted
             );
-            WhitelistedAccounts::<T>::insert(&user, true);
+            WhitelistedAccounts::<T>::insert(&user, ());
             Self::deposit_event(Event::<T>::NewUserWhitelisted { user });
             Ok(())
         }
@@ -100,12 +100,22 @@ pub mod pallet {
         pub fn remove_from_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
-                WhitelistedAccounts::<T>::get(&user),
+                WhitelistedAccounts::<T>::contains_key(&user),
                 Error::<T>::UserNotInWhitelist
             );
-            WhitelistedAccounts::<T>::take(&user);
+            WhitelistedAccounts::<T>::remove(&user);
             Self::deposit_event(Event::<T>::UserRemoved { user });
             Ok(())
         }
+    }
+}
+
+pub trait IsWhitelisted<AccountId> { 
+    fn is_whitelisted(account: &AccountId) -> bool;
+}
+
+impl<T: Config> IsWhitelisted<T::AccountId> for Pallet<T> {
+    fn is_whitelisted(account: &T::AccountId) -> bool {
+        WhitelistedAccounts::<T>::contains_key(account)
     }
 }

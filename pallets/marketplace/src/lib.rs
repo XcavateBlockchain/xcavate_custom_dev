@@ -43,6 +43,8 @@ use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
 };
 
+use pallet_xcavate_whitelist::IsWhitelisted;
+
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
 pub type LocalAssetIdOf<T> = <<T as Config>::LocalCurrency as fungibles::Inspect<
@@ -73,7 +75,6 @@ pub mod pallet {
     pub trait Config:
         frame_system::Config
         + pallet_nfts::Config
-        + pallet_xcavate_whitelist::Config
         + pallet_regions::Config
         + pallet_nft_fractionalization::Config
         + pallet_real_estate_asset::Config
@@ -174,6 +175,8 @@ pub mod pallet {
         /// The amount of time given to vote for a lawyer proposal.
         #[pallet::constant]
         type LawyerVotingTime: Get<BlockNumberFor<Self>>;
+
+        type Whitelist: pallet_xcavate_whitelist::IsWhitelisted<Self::AccountId>;
     }
 
     pub type RegionId = u16;
@@ -363,11 +366,6 @@ pub mod pallet {
             listing_id: ListingId,
             legal_side: LegalProperty,
             approve: bool,
-        },
-        /// Property token have been send to the investors.
-        PropertyTokenSent {
-            listing_id: ListingId,
-            asset_id: u32,
         },
         /// The property deal has been successfully sold.
         PropertySuccessfullySold {
@@ -566,7 +564,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
@@ -690,7 +688,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
@@ -847,7 +845,7 @@ pub mod pallet {
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             let mut property_details =
@@ -972,7 +970,7 @@ pub mod pallet {
             let signer = ensure_signed(origin)?;
 
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
@@ -1032,7 +1030,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let buyer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&buyer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&buyer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1134,7 +1132,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1200,7 +1198,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             let listing_details =
@@ -1500,7 +1498,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             TokenListings::<T>::try_mutate(listing_id, |maybe_listing_details| {
@@ -1536,7 +1534,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1580,7 +1578,7 @@ pub mod pallet {
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             let listing_details =
@@ -1883,7 +1881,7 @@ pub mod pallet {
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
 
@@ -2137,11 +2135,11 @@ pub mod pallet {
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&sender),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&sender),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&receiver),
+                <T as pallet::Config>::Whitelist::is_whitelisted(&receiver),
                 Error::<T>::UserNotWhitelisted
             );
             T::PropertyToken::transfer_property_token(

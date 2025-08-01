@@ -18,7 +18,7 @@ mod benchmarks {
         #[extrinsic_call]
         add_to_whitelist(RawOrigin::Root, user.clone());
 
-        assert_eq!(WhitelistedAccounts::<T>::get(user), true);
+        assert_eq!(Whitelist::<T>::is_whitelisted(&user), true);
     }
 
     #[benchmark]
@@ -28,11 +28,11 @@ mod benchmarks {
             RawOrigin::Root.into(),
             user.clone()
         ));
-        assert_eq!(WhitelistedAccounts::<T>::get(user.clone()), true);
+        assert_eq!(Whitelist::<T>::is_whitelisted(&user), true);
         #[extrinsic_call]
         remove_from_whitelist(RawOrigin::Root, user.clone());
 
-        assert_eq!(WhitelistedAccounts::<T>::get(user), false);
+        assert_eq!(Whitelist::<T>::is_whitelisted(&user), false);
     }
 
     impl_benchmark_test_suite!(Whitelist, crate::mock::new_test_ext(), crate::mock::Test);

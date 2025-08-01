@@ -249,6 +249,8 @@ impl pallet_regions::Config for Test {
     type MinimumRegionDeposit = ConstU128<10_000>;
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
+    type MaxRegionVoters = ConstU32<250>;
+    type Whitelist = XcavateWhitelist;
 }
 
 parameter_types! {

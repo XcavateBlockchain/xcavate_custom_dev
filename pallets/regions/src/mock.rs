@@ -194,6 +194,7 @@ impl crate::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
+    type Whitelist = XcavateWhitelist;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -266,6 +266,8 @@ impl pallet_regions::Config for Test {
     type MinimumRegionDeposit = ConstU128<10_000>;
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
+    type MaxRegionVoters = ConstU32<250>;
+    type Whitelist = XcavateWhitelist;
 }
 
 impl pallet_real_estate_asset::Config for Test {
@@ -315,6 +317,7 @@ impl pallet_marketplace::Config for Test {
     type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
+    type Whitelist = XcavateWhitelist;
 }
 
 // Build genesis storage according to the mock runtime.

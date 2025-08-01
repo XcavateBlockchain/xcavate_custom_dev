@@ -14,6 +14,7 @@ pub mod weights;
 pub use weights::*;
 
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
+use pallet_xcavate_whitelist::IsWhitelisted;
 
 use frame_support::{
     pallet_prelude::*,
@@ -154,7 +155,7 @@ pub mod pallet {
 
     #[pallet::config]
     pub trait Config:
-        frame_system::Config + pallet_xcavate_whitelist::Config + pallet_nfts::Config
+        frame_system::Config + pallet_nfts::Config
     {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -277,6 +278,8 @@ pub mod pallet {
         /// The maximum amount of voters for a region.
         #[pallet::constant]
         type MaxRegionVoters: Get<u32>;
+
+        type Whitelist: pallet_xcavate_whitelist::IsWhitelisted<Self::AccountId>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -706,7 +709,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                T::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             let region_proposal =
@@ -958,7 +961,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                T::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1003,7 +1006,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                T::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
 
@@ -1088,7 +1091,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                T::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1150,7 +1153,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                pallet_xcavate_whitelist::WhitelistedAccounts::<T>::get(&signer),
+                T::Whitelist::is_whitelisted(&signer),
                 Error::<T>::UserNotWhitelisted
             );
             let voting_power = T::NativeCurrency::balance(&signer);
@@ -1406,7 +1409,7 @@ pub mod pallet {
         /// - `lawyer`: The lawyer that should be registered.
         ///
         /// Emits `LawyerRegistered` event when succesfful.
-        #[pallet::call_index(21)]
+        #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::register_lawyer())]
         pub fn register_lawyer(
             origin: OriginFor<T>,
