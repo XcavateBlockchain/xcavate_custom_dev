@@ -1,7 +1,8 @@
 use super::*;
 
 use crate as pallet_marketplace;
-use frame_support::{derive_impl, parameter_types, traits::AsEnsureOriginWithArg, BoundedVec};
+use frame_support::{derive_impl, parameter_types, traits::AsEnsureOriginWithArg, BoundedVec, 
+    traits::{EnsureOriginWithArg, OriginTrait}};
 use sp_core::{ConstU128, ConstU32};
 use sp_runtime::{
     traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
@@ -146,6 +147,34 @@ impl pallet_xcavate_whitelist::Config for Test {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
+use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+
+pub struct EnsurePermission<T> {
+    _phantom: core::marker::PhantomData<T>,
+}
+
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role> for EnsurePermission<T> {
+    type Success = T::AccountId;
+
+    fn try_origin(
+        origin: T::RuntimeOrigin,
+        role: &whitelist::Role,
+    ) -> Result<Self::Success, T::RuntimeOrigin> {
+        let Some(who) = origin.clone().into_signer() else {return Err(origin)};
+        if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
+            Ok(who)
+        } else {
+            Err(origin)
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn try_successful_origin(_role: &whitelist::Role) -> Result<T::RuntimeOrigin, ()> {
+        let account = frame_benchmarking::whitelisted_caller();
+        Ok(frame_system::RawOrigin::Signed(account).into())
+    }
+}
+
 parameter_types! {
     pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 
@@ -254,7 +283,6 @@ impl pallet_regions::Config for Test {
     type RegionAuctionTime = RegionAuctionTime;
     type RegionThreshold = RegionThreshold;
     type RegionProposalCooldown = RegionProposalCooldown;
-    type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type RegionOperatorVotingTime = RegionOperatorVotingTime;
     type MaxProposalsForBlock = ConstU32<100>;
     type RegionSlashingAmount = ConstU128<10_000>;
@@ -268,6 +296,7 @@ impl pallet_regions::Config for Test {
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
     type Whitelist = XcavateWhitelist;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 impl pallet_real_estate_asset::Config for Test {
@@ -319,6 +348,7 @@ impl pallet_marketplace::Config for Test {
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
     type LawyerDeposit = ConstU128<10_000>;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 // Build genesis storage according to the mock runtime.

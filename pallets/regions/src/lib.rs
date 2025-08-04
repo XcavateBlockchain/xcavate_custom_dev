@@ -277,7 +277,7 @@ pub mod pallet {
 
         type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
 
-        type RegionalOperatorOrigin: EnsureOriginWithArg<Self::RuntimeOrigin, pallet_xcavate_whitelist::Role, Success = Self::AccountId>;
+        type PermissionOrigin: EnsureOriginWithArg<Self::RuntimeOrigin, pallet_xcavate_whitelist::Role, Success = Self::AccountId>;
     }
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
@@ -630,7 +630,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             region_identifier: RegionIdentifier,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
             let region_id = region_identifier.into_u16();
 
             ensure!(
@@ -695,7 +695,7 @@ pub mod pallet {
             region_id: RegionId,
             vote: Vote,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
             let region_proposal =
                 RegionProposals::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -770,7 +770,7 @@ pub mod pallet {
             region_id: RegionId,
             amount: T::Balance,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
 
             if let Some(region_proposal) = RegionProposals::<T>::get(region_id) {
                 let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -939,7 +939,7 @@ pub mod pallet {
             region_id: RegionId,
             listing_duration: BlockNumberFor<T>,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
             ensure!(
                 !listing_duration.is_zero(),
                 Error::<T>::ListingDurationCantBeZero
@@ -980,7 +980,7 @@ pub mod pallet {
             region_id: RegionId,
             new_tax: Permill,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
 
             RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
@@ -1061,7 +1061,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             region_id: RegionId,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
             ensure!(
                 RegionDetails::<T>::contains_key(region_id),
                 Error::<T>::RegionUnknown
@@ -1119,7 +1119,7 @@ pub mod pallet {
             region_id: RegionId,
             vote: Vote,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
             let voting_power = T::NativeCurrency::balance(&signer);
             ensure!(
                 voting_power >= T::MinimumVotingAmount::get(),
@@ -1187,7 +1187,7 @@ pub mod pallet {
             region_id: RegionId,
             amount: T::Balance,
         ) -> DispatchResult {
-            let signer = T::RegionalOperatorOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
+            let signer = T::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RegionalOperator)?;
             let region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();

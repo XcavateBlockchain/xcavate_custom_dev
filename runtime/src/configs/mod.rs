@@ -635,6 +635,7 @@ impl pallet_marketplace::Config for Runtime {
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
     type LawyerDeposit = LawyerDepositAmount;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 parameter_types! {
@@ -651,9 +652,7 @@ impl pallet_xcavate_whitelist::Config for Runtime {
 
 use pallet_xcavate_whitelist::{self as whitelist, HasRole};
 
-pub struct EnsurePermission<T> {
-    _phantom: core::marker::PhantomData<T>,
-}
+pub struct EnsurePermission<T>(core::marker::PhantomData<T>);
 
 impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role> for EnsurePermission<T> {
     type Success = T::AccountId;
@@ -796,7 +795,7 @@ impl pallet_regions::Config for Runtime {
     type MinimumVotingAmount = MinimumVotingPower;
     type MaxRegionVoters = MaximumRegionVoters;
     type Whitelist = XcavateWhitelist;
-    type RegionalOperatorOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

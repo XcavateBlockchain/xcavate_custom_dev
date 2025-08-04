@@ -222,7 +222,7 @@ impl crate::Config for Test {
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
     type Whitelist = XcavateWhitelist;
-    type RegionalOperatorOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 // Build genesis storage according to the mock runtime.
