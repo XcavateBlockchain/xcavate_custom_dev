@@ -24,6 +24,27 @@ pub mod pallet {
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
+    /// Role enum.
+    #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(
+        Encode,
+        Decode,
+        DecodeWithMemTracking,
+        Clone,
+        PartialEq,
+        Eq,
+        MaxEncodedLen,
+        RuntimeDebug,
+        TypeInfo,
+    )]
+    pub enum Role {
+        RegionalOperator,
+        RealEstateInvestor,
+        RealEstateDeveloper,
+        Lawyer,
+        LettingAgent,
+    }
+
     /// Configure the pallet by specifying the parameters and types on which it depends.
     #[pallet::config]
     pub trait Config: frame_system::Config {
@@ -39,83 +60,90 @@ pub mod pallet {
         type MaxUsersInWhitelist: Get<u32>;
     }
 
-    /// Mapping of the whitelisted accounts.
+    /// Mapping of the accounts to the assigned roles.
     #[pallet::storage]
-    pub type WhitelistedAccounts<T: Config> =
-        StorageMap<_, Blake2_128Concat, AccountIdOf<T>, (), ValueQuery>;
+    pub type AccountRoles<T: Config> = StorageDoubleMap<
+        _, 
+        Blake2_128Concat, 
+        AccountIdOf<T>,
+        Blake2_128Concat,
+        Role,
+        (), 
+        OptionQuery
+    >;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// A new user has been successfully whitelisted.
-        NewUserWhitelisted { user: T::AccountId },
-        /// A new user has been successfully removed.
-        UserRemoved { user: T::AccountId },
+        /// A new role has been assigned to a user.
+        RoleAssigned { user: T::AccountId, role: Role },
+        /// A role has been removed from a user.
+        RoleRemoved { user: T::AccountId, role: Role },
     }
 
     // Errors inform users that something went wrong.
     #[pallet::error]
     pub enum Error<T> {
-        /// The user is already registered in the whitelist.
-        AccountAlreadyWhitelisted,
-        /// The user has not been registered in the whitelist.
-        UserNotInWhitelist,
-        /// Too many users are already in the whitelist.
-        TooManyUsers,
+        /// The role has already been assigned to the usser.
+        RoleAlreadyAssigned,
+        /// The role has not been assigned to the user.
+        RoleNotAssigned,
     }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Adds a user to the whitelist.
+        /// Adds a role to a user.
         ///
         /// The origin must be the sudo.
         ///
         /// Parameters:
-        /// - `user`: The address of the new account added to the whitelist.
+        /// - `user`: The address of the accounts that gets a new role.
+        /// - `role`: The role that is getting assigned to the user.
         ///
-        /// Emits `NewUserWhitelisted` event when succesfful
+        /// Emits `RoleAssigned` event when succesfful
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn add_to_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
+        pub fn assign_role(origin: OriginFor<T>, user: AccountIdOf<T>, role: Role) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
-                !WhitelistedAccounts::<T>::contains_key(&user),
-                Error::<T>::AccountAlreadyWhitelisted
+                !AccountRoles::<T>::contains_key(&user, &role),
+                Error::<T>::RoleAlreadyAssigned
             );
-            WhitelistedAccounts::<T>::insert(&user, ());
-            Self::deposit_event(Event::<T>::NewUserWhitelisted { user });
+            AccountRoles::<T>::insert(&user, role.clone(), ());
+            Self::deposit_event(Event::<T>::RoleAssigned { user, role });
             Ok(())
         }
 
-        /// Removes a user from the whitelist.
+        /// Removes a role from a user.
         ///
         /// The origin must be the sudo.
         ///
         /// Parameters:
-        /// - `user`: The address of the new account removed from the whitelist.
+        /// - `user`: The address of the accounts that gets a role removed.
+        /// - `role`: The role that is getting removed from the user.
         ///
         /// Emits `UserRemoved` event when succesfful
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn remove_from_whitelist(origin: OriginFor<T>, user: AccountIdOf<T>) -> DispatchResult {
+        pub fn remove_role(origin: OriginFor<T>, user: AccountIdOf<T>, role: Role) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
-                WhitelistedAccounts::<T>::contains_key(&user),
-                Error::<T>::UserNotInWhitelist
+                AccountRoles::<T>::contains_key(&user, &role),
+                Error::<T>::RoleNotAssigned
             );
-            WhitelistedAccounts::<T>::remove(&user);
-            Self::deposit_event(Event::<T>::UserRemoved { user });
+            AccountRoles::<T>::remove(&user, role.clone());
+            Self::deposit_event(Event::<T>::RoleRemoved { user, role });
             Ok(())
         }
     }
 }
 
-pub trait IsWhitelisted<AccountId> { 
-    fn is_whitelisted(account: &AccountId) -> bool;
+pub trait HasRole<AccountId> { 
+    fn has_role(account: &AccountId, role: Role) -> bool;
 }
 
-impl<T: Config> IsWhitelisted<T::AccountId> for Pallet<T> {
-    fn is_whitelisted(account: &T::AccountId) -> bool {
-        WhitelistedAccounts::<T>::contains_key(account)
+impl<T: Config> HasRole<T::AccountId> for Pallet<T> {
+    fn has_role(account: &T::AccountId, role: Role) -> bool {
+        AccountRoles::<T>::contains_key(account, role)
     }
 }

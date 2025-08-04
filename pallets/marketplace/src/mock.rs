@@ -318,6 +318,7 @@ impl pallet_marketplace::Config for Test {
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
+    type LawyerDeposit = ConstU128<10_000>;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -336,6 +337,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             ([7; 32].into(), 5_000),
             ([8; 32].into(), 400_000),
             ([9; 32].into(), 5_000),
+            ([10; 32].into(), 15_000),
+            ([11; 32].into(), 15_000),
+            ([12; 32].into(), 15_000),
+            ([13; 32].into(), 15_000),
             ([14; 32].into(), 200_000_000_000_000_000_000),
             ([15; 32].into(), 3_500_000),
             ((Marketplace::account_id()), 20_000_000),

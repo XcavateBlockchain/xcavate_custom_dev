@@ -174,7 +174,7 @@ fn testnet_genesis(
         "sudo": { "key": Some(root.clone()) },
         "assets" : {
             "assets": vec![(1337, root.clone(), true, 1), (1984, root.clone(), true, 1), (100, root.clone(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
-            "metadata": vec![(1337, "USDC".as_bytes(), "USDC".as_bytes(), 0), (1984, "USDT".as_bytes(), "USDT".as_bytes(), 0), (100, "TOKEN".as_bytes(), "TOKEN".as_bytes(), 0)], // Genesis metadata: id, name, symbol, decimals
+            "metadata": vec![(1337, "USDC".as_bytes(), "USDC".as_bytes(), 6), (1984, "USDT".as_bytes(), "USDT".as_bytes(), 6), (100, "TOKEN".as_bytes(), "TOKEN".as_bytes(), 6)], // Genesis metadata: id, name, symbol, decimals
             "accounts": endowed_accounts
                 .iter()
                 .cloned()

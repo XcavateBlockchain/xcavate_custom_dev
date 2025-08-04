@@ -32,7 +32,7 @@ use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
 };
 
-use pallet_xcavate_whitelist::IsWhitelisted;
+use pallet_xcavate_whitelist::HasRole;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -287,7 +287,7 @@ pub mod pallet {
             + PropertyTokenSpvControl<Self>
             + PropertyTokenInspect<Self>;
 
-        type Whitelist: pallet_xcavate_whitelist::IsWhitelisted<Self::AccountId>;
+        type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -1089,7 +1089,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
+                <T as pallet::Config>::Whitelist::has_role(&signer, pallet_xcavate_whitelist::Role::RealEstateInvestor),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(

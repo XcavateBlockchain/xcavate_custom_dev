@@ -35,7 +35,7 @@ use frame_support::{
     parameter_types,
     traits::{
         AsEnsureOriginWithArg, ConstBool, ConstU32, ConstU64, ConstU8, EitherOfDiverse,
-        InstanceFilter, TransformOrigin, VariantCountOf,
+        InstanceFilter, TransformOrigin, VariantCountOf, EnsureOriginWithArg, OriginTrait,
     },
     weights::{ConstantMultiplier, Weight},
     BoundedVec, PalletId,
@@ -602,13 +602,14 @@ parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const MinPropertyTokens: u32 = 100;
     pub const MaxPropertyTokens: u32 = 250;
-    pub const ListingDepositAmount: Balance = 10 * UNIT;
+    pub const ListingDepositAmount: Balance = 10 * MICROUNIT;
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PropertyFundingAmount: Balance = 10 * UNIT;
     pub const MarketplaceFeePercent: Balance = 1;
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
-    pub const LawyerVotingDuration: BlockNumber = 30;
+    pub const LawyerVotingDuration: BlockNumber = 20;
+    pub const LawyerDepositAmount: Balance = 10_000 * UNIT;
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -633,6 +634,7 @@ impl pallet_marketplace::Config for Runtime {
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
+    type LawyerDeposit = LawyerDepositAmount;
 }
 
 parameter_types! {
@@ -647,12 +649,40 @@ impl pallet_xcavate_whitelist::Config for Runtime {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
+use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+
+pub struct EnsurePermission<T> {
+    _phantom: core::marker::PhantomData<T>,
+}
+
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role> for EnsurePermission<T> {
+    type Success = T::AccountId;
+
+    fn try_origin(
+        origin: T::RuntimeOrigin,
+        role: &whitelist::Role,
+    ) -> Result<Self::Success, T::RuntimeOrigin> {
+        let Some(who) = origin.clone().into_signer() else {return Err(origin)};
+        if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
+            Ok(who)
+        } else {
+            Err(origin)
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn try_successful_origin(_role: &whitelist::Role) -> Result<T::RuntimeOrigin, ()> {
+        let account = frame_benchmarking::whitelisted_caller();
+        Ok(frame_system::RawOrigin::Signed(account).into())
+    }
+}
+
 parameter_types! {
-    pub const MinimumStakingAmount: Balance = 100 * UNIT;
+    pub const MinimumStakingAmount: Balance = 1000 * UNIT;
     pub const MaxProperty: u32 = 1000;
     pub const MaxLettingAgent: u32 = 100;
     pub const MaxLocation: u32 = 100;
-    pub const LettingAgentVotingDuration: BlockNumber = 30;
+    pub const LettingAgentVotingDuration: BlockNumber = 20;
 }
 
 /// Configure the pallet-property-management in pallets/property-management.
@@ -677,7 +707,7 @@ impl pallet_property_management::Config for Runtime {
 
 parameter_types! {
     pub const PropertyVotingTime: BlockNumber = 20;
-    pub const PropertySaleVotingTime: BlockNumber = 30;
+    pub const PropertySaleVotingTime: BlockNumber = 20;
     pub const MaxVoteForBlock: u32 = 100;
     pub const MinimumSlashingAmount: Balance = 10 * UNIT;
     pub const VotingThreshold: Percent = Percent::from_percent(51);
@@ -719,9 +749,9 @@ parameter_types! {
     pub const Postcode: u32 = 10;
     pub const LocationDepositAmount: Balance = 10_000 * UNIT;
     pub const MaximumListingDuration: BlockNumber = 30 * DAYS;
-    pub const RegionVotingTime: BlockNumber = 40;
-    pub const RegionAuctionTime: BlockNumber = 40;
-    pub const RegionOperatorVotingTime: BlockNumber = 30;
+    pub const RegionVotingTime: BlockNumber = 20;
+    pub const RegionAuctionTime: BlockNumber = 20;
+    pub const RegionOperatorVotingTime: BlockNumber = 20;
     pub const RegionThreshold: Percent = Percent::from_percent(75);
     pub const RegionProposalCooldown: BlockNumber = 100;
     pub const MaxProposalForBlock: u32 = 100;
@@ -753,7 +783,6 @@ impl pallet_regions::Config for Runtime {
     type RegionAuctionTime = RegionAuctionTime;
     type RegionThreshold = RegionThreshold;
     type RegionProposalCooldown = RegionProposalCooldown;
-    type RegionOperatorOrigin = EnsureRoot<Self::AccountId>;
     type RegionOperatorVotingTime = RegionOperatorVotingTime;
     type MaxProposalsForBlock = MaxProposalForBlock;
     type RegionSlashingAmount = RegionSlashingAmount;
@@ -767,6 +796,7 @@ impl pallet_regions::Config for Runtime {
     type MinimumVotingAmount = MinimumVotingPower;
     type MaxRegionVoters = MaximumRegionVoters;
     type Whitelist = XcavateWhitelist;
+    type RegionalOperatorOrigin = EnsurePermission<Self>;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

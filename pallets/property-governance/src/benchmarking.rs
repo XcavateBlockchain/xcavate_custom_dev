@@ -118,7 +118,7 @@ fn list_and_sell_property<T: Config>(
         ]);
 
     let tax_paid_by_developer = true;
-    assert_ok!(Marketplace::<T>::list_object(
+    assert_ok!(Marketplace::<T>::claim_income(
         RawOrigin::Signed(seller).into(),
         region_id,
         location,

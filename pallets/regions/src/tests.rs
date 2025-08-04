@@ -2,7 +2,7 @@ use crate::{mock::*, Error, Event};
 use crate::{
     HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
     OngoingRegionProposalVotes, ProposedRegionIds, RealEstateLawyer, RegionAuctions, RegionDetails,
-    RegionOperatorAccounts, RegionOwnerProposals, RegionProposals, RegionReplacementAuctions,
+    RegionOwnerProposals, RegionProposals, RegionReplacementAuctions,
     UserRegionOwnerVote, UserRegionVote, VoteStats,
 };
 use frame_support::BoundedVec;
@@ -57,95 +57,13 @@ fn new_region_helper() {
 }
 
 #[test]
-fn add_regional_operator_works() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        assert_eq!(
-            RegionOperatorAccounts::<Test>::get::<AccountId>([8; 32].into()),
-            Some(())
-        );
-    })
-}
-
-#[test]
-fn add_regional_operator_fails() {
-    new_test_ext().execute_with(|| {
-        assert_noop!(
-            Regions::add_regional_operator(RuntimeOrigin::signed([8; 32].into()), [8; 32].into()),
-            BadOrigin
-        );
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        assert_eq!(
-            RegionOperatorAccounts::<Test>::get::<AccountId>([8; 32].into()),
-            Some(())
-        );
-        assert_noop!(
-            Regions::add_regional_operator(RuntimeOrigin::root(), [8; 32].into()),
-            Error::<Test>::AlreadyRegionOperator
-        );
-    })
-}
-
-#[test]
-fn remove_regional_operator_works() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        assert_eq!(
-            RegionOperatorAccounts::<Test>::get::<AccountId>([8; 32].into()),
-            Some(())
-        );
-        assert_ok!(Regions::remove_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        assert_eq!(
-            RegionOperatorAccounts::<Test>::get::<AccountId>([8; 32].into()),
-            None
-        );
-    })
-}
-
-#[test]
-fn remove_regional_operator_fails() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Regions::add_regional_operator(
-            RuntimeOrigin::root(),
-            [8; 32].into()
-        ));
-        assert_eq!(
-            RegionOperatorAccounts::<Test>::get::<AccountId>([8; 32].into()),
-            Some(())
-        );
-        assert_noop!(
-            Regions::remove_regional_operator(
-                RuntimeOrigin::signed([8; 32].into()),
-                [8; 32].into()
-            ),
-            BadOrigin
-        );
-        assert_noop!(
-            Regions::remove_regional_operator(RuntimeOrigin::root(), [7; 32].into()),
-            Error::<Test>::NoRegionalOperator
-        );
-    })
-}
-
-#[test]
 fn propose_new_region_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -172,13 +90,15 @@ fn propose_new_region_works() {
 fn propose_new_region_works_after_rejected() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -208,17 +128,20 @@ fn propose_new_region_works_after_rejected() {
 fn propose_new_region_slash_proposer() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -254,17 +177,20 @@ fn propose_new_region_slash_proposer() {
 fn propose_new_region_no_treasury_rewards() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -298,15 +224,17 @@ fn propose_new_region_fails() {
                 RuntimeOrigin::signed([0; 32].into()),
                 crate::RegionIdentifier::Japan
             ),
-            Error::<Test>::UserNotRegionalOperator
+            BadOrigin
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_eq!(LastRegionProposalBlock::<Test>::get(), None);
         assert_ok!(Regions::propose_new_region(
@@ -369,21 +297,25 @@ fn propose_new_region_fails() {
 fn vote_on_region_proposal_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [2; 32].into()
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -461,25 +393,30 @@ fn vote_on_region_proposal_works() {
 fn vote_on_region_proposal_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [2; 32].into()
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [9; 32].into()
+            [9; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Balances::force_set_balance(
             RuntimeOrigin::root(),
@@ -504,7 +441,7 @@ fn vote_on_region_proposal_fails() {
                 3,
                 crate::Vote::Yes
             ),
-            Error::<Test>::UserNotWhitelisted
+            BadOrigin
         );
         assert_noop!(
             Regions::vote_on_region_proposal(
@@ -530,21 +467,25 @@ fn vote_on_region_proposal_fails() {
 fn bid_on_region_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [2; 32].into()
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -650,17 +591,20 @@ fn bid_on_region_works() {
 fn bid_on_region_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -678,7 +622,7 @@ fn bid_on_region_fails() {
         run_to_block(31);
         assert_noop!(
             Regions::bid_on_region(RuntimeOrigin::signed([3; 32].into()), 3, 1_000),
-            Error::<Test>::UserNotRegionalOperator,
+            BadOrigin,
         );
         assert_noop!(
             Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 3, 0),
@@ -746,21 +690,25 @@ fn bid_on_region_fails() {
 fn create_new_region_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([0; 32].into()),
@@ -829,13 +777,15 @@ fn create_new_region_works() {
 fn create_new_region_does_not_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [7; 32].into()
+            [7; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [7; 32].into()
+            [7; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_noop!(
             Regions::create_new_region(
@@ -846,13 +796,15 @@ fn create_new_region_does_not_works() {
             ),
             Error::<Test>::NoAuction
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
@@ -933,13 +885,15 @@ fn create_new_region_does_not_works() {
 fn adjust_listing_duration_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_eq!(RegionDetails::<Test>::get(3).unwrap().listing_duration, 30);
@@ -948,13 +902,15 @@ fn adjust_listing_duration_works() {
             3,
             bvec![10, 10]
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::adjust_listing_duration(
             RuntimeOrigin::signed([8; 32].into()),
@@ -970,19 +926,22 @@ fn adjust_listing_duration_fails() {
         System::set_block_number(1);
         assert_noop!(
             Regions::adjust_listing_duration(RuntimeOrigin::signed([8; 32].into()), 0, 50,),
-            Error::<Test>::UserNotWhitelisted
+            BadOrigin
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_noop!(
             Regions::adjust_listing_duration(RuntimeOrigin::signed([8; 32].into()), 3, 50,),
@@ -991,7 +950,7 @@ fn adjust_listing_duration_fails() {
         new_region_helper();
         assert_noop!(
             Regions::adjust_listing_duration(RuntimeOrigin::signed([0; 32].into()), 3, 50,),
-            Error::<Test>::NoPermission
+            BadOrigin
         );
         assert_noop!(
             Regions::adjust_listing_duration(RuntimeOrigin::signed([8; 32].into()), 3, 0,),
@@ -1009,13 +968,15 @@ fn adjust_listing_duration_fails() {
 fn create_new_location_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_ok!(Regions::propose_new_region(
@@ -1091,13 +1052,15 @@ fn create_new_location_fails() {
             Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]),
             Error::<Test>::RegionUnknown
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_noop!(
@@ -1111,18 +1074,21 @@ fn create_new_location_fails() {
 fn propose_remove_regional_operator_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1143,26 +1109,29 @@ fn propose_remove_regional_operator_works() {
 fn propose_remove_regional_operator_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_noop!(
             Regions::propose_remove_regional_operator(RuntimeOrigin::signed([0; 32].into()), 0),
             Error::<Test>::RegionUnknown,
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_noop!(
             Regions::propose_remove_regional_operator(RuntimeOrigin::signed([1; 32].into()), 0),
-            Error::<Test>::UserNotWhitelisted,
+            BadOrigin,
         );
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1187,18 +1156,21 @@ fn propose_remove_regional_operator_fails() {
 fn vote_on_remove_owner_proposal_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1243,13 +1215,15 @@ fn vote_on_remove_owner_proposal_works() {
 fn vote_on_remove_owner_proposal_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_noop!(
             Regions::vote_on_remove_owner_proposal(
@@ -1268,9 +1242,10 @@ fn vote_on_remove_owner_proposal_fails() {
             ),
             Error::<Test>::NotOngoing,
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1282,11 +1257,12 @@ fn vote_on_remove_owner_proposal_fails() {
                 3,
                 crate::Vote::Yes
             ),
-            Error::<Test>::UserNotWhitelisted,
+            BadOrigin,
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [9; 32].into()
+            [9; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Balances::force_set_balance(
             RuntimeOrigin::root(),
@@ -1322,18 +1298,21 @@ fn vote_on_remove_owner_proposal_fails() {
 fn remove_owner_proposal_passes() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1426,18 +1405,21 @@ fn remove_owner_proposal_passes() {
 fn remove_owner_proposal_doesnt_pass() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1613,13 +1595,15 @@ fn remove_owner_proposal_doesnt_pass() {
 fn bid_on_region_replacement_after_proposal_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_ok!(Regions::create_new_location(
@@ -1632,9 +1616,10 @@ fn bid_on_region_replacement_after_proposal_works() {
             3,
             bvec![11, 10]
         ));
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1682,13 +1667,15 @@ fn bid_on_region_replacement_after_proposal_works() {
         );
         assert_eq!(Balances::total_balance(&([0; 32].into())), 200_000);
         assert_eq!(RegionReplacementAuctions::<Test>::get(3).is_none(), true);
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1775,13 +1762,15 @@ fn bid_on_region_replacement_after_proposal_works() {
 fn bid_on_region_replacement_after_time_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_eq!(
@@ -1790,13 +1779,15 @@ fn bid_on_region_replacement_after_time_works() {
         );
         run_to_block(362);
         assert_eq!(RegionReplacementAuctions::<Test>::get(3).is_none(), true);
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_ok!(Regions::bid_on_region_replacement(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1878,21 +1869,25 @@ fn bid_on_region_replacement_after_time_works() {
 fn bid_on_region_replacement_after_time_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into()
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_noop!(
             Regions::bid_on_region_replacement(RuntimeOrigin::signed([1; 32].into()), 0, 10_000),
@@ -1921,7 +1916,7 @@ fn bid_on_region_replacement_after_time_fails() {
         run_to_block(362);
         assert_noop!(
             Regions::bid_on_region_replacement(RuntimeOrigin::signed([2; 32].into()), 3, 10_000),
-            Error::<Test>::UserNotRegionalOperator
+            BadOrigin
         );
         assert_noop!(
             Regions::bid_on_region_replacement(RuntimeOrigin::signed([1; 32].into()), 3, 11_500),
@@ -1954,17 +1949,20 @@ fn bid_on_region_replacement_after_time_fails() {
 #[test]
 fn initiate_region_owner_resignation_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [0; 32].into()
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_eq!(
@@ -2000,13 +1998,15 @@ fn initiate_region_owner_resignation_works() {
 #[test]
 fn initiate_region_owner_resignation_fails() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         assert_noop!(
             Regions::initiate_region_owner_resignation(RuntimeOrigin::signed([8; 32].into()), 3),
@@ -2039,13 +2039,15 @@ fn initiate_region_owner_resignation_fails() {
 fn register_lawyer_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_eq!(
@@ -2072,13 +2074,15 @@ fn register_lawyer_fails() {
             Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
             Error::<Test>::RegionUnknown
         );
-        assert_ok!(XcavateWhitelist::add_to_whitelist(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::add_regional_operator(
+        assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [8; 32].into()
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
         ));
         new_region_helper();
         assert_ok!(Regions::register_lawyer(

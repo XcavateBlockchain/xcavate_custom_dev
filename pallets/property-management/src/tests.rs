@@ -188,7 +188,7 @@ fn let_letting_agent_deposit() {
                 .deposited,
             true
         );
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
     });
 }
 
@@ -223,7 +223,7 @@ fn let_letting_agent_deposit_fails() {
             PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed([1; 32].into())),
             Error::<Test>::NoPermission
         );
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
         for x in 1..100 {
             assert_ok!(PropertyManagement::add_letting_agent(
                 RuntimeOrigin::signed([6; 32].into()),
@@ -231,7 +231,7 @@ fn let_letting_agent_deposit_fails() {
                 bvec![10, 10],
                 [x; 32].into(),
             ));
-            Balances::make_free_balance_be(&[x; 32].into(), 200);
+            Balances::make_free_balance_be(&[x; 32].into(), 2_000);
             assert_ok!(PropertyManagement::letting_agent_deposit(
                 RuntimeOrigin::signed([x; 32].into())
             ));
@@ -417,7 +417,7 @@ fn letting_agent_propose_works() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -485,7 +485,7 @@ fn letting_agent_propose_fails() {
             PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
             Error::<Test>::NoObjectFound
         );
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -568,7 +568,7 @@ fn vote_on_letting_agent_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -694,7 +694,7 @@ fn vote_on_letting_agent_fails() {
             ),
             Error::<Test>::NoLettingAgentProposed
         );
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -788,7 +788,7 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -797,7 +797,7 @@ fn finalize_letting_agent_works() {
             bvec![22, 22],
             false
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -806,7 +806,7 @@ fn finalize_letting_agent_works() {
             bvec![22, 22],
             false
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -975,7 +975,7 @@ fn finalize_letting_agent_fails() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1040,7 +1040,7 @@ fn finalize_letting_agent_fails() {
             Error::<Test>::UserNotWhitelisted
         );
         for x in 1..=MaxProperty::get() {
-            assert_ok!(Marketplace::list_object(
+            assert_ok!(Marketplace::list_property(
                 RuntimeOrigin::signed([0; 32].into()),
                 3,
                 bvec![10, 10],
@@ -1144,7 +1144,7 @@ fn distribute_income_works() {
             3,
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1287,7 +1287,7 @@ fn distribute_income_fails() {
             RuntimeOrigin::root(),
             [1; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1373,7 +1373,7 @@ fn distribute_income_fails() {
 }
 
 #[test]
-fn withdraw_funds_works() {
+fn claim_income_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1404,7 +1404,7 @@ fn withdraw_funds_works() {
             3,
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1504,7 +1504,7 @@ fn withdraw_funds_works() {
             1000
         );
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2800);
-        assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
+        assert_eq!(Balances::free_balance(&([4; 32].into())), 4000);
         assert_eq!(
             Balances::free_balance(&PropertyManagement::property_account_id(0)),
             5085
@@ -1517,7 +1517,7 @@ fn withdraw_funds_works() {
             ForeignAssets::balance(1337, &PropertyManagement::property_account_id(0)),
             1000
         );
-        assert_ok!(PropertyManagement::withdraw_funds(
+        assert_ok!(PropertyManagement::claim_income(
             RuntimeOrigin::signed([1; 32].into()),
             0,
             1337
@@ -1540,7 +1540,7 @@ fn withdraw_funds_works() {
 }
 
 #[test]
-fn withdraw_funds_fails() {
+fn claim_income_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         assert_ok!(XcavateWhitelist::add_to_whitelist(
@@ -1571,7 +1571,7 @@ fn withdraw_funds_fails() {
             3,
             [11; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1662,11 +1662,11 @@ fn withdraw_funds_fails() {
             3200
         );
         assert_noop!(
-            PropertyManagement::withdraw_funds(RuntimeOrigin::signed([2; 32].into()), 0, 1984),
+            PropertyManagement::claim_income(RuntimeOrigin::signed([2; 32].into()), 0, 1984),
             Error::<Test>::UserHasNoFundsStored
         );
         assert_noop!(
-            PropertyManagement::withdraw_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1),
+            PropertyManagement::claim_income(RuntimeOrigin::signed([1; 32].into()), 0, 1),
             Error::<Test>::PaymentAssetNotSupported
         );
     });

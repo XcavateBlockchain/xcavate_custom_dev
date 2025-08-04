@@ -32,7 +32,7 @@ use codec::Codec;
 
 use pallet_real_estate_asset::traits::PropertyTokenInspect;
 
-use pallet_xcavate_whitelist::IsWhitelisted;
+use pallet_xcavate_whitelist::HasRole;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
@@ -179,7 +179,7 @@ pub mod pallet {
         #[pallet::constant]
         type LettingAgentVotingTime: Get<BlockNumberFor<Self>>;
 
-        type Whitelist: pallet_xcavate_whitelist::IsWhitelisted<Self::AccountId>;
+        type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -602,7 +602,7 @@ pub mod pallet {
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                <T as pallet::Config>::Whitelist::is_whitelisted(&signer),
+                <T as pallet::Config>::Whitelist::has_role(&signer, pallet_xcavate_whitelist::Role::RealEstateInvestor),
                 Error::<T>::UserNotWhitelisted
             );
 
@@ -732,7 +732,7 @@ pub mod pallet {
         /// Emits `WithdrawFunds` event when succesfful.
         #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
-        pub fn withdraw_funds(
+        pub fn claim_income(
             origin: OriginFor<T>,
             asset_id: u32,
             payment_asset: u32,

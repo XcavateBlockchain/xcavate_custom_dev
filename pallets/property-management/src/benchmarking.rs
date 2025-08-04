@@ -117,7 +117,7 @@ fn list_and_sell_property<T: Config>(
         ]);
 
     let tax_paid_by_developer = true;
-    assert_ok!(Marketplace::<T>::list_object(
+    assert_ok!(Marketplace::<T>::list_property(
         RawOrigin::Signed(seller).into(),
         region_id,
         location,
@@ -665,7 +665,7 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn withdraw_funds() {
+    fn claim_income() {
         let region_owner: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
@@ -730,7 +730,7 @@ mod benchmarks {
         );
 
         #[extrinsic_call]
-        withdraw_funds(
+        claim_income(
             RawOrigin::Signed(token_owner.clone()),
             asset_id,
             payment_asset,

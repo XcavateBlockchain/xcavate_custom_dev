@@ -90,7 +90,7 @@ fn listing_process() {
         RuntimeOrigin::root(),
         [1; 32].into()
     ));
-    assert_ok!(Marketplace::list_object(
+    assert_ok!(Marketplace::list_property(
         RuntimeOrigin::signed([0; 32].into()),
         3,
         bvec![10, 10],
@@ -487,7 +487,7 @@ fn proposal_pass() {
             RuntimeOrigin::root(),
             [2; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([2; 32].into()),
             3,
             bvec![10, 10],
@@ -1180,7 +1180,7 @@ fn challenge_does_not_pass() {
         assert_ok!(PropertyManagement::letting_agent_deposit(
             RuntimeOrigin::signed([1; 32].into())
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1519,7 +1519,7 @@ fn different_proposals() {
             RuntimeOrigin::root(),
             [4; 32].into()
         ));
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
@@ -1759,7 +1759,7 @@ fn propose_property_sale_fails() {
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
             RealEstateAssetError::<Test>::PropertyNotFound
         );
-        assert_ok!(Marketplace::list_object(
+        assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],

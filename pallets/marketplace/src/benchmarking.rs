@@ -108,7 +108,7 @@ fn list_and_sell_property<T: Config>(
         ]);
 
     let tax_paid_by_developer = true;
-    assert_ok!(Marketplace::<T>::list_object(
+    assert_ok!(Marketplace::<T>::list_property(
         RawOrigin::Signed(seller).into(),
         region_id,
         location,
@@ -257,7 +257,7 @@ fn claim_buyers_property_token<T: Config>(buyers: u32, listing_id: ListingId) {
 mod benchmarks {
     use super::*;
     #[benchmark]
-    fn list_object(m: Linear<0, { <T as pallet_nfts::Config>::StringLimit::get() }>) {
+    fn list_property(m: Linear<0, { <T as pallet_nfts::Config>::StringLimit::get() }>) {
         let signer: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(signer.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
@@ -276,7 +276,7 @@ mod benchmarks {
         let tax_paid_by_developer = true;
         assert!(!OngoingObjectListing::<T>::contains_key(0));
         #[extrinsic_call]
-        list_object(
+        list_property(
             RawOrigin::Signed(signer.clone()),
             region_id,
             location,
@@ -324,7 +324,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller).into(),
             region_id,
             location,
@@ -397,7 +397,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller).into(),
             region_id,
             location,
@@ -473,7 +473,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller).into(),
             region_id,
             location,
@@ -627,7 +627,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller).into(),
             region_id,
             location,
@@ -862,7 +862,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller.clone()).into(),
             region_id,
             location,
@@ -984,7 +984,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller.clone()).into(),
             region_id,
             location,
@@ -1051,7 +1051,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller.clone()).into(),
             region_id,
             location,
@@ -1077,31 +1077,6 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn upgrade_listing() {
-        let seller: T::AccountId = create_whitelisted_user::<T>();
-        let (region_id, location) = create_a_new_region::<T>(seller.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location);
-
-        let asset_id = 0;
-        let amount = 1;
-        let price = 5_000u32.into();
-
-        assert_ok!(Marketplace::<T>::relist_token(
-            RawOrigin::Signed(token_owner.clone()).into(),
-            asset_id,
-            price,
-            amount
-        ));
-
-        let new_price = 7_000u32.into();
-
-        #[extrinsic_call]
-        upgrade_listing(RawOrigin::Signed(token_owner.clone()), 1, new_price);
-
-        assert_eq!(TokenListings::<T>::get(1).unwrap().token_price, new_price);
-    }
-
-    #[benchmark]
     fn upgrade_object() {
         let seller: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone());
@@ -1122,7 +1097,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller.clone()).into(),
             region_id,
             location,
@@ -1325,7 +1300,7 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn remove_from_case() {
+    fn remove_lawyer_claim() {
         let seller: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone());
         let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone());
@@ -1373,7 +1348,7 @@ mod benchmarks {
         ));
 
         #[extrinsic_call]
-        remove_from_case(RawOrigin::Signed(lawyer_2.clone()), 0);
+        remove_lawyer_claim(RawOrigin::Signed(lawyer_2.clone()), 0);
 
         assert_eq!(PropertyLawyer::<T>::get(0).unwrap().spv_lawyer, None);
     }
@@ -1400,7 +1375,7 @@ mod benchmarks {
             ]);
 
         let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_object(
+        assert_ok!(Marketplace::<T>::list_property(
             RawOrigin::Signed(seller.clone()).into(),
             region_id,
             location,
