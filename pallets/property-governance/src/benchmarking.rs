@@ -341,9 +341,15 @@ mod benchmarks {
     fn propose() {
         let region_owner: T::AccountId = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
-        let token_owner = create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let letting_agent =
-            set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner);
+        let token_owner =
+            create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
+        let letting_agent = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner,
+        );
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::VotingTime::get());
         let mut proposals = BoundedVec::default();
@@ -377,7 +383,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::VotingTime::get());
         let mut challenges = BoundedVec::default();
@@ -402,8 +414,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let letting_agent =
-            set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let letting_agent = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let data = BoundedVec::try_from("Proposal".as_bytes().to_vec()).unwrap();
         let asset_id = 0;
@@ -436,7 +453,10 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserProposalVote::<T>::get(proposal_id).unwrap().get(&token_owner).unwrap(),
+            UserProposalVote::<T>::get(proposal_id)
+                .unwrap()
+                .get(&token_owner)
+                .unwrap(),
             &crate::Vote::Yes
         );
     }
@@ -447,7 +467,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
         assert_ok!(PropertyGovernance::<T>::challenge_against_letting_agent(
@@ -474,7 +500,10 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserChallengeVote::<T>::get(asset_id).unwrap().get(&token_owner).unwrap(),
+            UserChallengeVote::<T>::get(asset_id)
+                .unwrap()
+                .get(&token_owner)
+                .unwrap(),
             &crate::Vote::Yes
         );
     }
@@ -485,7 +514,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::SaleVotingTime::get());
         let mut sale_proposals = BoundedVec::default();
@@ -510,7 +545,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 
@@ -538,7 +579,10 @@ mod benchmarks {
             1
         );
         assert_eq!(
-            UserSaleProposalVote::<T>::get(asset_id).unwrap().get(&token_owner).unwrap(),
+            UserSaleProposalVote::<T>::get(asset_id)
+                .unwrap()
+                .get(&token_owner)
+                .unwrap(),
             &crate::Vote::Yes
         );
     }
@@ -549,7 +593,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 
@@ -630,7 +680,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 
@@ -711,7 +767,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 
@@ -797,7 +859,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 
@@ -902,7 +970,13 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone());
         let token_owner =
             create_registered_property::<T>(region_owner.clone(), region_id, location.clone());
-        let _ = set_letting_agent::<T>(region_owner.clone(), region_id, location.clone(), 0, token_owner.clone());
+        let _ = set_letting_agent::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            0,
+            token_owner.clone(),
+        );
 
         let asset_id = 0;
 

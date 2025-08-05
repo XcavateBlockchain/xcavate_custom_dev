@@ -114,8 +114,6 @@ pub struct PropertyLawyerDetails<T: Config> {
         <T as pallet::Config>::Balance,
         <T as pallet::Config>::MaxAcceptedAssets,
     >,
-    pub real_estate_developer_lawyer_deposit: <T as pallet::Config>::Balance,
-    pub spv_lawyer_deposit: <T as pallet::Config>::Balance,
     pub second_attempt: bool,
 }
 
@@ -174,7 +172,6 @@ where
 pub struct ProposedDeveloperLawyer<T: Config> {
     pub lawyer: AccountIdOf<T>,
     pub costs: <T as pallet::Config>::Balance,
-    pub deposit: <T as pallet::Config>::Balance,
 }
 
 #[derive(Encode, Decode, Clone, MaxEncodedLen, RuntimeDebug, TypeInfo)]
@@ -184,7 +181,6 @@ pub struct ProposedSpvLawyer<T: Config> {
     pub asset_id: u32,
     pub costs: <T as pallet::Config>::Balance,
     pub expiry_block: BlockNumberFor<T>,
-    pub deposit: <T as pallet::Config>::Balance,
 }
 
 /// Voting stats.

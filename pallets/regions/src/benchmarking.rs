@@ -140,7 +140,12 @@ mod benchmarks {
         vote_on_region_proposal(RawOrigin::Signed(signer.clone()), region_id, Vote::Yes);
 
         assert_eq!(
-            UserRegionVote::<T>::get(region_id).unwrap().get(&signer).cloned().unwrap().vote,
+            UserRegionVote::<T>::get(region_id)
+                .unwrap()
+                .get(&signer)
+                .cloned()
+                .unwrap()
+                .vote,
             Vote::Yes
         );
     }
@@ -170,7 +175,7 @@ mod benchmarks {
             Vote::Yes
         ));
 
-        for i in 1..T::MaxRegionVoters::get(){
+        for i in 1..T::MaxRegionVoters::get() {
             let voter: T::AccountId = account("voter", i, i);
             let _ = T::NativeCurrency::mint_into(&voter, deposit * 1000u32.into());
             Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), voter.clone()).unwrap();
@@ -198,7 +203,7 @@ mod benchmarks {
             RawOrigin::Root.into(),
             first_bidder.clone()
         ));
-/*         assert_ok!(Regions::<T>::bid_on_region(
+        /*         assert_ok!(Regions::<T>::bid_on_region(
             RawOrigin::Signed(first_bidder).into(),
             region_id,
             first_bid_amount
@@ -383,7 +388,10 @@ mod benchmarks {
                 .yes_voting_power,
             vote_power
         );
-        assert!(UserRegionOwnerVote::<T>::get(region_id).unwrap().get(&voter).is_some());
+        assert!(UserRegionOwnerVote::<T>::get(region_id)
+            .unwrap()
+            .get(&voter)
+            .is_some());
     }
 
     #[benchmark]

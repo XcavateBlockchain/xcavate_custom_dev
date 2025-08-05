@@ -155,14 +155,18 @@ pub struct EnsurePermission<T> {
     _phantom: core::marker::PhantomData<T>,
 }
 
-impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role> for EnsurePermission<T> {
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
+    for EnsurePermission<T>
+{
     type Success = T::AccountId;
 
     fn try_origin(
         origin: T::RuntimeOrigin,
         role: &whitelist::Role,
     ) -> Result<Self::Success, T::RuntimeOrigin> {
-        let Some(who) = origin.clone().into_signer() else {return Err(origin)};
+        let Some(who) = origin.clone().into_signer() else {
+            return Err(origin);
+        };
         if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
             Ok(who)
         } else {
@@ -221,8 +225,8 @@ impl crate::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
-    type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
+    type LawyerDeposit = ConstU128<10_000>;
 }
 
 // Build genesis storage according to the mock runtime.

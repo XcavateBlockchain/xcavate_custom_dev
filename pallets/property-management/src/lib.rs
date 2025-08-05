@@ -19,6 +19,7 @@ use frame_support::{
         fungibles::Mutate as FungiblesMutate,
         tokens::Preservation,
         tokens::{fungible, fungibles, Balance},
+        EnsureOriginWithArg,
     },
     PalletId,
 };
@@ -180,6 +181,12 @@ pub mod pallet {
         type LettingAgentVotingTime: Get<BlockNumberFor<Self>>;
 
         type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
+
+        type PermissionOrigin: EnsureOriginWithArg<
+            Self::RuntimeOrigin,
+            pallet_xcavate_whitelist::Role,
+            Success = Self::AccountId,
+        >;
     }
 
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
@@ -234,24 +241,16 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// A new letting agent got set.
-        LettingAgentAdded {
-            region: u16,
-            who: T::AccountId,
-        },
+        LettingAgentAdded { region: u16, who: T::AccountId },
         /// A letting agent deposited the necessary funds.
-        Deposited {
-            who: T::AccountId,
-        },
+        Deposited { who: T::AccountId },
         /// A letting agent has been added to a location.
         LettingAgentAddedToLocation {
             who: T::AccountId,
             location: LocationId<T>,
         },
         /// A letting agent has been added to a property.
-        LettingAgentSet {
-            asset_id: u32,
-            who: T::AccountId,
-        },
+        LettingAgentSet { asset_id: u32, who: T::AccountId },
         /// The rental income has been distributed.
         IncomeDistributed {
             asset_id: u32,
@@ -263,10 +262,7 @@ pub mod pallet {
             amount: <T as pallet::Config>::Balance,
         },
         /// A letting agent has been proposed for a property.
-        LettingAgentProposed {
-            asset_id: u32,
-            who: T::AccountId,
-        },
+        LettingAgentProposed { asset_id: u32, who: T::AccountId },
         /// Someone has voted on a letting agent.
         VotedOnLettingAgent {
             asset_id: u32,
@@ -340,6 +336,8 @@ pub mod pallet {
         LettingAgentProposalOngoing,
         /// There are already too many voters for this voting.
         TooManyVoters,
+        /// The account has not the role of a letting agent.
+        AccountIsNotLettingAgent,
     }
 
     #[pallet::call]
@@ -362,7 +360,10 @@ pub mod pallet {
             location: LocationId<T>,
             letting_agent: AccountIdOf<T>,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RegionalOperator,
+            )?;
             let region_info =
                 pallet_regions::RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
             ensure!(region_info.owner == signer, Error::<T>::NoPermission);
@@ -370,6 +371,10 @@ pub mod pallet {
                 pallet_regions::LocationRegistration::<T>::get(region, &location),
                 Error::<T>::LocationUnknown
             );
+            ensure!(<T as pallet::Config>::Whitelist::has_role(
+                &letting_agent,
+                pallet_xcavate_whitelist::Role::LettingAgent
+            ), Error::<T>::AccountIsNotLettingAgent);
             ensure!(
                 !LettingInfo::<T>::contains_key(&letting_agent),
                 Error::<T>::LettingAgentExists
@@ -401,7 +406,10 @@ pub mod pallet {
         #[pallet::call_index(1)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_deposit())]
         pub fn letting_agent_deposit(origin: OriginFor<T>) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::LettingAgent,
+            )?;
             LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info| {
                 let letting_info = maybe_letting_info
                     .as_mut()
@@ -438,7 +446,10 @@ pub mod pallet {
             location: LocationId<T>,
             letting_agent: AccountIdOf<T>,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RegionalOperator,
+            )?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_letting_info| {
                 let letting_info = maybe_letting_info
                     .as_mut()
@@ -479,7 +490,10 @@ pub mod pallet {
         #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_propose())]
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::LettingAgent,
+            )?;
             ensure!(
                 T::PropertyToken::get_property_asset_info(asset_id).is_some(),
                 Error::<T>::NoObjectFound
@@ -534,7 +548,10 @@ pub mod pallet {
             asset_id: u32,
             vote: Vote,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let proposal_details = LettingAgentProposal::<T>::get(asset_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -600,11 +617,10 @@ pub mod pallet {
         #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_letting_agent())]
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
-            ensure!(
-                <T as pallet::Config>::Whitelist::has_role(&signer, pallet_xcavate_whitelist::Role::RealEstateInvestor),
-                Error::<T>::UserNotWhitelisted
-            );
+            let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
 
             let proposal = LettingAgentProposal::<T>::get(asset_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
@@ -679,7 +695,10 @@ pub mod pallet {
             amount: <T as pallet::Config>::Balance,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::LettingAgent,
+            )?;
             let letting_agent =
                 LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
             ensure!(letting_agent == signer, Error::<T>::NoPermission);
@@ -737,7 +756,10 @@ pub mod pallet {
             asset_id: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported

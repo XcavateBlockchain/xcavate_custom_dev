@@ -2,8 +2,8 @@ use crate::{mock::*, Error, Event};
 use crate::{
     HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
     OngoingRegionProposalVotes, ProposedRegionIds, RealEstateLawyer, RegionAuctions, RegionDetails,
-    RegionOwnerProposals, RegionProposals, RegionReplacementAuctions,
-    UserRegionOwnerVote, UserRegionVote, VoteStats,
+    RegionOwnerProposals, RegionProposals, RegionReplacementAuctions, UserRegionOwnerVote,
+    UserRegionVote, VoteStats,
 };
 use frame_support::BoundedVec;
 use frame_support::{
@@ -334,7 +334,10 @@ fn vote_on_region_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get(3).unwrap().get(&[2; 32].into()).clone(),
+            UserRegionVote::<Test>::get(3)
+                .unwrap()
+                .get(&[2; 32].into())
+                .clone(),
             Some(&crate::VoteRecord {
                 vote: crate::Vote::Yes,
                 power: 300_000
@@ -380,7 +383,10 @@ fn vote_on_region_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get(3).unwrap().get(&[2; 32].into()).clone(),
+            UserRegionVote::<Test>::get(3)
+                .unwrap()
+                .get(&[2; 32].into())
+                .clone(),
             Some(&crate::VoteRecord {
                 vote: crate::Vote::No,
                 power: 300_000
@@ -1048,10 +1054,6 @@ fn create_new_location_works() {
 fn create_new_location_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_noop!(
-            Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]),
-            Error::<Test>::RegionUnknown
-        );
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
             [8; 32].into(),
@@ -1062,7 +1064,16 @@ fn create_new_location_fails() {
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RegionalOperator
         ));
+        assert_noop!(
+            Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 0, bvec![10, 10]),
+            Error::<Test>::RegionUnknown
+        );
         new_region_helper();
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [7; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
         assert_noop!(
             Regions::create_new_location(RuntimeOrigin::signed([7; 32].into()), 3, bvec![10, 10]),
             Error::<Test>::NoPermission
@@ -1202,7 +1213,10 @@ fn vote_on_remove_owner_proposal_works() {
             }
         );
         assert_eq!(
-            UserRegionOwnerVote::<Test>::get(3).unwrap().get(&[0; 32].into()).clone(),
+            UserRegionOwnerVote::<Test>::get(3)
+                .unwrap()
+                .get(&[0; 32].into())
+                .clone(),
             Some(&crate::VoteRecord {
                 vote: crate::Vote::Yes,
                 power: 199_000
@@ -1447,10 +1461,7 @@ fn remove_owner_proposal_doesnt_pass() {
             OngoingRegionOwnerProposalVotes::<Test>::get(3).is_none(),
             true
         );
-        assert_eq!(
-            UserRegionOwnerVote::<Test>::get(3).is_none(),
-            true
-        );
+        assert_eq!(UserRegionOwnerVote::<Test>::get(3).is_none(), true);
         assert_eq!(
             RegionDetails::<Test>::get(3).unwrap().next_owner_change,
             361
@@ -1507,10 +1518,7 @@ fn remove_owner_proposal_doesnt_pass() {
             OngoingRegionOwnerProposalVotes::<Test>::get(3).is_none(),
             true
         );
-        assert_eq!(
-            UserRegionOwnerVote::<Test>::get(3).is_none(),
-            true
-        );
+        assert_eq!(UserRegionOwnerVote::<Test>::get(3).is_none(), true);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([8; 32].into())),
             100_000
@@ -1522,10 +1530,7 @@ fn remove_owner_proposal_doesnt_pass() {
             OngoingRegionOwnerProposalVotes::<Test>::get(3).is_none(),
             true
         );
-        assert_eq!(
-            UserRegionOwnerVote::<Test>::get(3).is_none(),
-            true
-        );
+        assert_eq!(UserRegionOwnerVote::<Test>::get(3).is_none(), true);
         assert_ok!(Regions::propose_remove_regional_operator(
             RuntimeOrigin::signed([0; 32].into()),
             3
@@ -1579,10 +1584,7 @@ fn remove_owner_proposal_doesnt_pass() {
             OngoingRegionOwnerProposalVotes::<Test>::get(3).is_none(),
             true
         );
-        assert_eq!(
-            UserRegionOwnerVote::<Test>::get(3).is_none(),
-            true
-        );
+        assert_eq!(UserRegionOwnerVote::<Test>::get(3).is_none(), true);
         assert_eq!(RegionDetails::<Test>::get(3).unwrap().active_strikes, 1);
         assert_eq!(
             RegionDetails::<Test>::get(3).unwrap().next_owner_change,
@@ -2008,6 +2010,11 @@ fn initiate_region_owner_resignation_fails() {
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RegionalOperator
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
         assert_noop!(
             Regions::initiate_region_owner_resignation(RuntimeOrigin::signed([8; 32].into()), 3),
             Error::<Test>::RegionUnknown
@@ -2054,10 +2061,14 @@ fn register_lawyer_works() {
             RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(),
             true
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
         assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             3,
-            [0; 32].into()
         ));
         assert_eq!(
             RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_some(),
@@ -2070,10 +2081,6 @@ fn register_lawyer_works() {
 fn register_lawyer_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_noop!(
-            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
-            Error::<Test>::RegionUnknown
-        );
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
             [8; 32].into(),
@@ -2084,15 +2091,36 @@ fn register_lawyer_fails() {
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RegionalOperator
         ));
-        new_region_helper();
-        assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([8; 32].into()),
-            3,
-            [0; 32].into()
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            BadOrigin
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_noop!(
-            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 3, [0; 32].into()),
+            Regions::register_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            Error::<Test>::RegionUnknown
+        );
+        new_region_helper();
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+        ));
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
             Error::<Test>::LawyerAlreadyRegistered
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [3; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_noop!(
+            Regions::register_lawyer(RuntimeOrigin::signed([3; 32].into()), 3),
+            TokenError::FundsUnavailable,
         );
         assert_ok!(Regions::propose_new_region(
             RuntimeOrigin::signed([8; 32].into()),
@@ -2117,7 +2145,7 @@ fn register_lawyer_fails() {
             Permill::from_percent(3)
         ));
         assert_noop!(
-            Regions::register_lawyer(RuntimeOrigin::signed([8; 32].into()), 2, [0; 32].into()),
+            Regions::register_lawyer(RuntimeOrigin::signed([0; 32].into()), 2),
             Error::<Test>::LawyerAlreadyRegistered
         );
     })

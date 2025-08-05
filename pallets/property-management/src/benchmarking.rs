@@ -5,11 +5,11 @@ use super::*;
 #[allow(unused)]
 use crate::Pallet as PropertyManagement;
 use frame_benchmarking::v2::*;
-use frame_system::RawOrigin;
 use frame_support::sp_runtime::{Permill, Saturating};
 use frame_support::traits::fungible::Mutate;
 use frame_support::BoundedVec;
 use frame_support::{assert_ok, traits::Get};
+use frame_system::RawOrigin;
 use pallet_marketplace::types::LegalProperty;
 use pallet_marketplace::Pallet as Marketplace;
 use pallet_regions::Pallet as Regions;
@@ -510,7 +510,10 @@ mod benchmarks {
             crate::Vote::Yes,
         );
 
-        assert_eq!(UserLettingAgentVote::<T>::get(0).unwrap().get(&token_owner), Some(crate::Vote::Yes).as_ref());
+        assert_eq!(
+            UserLettingAgentVote::<T>::get(0).unwrap().get(&token_owner),
+            Some(crate::Vote::Yes).as_ref()
+        );
         assert_eq!(
             OngoingLettingAgentVoting::<T>::get(asset_id).unwrap(),
             crate::VoteStats {
@@ -579,10 +582,7 @@ mod benchmarks {
         frame_system::Pallet::<T>::set_block_number(expiry);
 
         #[extrinsic_call]
-        finalize_letting_agent(
-            RawOrigin::Signed(token_owner.clone()),
-            asset_id,
-        );
+        finalize_letting_agent(RawOrigin::Signed(token_owner.clone()), asset_id);
 
         assert!(LettingAgentProposal::<T>::get(asset_id).is_none());
         assert!(OngoingLettingAgentVoting::<T>::get(asset_id).is_none());

@@ -873,8 +873,8 @@ pub mod pallet {
                     map.try_insert(signer.clone(), vote.clone())
                         .map_err(|_| Error::<T>::TooManyVoters)?;
                     Ok::<(), DispatchError>(())
-                })?; 
-                Ok::<(), DispatchError>(())  
+                })?;
+                Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::VotedOnProposal {
                 proposal_id,
@@ -940,7 +940,7 @@ pub mod pallet {
                     map.try_insert(signer.clone(), vote.clone())
                         .map_err(|_| Error::<T>::TooManyVoters)?;
                     Ok::<(), DispatchError>(())
-                })?; 
+                })?;
                 Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::VotedOnChallenge {
@@ -1058,7 +1058,7 @@ pub mod pallet {
                     map.try_insert(signer.clone(), vote.clone())
                         .map_err(|_| Error::<T>::TooManyVoters)?;
                     Ok::<(), DispatchError>(())
-                })?; 
+                })?;
                 Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::VotedOnPropertySaleProposal {
@@ -1089,7 +1089,10 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             ensure!(
-                <T as pallet::Config>::Whitelist::has_role(&signer, pallet_xcavate_whitelist::Role::RealEstateInvestor),
+                <T as pallet::Config>::Whitelist::has_role(
+                    &signer,
+                    pallet_xcavate_whitelist::Role::RealEstateInvestor
+                ),
                 Error::<T>::UserNotWhitelisted
             );
             ensure!(
@@ -1161,7 +1164,7 @@ pub mod pallet {
                 <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
                     .ok_or(Error::<T>::AssetNotFound)?;
             ensure!(
-                lawyer_region == asset_info.region,
+                lawyer_region.region == asset_info.region,
                 Error::<T>::NoPermissionInRegion
             );
             let mut property_sale_info =

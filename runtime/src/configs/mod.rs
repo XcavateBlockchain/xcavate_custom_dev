@@ -35,7 +35,7 @@ use frame_support::{
     parameter_types,
     traits::{
         AsEnsureOriginWithArg, ConstBool, ConstU32, ConstU64, ConstU8, EitherOfDiverse,
-        InstanceFilter, TransformOrigin, VariantCountOf, EnsureOriginWithArg, OriginTrait,
+        EnsureOriginWithArg, InstanceFilter, OriginTrait, TransformOrigin, VariantCountOf,
     },
     weights::{ConstantMultiplier, Weight},
     BoundedVec, PalletId,
@@ -68,8 +68,9 @@ use super::{
     CollatorSelection, ConsensusHook, Hash, MessageQueue, Nfts, Nonce, OriginCaller, PalletInfo,
     ParachainSystem, RealEstateAsset, RealEstateAssets, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
-    System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS, EXISTENTIAL_DEPOSIT, HOURS,
-    MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, UNIT, VERSION, XcavateWhitelist,
+    System, WeightToFee, XcavateWhitelist, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS,
+    EXISTENTIAL_DEPOSIT, HOURS, MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO,
+    SLOT_DURATION, UNIT, VERSION,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use pallet_nfts::PalletFeatures;
@@ -609,7 +610,6 @@ parameter_types! {
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const LawyerVotingDuration: BlockNumber = 20;
-    pub const LawyerDepositAmount: Balance = 10_000 * UNIT;
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -634,7 +634,6 @@ impl pallet_marketplace::Config for Runtime {
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
-    type LawyerDeposit = LawyerDepositAmount;
     type PermissionOrigin = EnsurePermission<Self>;
 }
 
@@ -654,14 +653,18 @@ use pallet_xcavate_whitelist::{self as whitelist, HasRole};
 
 pub struct EnsurePermission<T>(core::marker::PhantomData<T>);
 
-impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role> for EnsurePermission<T> {
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
+    for EnsurePermission<T>
+{
     type Success = T::AccountId;
 
     fn try_origin(
         origin: T::RuntimeOrigin,
         role: &whitelist::Role,
     ) -> Result<Self::Success, T::RuntimeOrigin> {
-        let Some(who) = origin.clone().into_signer() else {return Err(origin)};
+        let Some(who) = origin.clone().into_signer() else {
+            return Err(origin);
+        };
         if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
             Ok(who)
         } else {
@@ -702,6 +705,7 @@ impl pallet_property_management::Config for Runtime {
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
     type Whitelist = XcavateWhitelist;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 parameter_types! {
@@ -762,6 +766,7 @@ parameter_types! {
     pub const RegionProposalDepositAmount: Balance = 5_000 * UNIT;
     pub const MinimumVotingPower: Balance = 100 * UNIT;
     pub const MaximumRegionVoters: u32 = 250;
+    pub const LawyerDepositAmount: Balance = 10_000 * UNIT;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -794,8 +799,8 @@ impl pallet_regions::Config for Runtime {
     type RegionProposalDeposit = RegionProposalDepositAmount;
     type MinimumVotingAmount = MinimumVotingPower;
     type MaxRegionVoters = MaximumRegionVoters;
-    type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
+    type LawyerDeposit = LawyerDepositAmount;
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.

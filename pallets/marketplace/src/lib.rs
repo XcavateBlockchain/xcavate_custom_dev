@@ -69,8 +69,6 @@ pub mod pallet {
     pub enum HoldReason {
         #[codec(index = 0)]
         ListingDepositReserve,
-        #[codec(index = 1)]
-        LawyerDepositReserve,
     }
 
     /// The module configuration trait.
@@ -181,11 +179,11 @@ pub mod pallet {
 
         type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
 
-        /// A deposit for claiming a property.
-        #[pallet::constant]
-        type LawyerDeposit: Get<<Self as pallet::Config>::Balance>;
-
-        type PermissionOrigin: EnsureOriginWithArg<Self::RuntimeOrigin, pallet_xcavate_whitelist::Role, Success = Self::AccountId>;
+        type PermissionOrigin: EnsureOriginWithArg<
+            Self::RuntimeOrigin,
+            pallet_xcavate_whitelist::Role,
+            Success = Self::AccountId,
+        >;
     }
 
     pub type RegionId = u16;
@@ -283,11 +281,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         ListingId,
-        BoundedBTreeMap<
-            AccountIdOf<T>,
-            Vote,
-            <T as pallet::Config>::MaxPropertyToken,
-        >,
+        BoundedBTreeMap<AccountIdOf<T>, Vote, <T as pallet::Config>::MaxPropertyToken>,
         OptionQuery,
     >;
 
@@ -566,7 +560,10 @@ pub mod pallet {
             data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
             tax_paid_by_developer: bool,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateDeveloper)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+            )?;
             ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(
                 token_amount <= <T as pallet::Config>::MaxPropertyToken::get(),
@@ -686,7 +683,10 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             let accepted_payment_assets = T::AcceptedAssets::get();
             ensure!(
@@ -808,8 +808,6 @@ pub mod pallet {
                     spv_status: DocumentStatus::Pending,
                     real_estate_developer_lawyer_costs: initial_funds.clone(),
                     spv_lawyer_costs: initial_funds,
-                    real_estate_developer_lawyer_deposit: Default::default(),
-                    spv_lawyer_deposit: Default::default(),
                     second_attempt: false,
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
@@ -841,7 +839,10 @@ pub mod pallet {
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_property_token())]
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(
@@ -961,7 +962,10 @@ pub mod pallet {
             token_price: <T as pallet::Config>::Balance,
             amount: u32,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
 
@@ -1017,7 +1021,10 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let buyer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let buyer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
@@ -1059,7 +1066,10 @@ pub mod pallet {
             origin: OriginFor<T>,
             listing_id: ListingId,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
@@ -1115,7 +1125,10 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
@@ -1177,7 +1190,10 @@ pub mod pallet {
             offeror: AccountIdOf<T>,
             offer: Offer,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let listing_details =
                 TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
@@ -1236,7 +1252,10 @@ pub mod pallet {
         #[pallet::call_index(8)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let offer_details =
                 OngoingOffers::<T>::take(listing_id, &signer).ok_or(Error::<T>::InvalidIndex)?;
             let price = offer_details.get_total_amount()?;
@@ -1265,7 +1284,10 @@ pub mod pallet {
         #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_rejected())]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let property_account = Self::property_account_id(property_details.asset_id);
@@ -1338,7 +1360,10 @@ pub mod pallet {
         #[pallet::call_index(10)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_expired())]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
@@ -1411,7 +1436,10 @@ pub mod pallet {
             origin: OriginFor<T>,
             listing_id: ListingId,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
@@ -1473,7 +1501,10 @@ pub mod pallet {
             listing_id: ListingId,
             new_price: <T as pallet::Config>::Balance,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateDeveloper)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+            )?;
             ensure!(
                 PropertyLawyer::<T>::get(listing_id).is_none(),
                 Error::<T>::PropertyAlreadySold
@@ -1513,7 +1544,10 @@ pub mod pallet {
         #[pallet::call_index(14)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let listing_details =
                 TokenListings::<T>::take(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
@@ -1550,8 +1584,10 @@ pub mod pallet {
             legal_side: LegalProperty,
             costs: <T as pallet::Config>::Balance,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::Lawyer)?;
-
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::Lawyer,
+            )?;
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
                 .ok_or(Error::<T>::NoPermission)?;
             let property_lawyer_details =
@@ -1562,7 +1598,7 @@ pub mod pallet {
                 T::PropertyToken::get_property_asset_info(property_details.asset_id)
                     .ok_or(Error::<T>::NoObjectFound)?;
             ensure!(
-                lawyer_region == asset_details.region,
+                lawyer_region.region == asset_details.region,
                 Error::<T>::WrongRegion
             );
 
@@ -1579,7 +1615,6 @@ pub mod pallet {
                 .checked_add(collected_fee_usdc)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
             ensure!(collected_fees >= costs, Error::<T>::CostsTooHigh);
-            let deposit = T::LawyerDeposit::get();
             match legal_side {
                 LegalProperty::RealEstateDeveloperSide => {
                     ensure!(
@@ -1599,17 +1634,11 @@ pub mod pallet {
                     if let Some(lawyer_proposal) = SpvLawyerProposal::<T>::get(listing_id) {
                         ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
                     }
-                    <T as pallet::Config>::NativeCurrency::hold(
-                        &HoldReason::LawyerDepositReserve.into(),
-                        &signer,
-                        deposit,
-                    )?;
                     ProposedLawyers::<T>::insert(
                         listing_id,
                         ProposedDeveloperLawyer {
                             lawyer: signer.clone(),
                             costs,
-                            deposit,
                         },
                     );
                 }
@@ -1635,11 +1664,6 @@ pub mod pallet {
                     let current_block_number = <frame_system::Pallet<T>>::block_number();
                     let expiry_block =
                         current_block_number.saturating_add(T::LawyerVotingTime::get());
-                    <T as pallet::Config>::NativeCurrency::hold(
-                        &HoldReason::LawyerDepositReserve.into(),
-                        &signer,
-                        deposit,
-                    )?;
                     SpvLawyerProposal::<T>::insert(
                         listing_id,
                         ProposedSpvLawyer {
@@ -1647,7 +1671,6 @@ pub mod pallet {
                             asset_id: property_details.asset_id,
                             costs,
                             expiry_block,
-                            deposit,
                         },
                     );
 
@@ -1684,7 +1707,10 @@ pub mod pallet {
             listing_id: ListingId,
             vote: Vote,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             let proposal_details =
                 SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -1699,7 +1725,7 @@ pub mod pallet {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLawyerProposed)?;
-                
+
                 UserLawyerVote::<T>::try_mutate(listing_id, |maybe_map| {
                     let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
                     if let Some(previous_vote) = map.get(&signer) {
@@ -1729,8 +1755,8 @@ pub mod pallet {
                     map.try_insert(signer.clone(), vote.clone())
                         .map_err(|_| Error::<T>::TooManyToken)?;
                     Ok::<(), DispatchError>(())
-                })?;          
-                
+                })?;
+
                 Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::VotedOnLawyer {
@@ -1758,7 +1784,10 @@ pub mod pallet {
             listing_id: ListingId,
             approve: bool,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+            )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             ensure!(
@@ -1798,19 +1827,12 @@ pub mod pallet {
                     collected_fee_usdc,
                     proposal.costs,
                 )?;
-                property_lawyer_details.real_estate_developer_lawyer_deposit = proposal.deposit;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
                 Self::deposit_event(Event::RealEstateLawyerApproved {
                     listing_id,
                     lawyer: proposal.lawyer,
                 });
             } else {
-                <T as pallet::Config>::NativeCurrency::release(
-                    &HoldReason::LawyerDepositReserve.into(),
-                    &proposal.lawyer,
-                    proposal.deposit,
-                    Precision::Exact,
-                )?;
                 Self::deposit_event(Event::RealEstateLawyerRejected {
                     listing_id,
                     lawyer: proposal.lawyer,
@@ -1832,7 +1854,10 @@ pub mod pallet {
         #[pallet::call_index(18)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_spv_lawyer())]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::Lawyer)?;
+            let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
 
             let proposal =
                 SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
@@ -1876,19 +1901,12 @@ pub mod pallet {
                     collected_fee_usdc,
                     proposal.costs,
                 )?;
-                property_lawyer_details.spv_lawyer_deposit = proposal.deposit;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
                 Self::deposit_event(Event::SpvLawyerApproved {
                     listing_id,
                     lawyer: proposal.lawyer,
                 });
             } else {
-                <T as pallet::Config>::NativeCurrency::release(
-                    &HoldReason::LawyerDepositReserve.into(),
-                    &proposal.lawyer,
-                    proposal.deposit,
-                    Precision::Exact,
-                )?;
                 Self::deposit_event(Event::SpvLawyerRejected {
                     listing_id,
                     lawyer: proposal.lawyer,
@@ -1912,53 +1930,40 @@ pub mod pallet {
         #[pallet::call_index(19)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::Lawyer,
+            )?;
             ensure!(
                 pallet_regions::RealEstateLawyer::<T>::get(&signer).is_some(),
                 Error::<T>::NoPermission
             );
-            PropertyLawyer::<T>::try_mutate(listing_id, |maybe_details| {
-                let property_lawyer_details = maybe_details.as_mut().ok_or(Error::<T>::InvalidIndex)?;
-                let mut removed = false;
-                if let Some(lawyer) = &property_lawyer_details.real_estate_developer_lawyer {
-                    if lawyer == &signer {
-                        ensure!(
-                            property_lawyer_details.real_estate_developer_status == DocumentStatus::Pending,
-                                Error::<T>::AlreadyConfirmed
-                        );
-                        <T as pallet::Config>::NativeCurrency::release(
-                            &HoldReason::LawyerDepositReserve.into(),
-                            &lawyer,
-                            property_lawyer_details.real_estate_developer_lawyer_deposit,
-                            Precision::Exact,
-                        )?;
-                        property_lawyer_details.real_estate_developer_lawyer = None;
-                        removed = true;
-                    } 
-                } 
-                if let Some(lawyer) = &property_lawyer_details.spv_lawyer {
-                    if lawyer == &signer {
-                        ensure!(
-                            property_lawyer_details.spv_status == DocumentStatus::Pending,
-                            Error::<T>::AlreadyConfirmed
-                        );
-                        <T as pallet::Config>::NativeCurrency::release(
-                            &HoldReason::LawyerDepositReserve.into(),
-                            &lawyer,
-                            property_lawyer_details.spv_lawyer_deposit,
-                            Precision::Exact,
-                        )?;
-                        property_lawyer_details.spv_lawyer = None;
-                        removed = true;
-                    } 
-                }
-                ensure!(removed, Error::<T>::NoPermission);
-                Self::deposit_event(Event::<T>::LawyerRemovedFromCase {
-                    lawyer: signer,
-                    listing_id,
-                });
-                Ok::<(), DispatchError>(())
-            })?;
+            let mut property_lawyer_details =
+                PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            if property_lawyer_details
+                .real_estate_developer_lawyer
+                .as_ref()
+                == Some(&signer)
+            {
+                ensure!(
+                    property_lawyer_details.real_estate_developer_status == DocumentStatus::Pending,
+                    Error::<T>::AlreadyConfirmed
+                );
+                property_lawyer_details.real_estate_developer_lawyer = None;
+            } else if property_lawyer_details.spv_lawyer.as_ref() == Some(&signer) {
+                ensure!(
+                    property_lawyer_details.spv_status == DocumentStatus::Pending,
+                    Error::<T>::AlreadyConfirmed
+                );
+                property_lawyer_details.spv_lawyer = None;
+            } else {
+                return Err(Error::<T>::NoPermission.into());
+            }
+            PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+            Self::deposit_event(Event::<T>::LawyerRemovedFromCase {
+                lawyer: signer,
+                listing_id,
+            });
             Ok(())
         }
 
@@ -1980,8 +1985,10 @@ pub mod pallet {
             listing_id: ListingId,
             approve: bool,
         ) -> DispatchResult {
-            let signer = ensure_signed(origin)?;
-
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::Lawyer,
+            )?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             if property_lawyer_details
@@ -2105,9 +2112,15 @@ pub mod pallet {
             receiver: AccountIdOf<T>,
             token_amount: u32,
         ) -> DispatchResult {
-            let sender = <T as pallet::Config>::PermissionOrigin::ensure_origin(origin, &pallet_xcavate_whitelist::Role::RealEstateInvestor)?;
+            let sender = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
             ensure!(
-                <T as pallet::Config>::Whitelist::has_role(&receiver, pallet_xcavate_whitelist::Role::RealEstateInvestor),
+                <T as pallet::Config>::Whitelist::has_role(
+                    &receiver,
+                    pallet_xcavate_whitelist::Role::RealEstateInvestor
+                ),
                 Error::<T>::UserNotWhitelisted
             );
             T::PropertyToken::transfer_property_token(
@@ -2269,18 +2282,6 @@ pub mod pallet {
                     Precision::Exact,
                 )?;
             }
-            <T as pallet::Config>::NativeCurrency::release(
-                &HoldReason::LawyerDepositReserve.into(),
-                &real_estate_developer_lawyer_id,
-                property_lawyer_details.real_estate_developer_lawyer_deposit,
-                Precision::Exact,
-            )?;
-            <T as pallet::Config>::NativeCurrency::release(
-                &HoldReason::LawyerDepositReserve.into(),
-                &spv_lawyer_id,
-                property_lawyer_details.spv_lawyer_deposit,
-                Precision::Exact,
-            )?;
             Self::deposit_event(Event::<T>::PropertySuccessfullySold {
                 listing_id,
                 item_index: property_details.item_id,
@@ -2299,9 +2300,6 @@ pub mod pallet {
             let treasury_id = Self::treasury_account_id();
             let spv_lawyer_id = property_lawyer_details
                 .spv_lawyer
-                .ok_or(Error::<T>::LawyerNotFound)?;
-            let real_estate_developer_lawyer_id = property_lawyer_details
-                .real_estate_developer_lawyer
                 .ok_or(Error::<T>::LawyerNotFound)?;
 
             // Process fees and transfers for each asset
@@ -2327,18 +2325,6 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, *asset)?;
                 Self::transfer_funds(&property_account, &spv_lawyer_id, lawyer_costs, *asset)?;
             }
-            <T as pallet::Config>::NativeCurrency::release(
-                &HoldReason::LawyerDepositReserve.into(),
-                &real_estate_developer_lawyer_id,
-                property_lawyer_details.real_estate_developer_lawyer_deposit,
-                Precision::Exact,
-            )?;
-            <T as pallet::Config>::NativeCurrency::release(
-                &HoldReason::LawyerDepositReserve.into(),
-                &spv_lawyer_id,
-                property_lawyer_details.spv_lawyer_deposit,
-                Precision::Exact,
-            )?;
             T::PropertyToken::clear_token_owners(property_details.asset_id)?;
             Ok(())
         }

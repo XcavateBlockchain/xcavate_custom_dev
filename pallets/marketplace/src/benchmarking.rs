@@ -1205,7 +1205,10 @@ mod benchmarks {
             0,
             crate::Vote::No
         ));
-        assert_eq!(UserLawyerVote::<T>::get(0).unwrap().get(&token_holder), Some(crate::Vote::No).as_ref());
+        assert_eq!(
+            UserLawyerVote::<T>::get(0).unwrap().get(&token_holder),
+            Some(crate::Vote::No).as_ref()
+        );
 
         #[extrinsic_call]
         vote_on_spv_lawyer(RawOrigin::Signed(token_holder.clone()), 0, types::Vote::Yes);
@@ -1215,7 +1218,10 @@ mod benchmarks {
             OngoingLawyerVoting::<T>::get(0).unwrap().yes_voting_power,
             <T as pallet::Config>::MaxPropertyToken::get()
         );
-        assert_eq!(UserLawyerVote::<T>::get(0).unwrap().get(&token_holder), Some(crate::Vote::Yes).as_ref());
+        assert_eq!(
+            UserLawyerVote::<T>::get(0).unwrap().get(&token_holder),
+            Some(crate::Vote::Yes).as_ref()
+        );
     }
 
     #[benchmark]

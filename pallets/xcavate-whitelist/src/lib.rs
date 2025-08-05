@@ -63,13 +63,13 @@ pub mod pallet {
     /// Mapping of the accounts to the assigned roles.
     #[pallet::storage]
     pub type AccountRoles<T: Config> = StorageDoubleMap<
-        _, 
-        Blake2_128Concat, 
+        _,
+        Blake2_128Concat,
         AccountIdOf<T>,
         Blake2_128Concat,
         Role,
-        (), 
-        OptionQuery
+        (),
+        OptionQuery,
     >;
 
     #[pallet::event]
@@ -103,7 +103,11 @@ pub mod pallet {
         /// Emits `RoleAssigned` event when succesfful
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn assign_role(origin: OriginFor<T>, user: AccountIdOf<T>, role: Role) -> DispatchResult {
+        pub fn assign_role(
+            origin: OriginFor<T>,
+            user: AccountIdOf<T>,
+            role: Role,
+        ) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
                 !AccountRoles::<T>::contains_key(&user, &role),
@@ -125,7 +129,11 @@ pub mod pallet {
         /// Emits `UserRemoved` event when succesfful
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn remove_role(origin: OriginFor<T>, user: AccountIdOf<T>, role: Role) -> DispatchResult {
+        pub fn remove_role(
+            origin: OriginFor<T>,
+            user: AccountIdOf<T>,
+            role: Role,
+        ) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
                 AccountRoles::<T>::contains_key(&user, &role),
@@ -138,7 +146,7 @@ pub mod pallet {
     }
 }
 
-pub trait HasRole<AccountId> { 
+pub trait HasRole<AccountId> {
     fn has_role(account: &AccountId, role: Role) -> bool;
 }
 
