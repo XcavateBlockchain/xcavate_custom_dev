@@ -33,8 +33,6 @@ use codec::Codec;
 
 use pallet_real_estate_asset::traits::PropertyTokenInspect;
 
-use pallet_xcavate_whitelist::HasRole;
-
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
@@ -70,7 +68,7 @@ pub mod pallet {
         pub region: u16,
         pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
         pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
-        pub deposited: bool,
+        pub deposit: <T as pallet::Config>::Balance,
         pub active_strikes: BoundedBTreeMap<u32, u8, T::MaxProperties>,
     }
 
@@ -180,8 +178,6 @@ pub mod pallet {
         #[pallet::constant]
         type LettingAgentVotingTime: Get<BlockNumberFor<Self>>;
 
-        type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
-
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
             pallet_xcavate_whitelist::Role,
@@ -242,13 +238,6 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// A new letting agent got set.
         LettingAgentAdded { region: u16, who: T::AccountId },
-        /// A letting agent deposited the necessary funds.
-        Deposited { who: T::AccountId },
-        /// A letting agent has been added to a location.
-        LettingAgentAddedToLocation {
-            who: T::AccountId,
-            location: LocationId<T>,
-        },
         /// A letting agent has been added to a property.
         LettingAgentSet { asset_id: u32, who: T::AccountId },
         /// The rental income has been distributed.
@@ -308,20 +297,14 @@ pub mod pallet {
         NoObjectFound,
         /// The account is not a letting agent of this location.
         AgentNotFound,
-        /// The letting already deposited the necessary amount.
-        AlreadyDeposited,
         /// The location is not registered.
         LocationUnknown,
         /// The letting agent is already assigned to this location.
         LettingAgentInLocation,
-        /// The letting agent has no funds deposited.
-        NotDeposited,
         /// The letting agent is already registered.
         LettingAgentExists,
         /// This asset has no token.
         AssetNotFound,
-        /// This letting agent has no location.
-        NoLoactions,
         /// This Asset is not supported for payment.
         PaymentAssetNotSupported,
         /// No letting agent has been proposed for this property.
@@ -358,123 +341,57 @@ pub mod pallet {
             origin: OriginFor<T>,
             region: u16,
             location: LocationId<T>,
-            letting_agent: AccountIdOf<T>,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
-                origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
-            )?;
-            let region_info =
-                pallet_regions::RegionDetails::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
-            ensure!(region_info.owner == signer, Error::<T>::NoPermission);
-            ensure!(
-                pallet_regions::LocationRegistration::<T>::get(region, &location),
-                Error::<T>::LocationUnknown
-            );
-            ensure!(<T as pallet::Config>::Whitelist::has_role(
-                &letting_agent,
-                pallet_xcavate_whitelist::Role::LettingAgent
-            ), Error::<T>::AccountIsNotLettingAgent);
-            ensure!(
-                !LettingInfo::<T>::contains_key(&letting_agent),
-                Error::<T>::LettingAgentExists
-            );
-            let mut letting_info = LettingAgentInfo {
-                region,
-                locations: Default::default(),
-                assigned_properties: Default::default(),
-                deposited: Default::default(),
-                active_strikes: Default::default(),
-            };
-            letting_info
-                .locations
-                .try_push(location)
-                .map_err(|_| Error::<T>::TooManyLocations)?;
-            LettingInfo::<T>::insert(&letting_agent, letting_info);
-            Self::deposit_event(Event::<T>::LettingAgentAdded {
-                region,
-                who: letting_agent,
-            });
-            Ok(())
-        }
-
-        /// Lets the letting agent deposit the required amount, to be able to operate as a letting agent.
-        ///
-        /// The origin must be Signed and the sender must have sufficient funds free.
-        ///
-        /// Emits `Deposited` event when succesfful.
-        #[pallet::call_index(1)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_deposit())]
-        pub fn letting_agent_deposit(origin: OriginFor<T>) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info| {
-                let letting_info = maybe_letting_info
-                    .as_mut()
-                    .ok_or(Error::<T>::NoPermission)?;
-                ensure!(!letting_info.deposited, Error::<T>::AlreadyDeposited);
-                ensure!(!letting_info.locations.is_empty(), Error::<T>::NoLoactions);
-
-                <T as pallet::Config>::NativeCurrency::hold(
-                    &HoldReason::LettingAgent.into(),
-                    &signer,
-                    <T as Config>::LettingAgentDeposit::get(),
-                )?;
-
-                letting_info.deposited = true;
-                Ok::<(), DispatchError>(())
-            })?;
-            Self::deposit_event(Event::<T>::Deposited { who: signer });
-            Ok(())
-        }
-
-        /// Adds a letting agent to a location.
-        ///
-        /// The origin must be the AgentOrigin.
-        ///
-        /// Parameters:
-        /// - `location`: The location number where the letting agent should be added to.
-        /// - `letting_agent`: The account of the letting_agent.
-        ///
-        /// Emits `LettingAgentAddedToLocation` event when succesfful.
-        #[pallet::call_index(2)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::add_letting_agent_to_location())]
-        pub fn add_letting_agent_to_location(
-            origin: OriginFor<T>,
-            location: LocationId<T>,
-            letting_agent: AccountIdOf<T>,
-        ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
-                origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
-            )?;
-            LettingInfo::<T>::try_mutate(&letting_agent, |maybe_letting_info| {
-                let letting_info = maybe_letting_info
-                    .as_mut()
-                    .ok_or(Error::<T>::NoLettingAgentFound)?;
-                let region_info = pallet_regions::RegionDetails::<T>::get(letting_info.region)
-                    .ok_or(Error::<T>::RegionUnknown)?;
-                ensure!(region_info.owner == signer, Error::<T>::NoPermission);
-                ensure!(letting_info.deposited, Error::<T>::NotDeposited);
-                ensure!(
-                    pallet_regions::LocationRegistration::<T>::get(letting_info.region, &location),
-                    Error::<T>::LocationUnknown
-                );
+            ensure!(pallet_regions::RegionDetails::<T>::contains_key(region), Error::<T>::RegionUnknown);
+            ensure!(
+                pallet_regions::LocationRegistration::<T>::get(region, &location),
+                Error::<T>::LocationUnknown
+            );
+            let deposit_amount = <T as Config>::LettingAgentDeposit::get();
+            if let Some(mut letting_info) = LettingInfo::<T>::get(&signer) {
                 ensure!(
                     !letting_info.locations.contains(&location),
                     Error::<T>::LettingAgentInLocation
                 );
+                <T as pallet::Config>::NativeCurrency::hold(
+                    &HoldReason::LettingAgent.into(),
+                    &signer,
+                    deposit_amount,
+                )?;
+                letting_info.deposit = letting_info.deposit
+                    .checked_add(&deposit_amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
                 letting_info
                     .locations
                     .try_push(location.clone())
                     .map_err(|_| Error::<T>::TooManyLocations)?;
-                Ok::<(), DispatchError>(())
-            })?;
-            Self::deposit_event(Event::<T>::LettingAgentAddedToLocation {
-                who: letting_agent,
-                location,
+                LettingInfo::<T>::insert(&signer, letting_info);
+            } else {
+                <T as pallet::Config>::NativeCurrency::hold(
+                    &HoldReason::LettingAgent.into(),
+                    &signer,
+                    deposit_amount,
+                )?;
+                let mut letting_info = LettingAgentInfo {
+                    region,
+                    locations: Default::default(),
+                    assigned_properties: Default::default(),
+                    deposit: deposit_amount,
+                    active_strikes: Default::default(),
+                };
+                letting_info
+                    .locations
+                    .try_push(location)
+                    .map_err(|_| Error::<T>::TooManyLocations)?;
+                LettingInfo::<T>::insert(&signer, letting_info);
+            }     
+            Self::deposit_event(Event::<T>::LettingAgentAdded {
+                region,
+                who: signer,
             });
             Ok(())
         }
@@ -506,8 +423,7 @@ pub mod pallet {
                 !LettingAgentProposal::<T>::contains_key(asset_id),
                 Error::<T>::LettingAgentProposalOngoing
             );
-            let letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
-            ensure!(letting_info.deposited, Error::<T>::NotDeposited);
+            ensure!(LettingInfo::<T>::contains_key(&signer), Error::<T>::AgentNotFound);
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::LettingAgentVotingTime::get());

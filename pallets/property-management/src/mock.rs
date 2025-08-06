@@ -305,8 +305,8 @@ impl pallet_regions::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
-    type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
+    type LawyerDeposit = ConstU128<10_000>;
 }
 
 impl pallet_real_estate_asset::Config for Test {
@@ -357,7 +357,6 @@ impl pallet_marketplace::Config for Test {
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
     type Whitelist = XcavateWhitelist;
-    type LawyerDeposit = ConstU128<10_000>;
     type PermissionOrigin = EnsurePermission<Self>;
 }
 
@@ -385,7 +384,6 @@ impl pallet_property_management::Config for Test {
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
-    type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
 }
 
@@ -403,6 +401,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             ([3; 32].into(), 1_005_000),
             ([4; 32].into(), 5_000),
             ([6; 32].into(), 200_000),
+            ([10; 32].into(), 15_000),
+            ([11; 32].into(), 15_000),
             ((Marketplace::account_id()), 20_000_000),
             ((PropertyManagement::property_account_id(0)), 5_000),
         ],

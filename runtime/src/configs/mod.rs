@@ -704,7 +704,6 @@ impl pallet_property_management::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
-    type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
 }
 
@@ -745,7 +744,7 @@ impl pallet_property_governance::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type TreasuryId = TreasuryPalletId;
     type PropertyToken = RealEstateAsset;
-    type Whitelist = XcavateWhitelist;
+    type PermissionOrigin = EnsurePermission<Self>;
 }
 
 parameter_types! {

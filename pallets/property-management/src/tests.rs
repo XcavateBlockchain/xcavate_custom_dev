@@ -11,7 +11,7 @@ use crate::{
     UserLettingAgentVote,
 };
 
-use sp_runtime::{Permill, TokenError};
+use sp_runtime::{Permill, TokenError, traits::BadOrigin};
 
 use pallet_marketplace::types::LegalProperty;
 
@@ -87,10 +87,9 @@ fn add_letting_agent_works() {
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
-            [0; 32].into(),
         ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
@@ -103,6 +102,13 @@ fn add_letting_agent_works() {
                 .locations[0],
             location
         );
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .deposit,
+            1_000
+        );
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
     });
 }
 
@@ -122,10 +128,9 @@ fn add_letting_agent_fails() {
         ));
         assert_noop!(
             PropertyManagement::add_letting_agent(
-                RuntimeOrigin::signed([6; 32].into()),
+                RuntimeOrigin::signed([0; 32].into()),
                 0,
                 bvec![10, 10],
-                [0; 32].into(),
             ),
             Error::<Test>::RegionUnknown
         );
@@ -142,10 +147,9 @@ fn add_letting_agent_fails() {
         new_region_helper();
         assert_noop!(
             PropertyManagement::add_letting_agent(
-                RuntimeOrigin::signed([6; 32].into()),
+                RuntimeOrigin::signed([0; 32].into()),
                 3,
                 bvec![10, 10],
-                [0; 32].into(),
             ),
             Error::<Test>::LocationUnknown
         );
@@ -155,10 +159,9 @@ fn add_letting_agent_fails() {
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
-            [0; 32].into(),
         ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
@@ -166,175 +169,29 @@ fn add_letting_agent_fails() {
         );
         assert_noop!(
             PropertyManagement::add_letting_agent(
-                RuntimeOrigin::signed([6; 32].into()),
+                RuntimeOrigin::signed([0; 32].into()),
                 3,
                 bvec![10, 10],
-                [0; 32].into(),
             ),
-            Error::<Test>::LettingAgentExists
-        );
-    });
-}
-
-#[test]
-fn let_letting_agent_deposit() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [6; 32].into(),
-            pallet_xcavate_whitelist::Role::RealEstateInvestor
-        ));
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [0; 32].into(),
-            pallet_xcavate_whitelist::Role::LettingAgent
-        ));
-        new_region_helper();
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10]
-        ));
-        assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10],
-            [0; 32].into(),
-        ));
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .deposited,
-            false
-        );
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([0; 32].into())
-        ));
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .deposited,
-            true
-        );
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
-    });
-}
-
-#[test]
-fn let_letting_agent_deposit_fails() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [6; 32].into(),
-            pallet_xcavate_whitelist::Role::RealEstateInvestor
-        ));
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [0; 32].into(),
-            pallet_xcavate_whitelist::Role::LettingAgent
-        ));
-        new_region_helper();
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10]
-        ));
-        assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10],
-            [0; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([0; 32].into())
-        ));
-        assert_noop!(
-            PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed([0; 32].into())),
-            Error::<Test>::AlreadyDeposited
+            Error::<Test>::LettingAgentInLocation
         );
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
-            [1; 32].into(),
+            [5; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
         assert_noop!(
-            PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed([1; 32].into())),
-            Error::<Test>::NoPermission
-        );
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
-        assert_ok!(XcavateWhitelist::remove_role(
-            RuntimeOrigin::root(),
-            [1; 32].into(),
-            pallet_xcavate_whitelist::Role::LettingAgent
-        ));
-        for x in 1..100 {
-            assert_ok!(XcavateWhitelist::assign_role(
-                RuntimeOrigin::root(),
-                [x; 32].into(),
-                pallet_xcavate_whitelist::Role::LettingAgent
-            ));
-            assert_ok!(PropertyManagement::add_letting_agent(
-                RuntimeOrigin::signed([6; 32].into()),
+            PropertyManagement::add_letting_agent(
+                RuntimeOrigin::signed([5; 32].into()),
                 3,
                 bvec![10, 10],
-                [x; 32].into(),
-            ));
-            Balances::make_free_balance_be(&[x; 32].into(), 2_000);
-            assert_ok!(PropertyManagement::letting_agent_deposit(
-                RuntimeOrigin::signed([x; 32].into())
-            ));
-        }
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [100; 32].into(),
-            pallet_xcavate_whitelist::Role::LettingAgent
-        ));
-        assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10],
-            [100; 32].into(),
-        ));
-        Balances::make_free_balance_be(&[100; 32].into(), 200);
-    });
-}
-
-#[test]
-fn let_letting_agent_deposit_not_enough_funds() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [6; 32].into(),
-            pallet_xcavate_whitelist::Role::RealEstateInvestor
-        ));
-        assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
-            [5; 32].into(),
-            pallet_xcavate_whitelist::Role::LettingAgent
-        ));
-        new_region_helper();
-        assert_ok!(Regions::create_new_location(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10]
-        ));
-        assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            bvec![10, 10],
-            [5; 32].into(),
-        ));
-        assert_noop!(
-            PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed([5; 32].into())),
-            TokenError::FundsUnavailable
+            ),
+            TokenError::FundsUnavailable,
         );
     });
 }
 
-#[test]
+/* #[test]
 fn add_letting_agent_to_location_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -360,10 +217,9 @@ fn add_letting_agent_to_location_works() {
             bvec![10, 10]
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![9, 10],
-            [0; 32].into(),
         ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
@@ -373,9 +229,8 @@ fn add_letting_agent_to_location_works() {
             RuntimeOrigin::signed([0; 32].into())
         ));
         assert_ok!(PropertyManagement::add_letting_agent_to_location(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             bvec![10, 10],
-            [0; 32].into()
         ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -403,9 +258,8 @@ fn add_letting_agent_to_location_fails() {
         ));
         assert_noop!(
             PropertyManagement::add_letting_agent_to_location(
-                RuntimeOrigin::signed([6; 32].into()),
+                RuntimeOrigin::signed([0; 32].into()),
                 bvec![10, 10],
-                [0; 32].into()
             ),
             Error::<Test>::NoLettingAgentFound
         );
@@ -436,10 +290,9 @@ fn add_letting_agent_to_location_fails() {
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([0; 32].into()),
             3,
             bvec![10, 10],
-            [0; 32].into(),
         ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
@@ -486,7 +339,7 @@ fn add_letting_agent_to_location_fails() {
             Error::<Test>::LettingAgentInLocation
         );
     });
-}
+} */
 
 #[test]
 fn letting_agent_propose_works() {
@@ -534,13 +387,9 @@ fn letting_agent_propose_works() {
             1984
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -614,17 +463,9 @@ fn letting_agent_propose_fails() {
             0
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_noop!(
-            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
-            Error::<Test>::NotDeposited
-        );
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -681,6 +522,11 @@ fn vote_on_letting_agent_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
@@ -711,13 +557,9 @@ fn vote_on_letting_agent_works() {
             0
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -806,6 +648,11 @@ fn vote_on_letting_agent_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
         assert_noop!(
             PropertyManagement::vote_on_letting_agent(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -830,13 +677,9 @@ fn vote_on_letting_agent_fails() {
             1984
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_noop!(
             PropertyManagement::vote_on_letting_agent(
@@ -912,6 +755,16 @@ fn finalize_letting_agent_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [3; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
@@ -980,22 +833,14 @@ fn finalize_letting_agent_works() {
             2
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([3; 32].into()),
             3,
             bvec![10, 10],
-            [3; 32].into(),
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([3; 32].into())
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1092,6 +937,11 @@ fn finalize_letting_agent_fails() {
         ));
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::root(),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1099,6 +949,11 @@ fn finalize_letting_agent_fails() {
             RuntimeOrigin::root(),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
         ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1134,13 +989,9 @@ fn finalize_letting_agent_fails() {
             0
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_noop!(
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
@@ -1162,7 +1013,7 @@ fn finalize_letting_agent_fails() {
         run_to_block(91);
         assert_noop!(
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([3; 32].into()), 0,),
-            Error::<Test>::UserNotWhitelisted
+            BadOrigin
         );
         for x in 1..=MaxProperty::get() {
             assert_ok!(Marketplace::list_property(
@@ -1272,14 +1123,12 @@ fn distribute_income_works() {
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([10; 32].into()),
             3,
-            [10; 32].into()
         ));
         assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([11; 32].into()),
             3,
-            [11; 32].into()
         ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1363,13 +1212,9 @@ fn distribute_income_works() {
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1406,7 +1251,7 @@ fn distribute_income_works() {
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 1800);
     });
 }
-/*
+
 #[test]
 fn distribute_income_fails() {
     new_test_ext().execute_with(|| {
@@ -1432,6 +1277,11 @@ fn distribute_income_fails() {
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
             3,
@@ -1451,6 +1301,11 @@ fn distribute_income_fails() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
         assert_noop!(
             PropertyManagement::distribute_income(
                 RuntimeOrigin::signed([5; 32].into()),
@@ -1465,13 +1320,9 @@ fn distribute_income_fails() {
             0
         );
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1542,15 +1393,28 @@ fn claim_income_works() {
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            [10; 32].into()
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [10; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [11; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([10; 32].into()),
             3,
-            [11; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([11; 32].into()),
+            3,
         ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1609,13 +1473,9 @@ fn claim_income_works() {
             true,
         ));
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1712,15 +1572,33 @@ fn claim_income_fails() {
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
-        assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
-            3,
-            [10; 32].into()
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [10; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::root(),
+            [11; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(Regions::register_lawyer(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([10; 32].into()),
             3,
-            [11; 32].into()
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([11; 32].into()),
+            3,
         ));
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1780,13 +1658,9 @@ fn claim_income_fails() {
         ));
         assert_eq!(LocalAssets::total_supply(0), 1000);
         assert_ok!(PropertyManagement::add_letting_agent(
-            RuntimeOrigin::signed([6; 32].into()),
+            RuntimeOrigin::signed([4; 32].into()),
             3,
             bvec![10, 10],
-            [4; 32].into(),
-        ));
-        assert_ok!(PropertyManagement::letting_agent_deposit(
-            RuntimeOrigin::signed([4; 32].into())
         ));
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1822,4 +1696,3 @@ fn claim_income_fails() {
         );
     });
 }
- */
