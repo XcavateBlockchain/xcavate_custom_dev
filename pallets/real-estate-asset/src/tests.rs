@@ -32,13 +32,15 @@ fn run_to_block(n: u64) {
 }
 
 fn new_region_helper() {
-    assert_ok!(XcavateWhitelist::add_to_whitelist(
+    assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::root(),
-        [8; 32].into()
+        [8; 32].into(),
+        pallet_xcavate_whitelist::Role::RegionalOperator
     ));
-    assert_ok!(Regions::add_regional_operator(
+    assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::root(),
-        [8; 32].into()
+        [8; 32].into(),
+        pallet_xcavate_whitelist::Role::RealEstateInvestor
     ));
     assert_ok!(Regions::propose_new_region(
         RuntimeOrigin::signed([8; 32].into()),

@@ -1,6 +1,6 @@
 use super::*;
 
-use frame_support::{derive_impl, parameter_types, traits::AsEnsureOriginWithArg};
+use frame_support::{derive_impl, parameter_types, traits::{AsEnsureOriginWithArg, EnsureOriginWithArg, OriginTrait}};
 use sp_runtime::{
     traits::{AccountIdLookup, BlakeTwo256, ConstU128, ConstU32, IdentifyAccount, Verify},
     BuildStorage, MultiSignature, Percent,
@@ -205,6 +205,38 @@ impl pallet_xcavate_whitelist::Config for Test {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
+use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+
+pub struct EnsurePermission<T> {
+    _phantom: core::marker::PhantomData<T>,
+}
+
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
+    for EnsurePermission<T>
+{
+    type Success = T::AccountId;
+
+    fn try_origin(
+        origin: T::RuntimeOrigin,
+        role: &whitelist::Role,
+    ) -> Result<Self::Success, T::RuntimeOrigin> {
+        let Some(who) = origin.clone().into_signer() else {
+            return Err(origin);
+        };
+        if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
+            Ok(who)
+        } else {
+            Err(origin)
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn try_successful_origin(_role: &whitelist::Role) -> Result<T::RuntimeOrigin, ()> {
+        let account = frame_benchmarking::whitelisted_caller();
+        Ok(frame_system::RawOrigin::Signed(account).into())
+    }
+}
+
 parameter_types! {
     pub const MarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
     pub const Postcode: u32 = 10;
@@ -237,7 +269,6 @@ impl pallet_regions::Config for Test {
     type RegionAuctionTime = RegionAuctionTime;
     type RegionThreshold = RegionThreshold;
     type RegionProposalCooldown = RegionProposalCooldown;
-    type RegionOperatorOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type RegionOperatorVotingTime = RegionOperatorVotingTime;
     type MaxProposalsForBlock = ConstU32<100>;
     type RegionSlashingAmount = ConstU128<10_000>;
@@ -250,7 +281,8 @@ impl pallet_regions::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
-    type Whitelist = XcavateWhitelist;
+    type PermissionOrigin = EnsurePermission<Self>;
+    type LawyerDeposit = ConstU128<10_000>;
 }
 
 parameter_types! {

@@ -445,6 +445,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             ([6; 32].into(), 300_000),
             ([10; 32].into(), 15_000),
             ([11; 32].into(), 15_000),
+            ([12; 32].into(), 15_000),
             ((Marketplace::account_id()), 20_000_000),
             ((PropertyManagement::property_account_id(0)), 1),
         ],
