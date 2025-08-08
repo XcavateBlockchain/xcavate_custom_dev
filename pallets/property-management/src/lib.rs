@@ -31,7 +31,7 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
-use pallet_real_estate_asset::traits::PropertyTokenInspect;
+use pallet_real_estate_asset::traits::{PropertyTokenInspect, PropertyTokenSpvControl};
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
@@ -172,7 +172,7 @@ pub mod pallet {
         #[pallet::constant]
         type AcceptedAssets: Get<[u32; 2]>;
 
-        type PropertyToken: PropertyTokenInspect<Self>;
+        type PropertyToken: PropertyTokenInspect<Self> + PropertyTokenSpvControl<Self>;
 
         /// The amount of time given to vote for a lawyer proposal.
         #[pallet::constant]
@@ -470,6 +470,7 @@ pub mod pallet {
             )?;
             let proposal_details = LettingAgentProposal::<T>::get(asset_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
+            T::PropertyToken::ensure_spv_created(asset_id)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,

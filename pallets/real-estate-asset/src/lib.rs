@@ -55,6 +55,7 @@ pub mod pallet {
         pub price: <T as pallet::Config>::Balance,
         pub token_amount: u32,
         pub spv_created: bool,
+        pub finalized: bool,
     }
 
     #[pallet::config]
@@ -233,6 +234,8 @@ pub mod pallet {
         SpvAlreadyCreated,
         /// The SPV has not been created.
         SpvNotCreated,
+        /// The property has not been finalized yet.
+        PropertyNotFinalized,
     }
 
     impl<T: Config> Pallet<T> {
@@ -317,6 +320,7 @@ pub mod pallet {
                     price: property_price,
                     token_amount,
                     spv_created: false,
+                    finalized: false,
                 },
             );
 
@@ -481,6 +485,16 @@ pub mod pallet {
             })
         }
 
+        pub(crate) fn do_finalize_property(asset_id: u32) -> DispatchResult {
+            PropertyAssetInfo::<T>::try_mutate(asset_id, |maybe_asset_details| {
+                let asset_details = maybe_asset_details
+                    .as_mut()
+                    .ok_or(Error::<T>::PropertyAssetNotRegistered)?;
+                asset_details.finalized = true;
+                Ok::<(), DispatchError>(())
+            })
+        }
+
         pub(crate) fn do_ensure_spv_not_created(asset_id: u32) -> DispatchResult {
             ensure!(
                 !Self::do_get_property_asset_info(asset_id)
@@ -501,6 +515,16 @@ pub mod pallet {
             Ok(())
         }
 
+        pub(crate) fn do_ensure_property_finalized(asset_id: u32) -> DispatchResult {
+            ensure!(
+                Self::do_get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::PropertyNotFound)?
+                    .finalized,
+                Error::<T>::PropertyNotFinalized
+            );
+            Ok(())
+        }
+
         pub(crate) fn do_get_if_spv_not_created(
             asset_id: u32,
         ) -> Result<
@@ -517,7 +541,7 @@ pub mod pallet {
             Ok(asset_details)
         }
 
-        pub(crate) fn do_get_if_spv_created(
+        pub(crate) fn do_get_if_property_finalized(
             asset_id: u32,
         ) -> Result<
             PropertyAssetDetails<
@@ -529,7 +553,7 @@ pub mod pallet {
         > {
             let asset_details =
                 Self::do_get_property_asset_info(asset_id).ok_or(Error::<T>::PropertyNotFound)?;
-            ensure!(asset_details.spv_created, Error::<T>::SpvNotCreated);
+            ensure!(asset_details.finalized, Error::<T>::PropertyNotFinalized);
             Ok(asset_details)
         }
 

@@ -33,12 +33,12 @@ fn run_to_block(n: u64) {
 
 fn new_region_helper() {
     assert_ok!(XcavateWhitelist::assign_role(
-        RuntimeOrigin::root(),
+        RuntimeOrigin::signed([20; 32].into()),
         [8; 32].into(),
         pallet_xcavate_whitelist::Role::RegionalOperator
     ));
     assert_ok!(XcavateWhitelist::assign_role(
-        RuntimeOrigin::root(),
+        RuntimeOrigin::signed([20; 32].into()),
         [8; 32].into(),
         pallet_xcavate_whitelist::Role::RealEstateInvestor
     ));
@@ -74,6 +74,10 @@ fn new_region_helper() {
 #[test]
 fn create_property_token_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -101,6 +105,7 @@ fn create_property_token_works() {
                 price: 1_000,
                 token_amount: 10,
                 spv_created: false,
+                finalized: false,
             }
         );
     })
@@ -109,6 +114,10 @@ fn create_property_token_works() {
 #[test]
 fn burn_property_token_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -135,6 +144,10 @@ fn burn_property_token_works() {
 #[test]
 fn burn_property_token_fails() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_noop!(
             RealEstateAsset::burn_property_token(0),
@@ -164,6 +177,10 @@ fn burn_property_token_fails() {
 #[test]
 fn distribute_property_token_to_owner_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -211,6 +228,10 @@ fn distribute_property_token_to_owner_works() {
 #[test]
 fn distribute_property_token_to_owner_fails() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -238,6 +259,10 @@ fn distribute_property_token_to_owner_fails() {
 #[test]
 fn transfer_property_token_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -311,6 +336,10 @@ fn transfer_property_token_works() {
 #[test]
 fn transfer_property_token_fails() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -358,6 +387,10 @@ fn transfer_property_token_fails() {
 #[test]
 fn take_property_token_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -387,6 +420,10 @@ fn take_property_token_works() {
 #[test]
 fn remove_token_ownership_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -416,6 +453,10 @@ fn remove_token_ownership_works() {
 #[test]
 fn clear_token_owners_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -454,6 +495,10 @@ fn clear_token_owners_works() {
 #[test]
 fn register_spv_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -473,6 +518,7 @@ fn register_spv_works() {
                 price: 1_000,
                 token_amount: 10,
                 spv_created: false,
+                finalized: false,
             }
         );
         assert_ok!(RealEstateAsset::register_spv(0));
@@ -486,6 +532,7 @@ fn register_spv_works() {
                 price: 1_000,
                 token_amount: 10,
                 spv_created: true,
+                finalized: false,
             }
         );
     })
@@ -494,6 +541,10 @@ fn register_spv_works() {
 #[test]
 fn register_spv_fails() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_noop!(
             RealEstateAsset::register_spv(0),
@@ -505,6 +556,10 @@ fn register_spv_fails() {
 #[test]
 fn getter_function_works() {
     new_test_ext().execute_with(|| {
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
         new_region_helper();
         assert_ok!(RealEstateAsset::create_property_token(
             &[0; 32].into(),
@@ -534,6 +589,7 @@ fn getter_function_works() {
                 price: 1_000,
                 token_amount: 10,
                 spv_created: false,
+                finalized: false,
             }
         );
         assert_eq!(

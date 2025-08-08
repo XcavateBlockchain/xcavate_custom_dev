@@ -37,7 +37,7 @@ fn run_to_block(n: u64) {
 
 fn new_region_helper() {
     assert_ok!(XcavateWhitelist::assign_role(
-        RuntimeOrigin::root(),
+        RuntimeOrigin::signed([20; 32].into()),
         [8; 32].into(),
         pallet_xcavate_whitelist::Role::RegionalOperator
     ));
@@ -69,8 +69,12 @@ fn new_region_helper() {
 fn adjust_listing_duration_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -82,12 +86,12 @@ fn adjust_listing_duration_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -141,8 +145,12 @@ fn adjust_listing_duration_works() {
 fn list_property_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -153,7 +161,7 @@ fn list_property_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
@@ -192,13 +200,17 @@ fn list_property_works() {
 fn list_property_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -276,8 +288,12 @@ fn list_property_fails() {
 fn buy_property_token_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -288,12 +304,12 @@ fn buy_property_token_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [6; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [14; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
@@ -356,8 +372,12 @@ fn buy_property_token_works() {
 fn buy_property_token_works_developer_covers_fees() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -368,12 +388,12 @@ fn buy_property_token_works_developer_covers_fees() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -444,8 +464,12 @@ fn buy_property_token_works_developer_covers_fees() {
 fn buy_property_token_doesnt_work() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -460,8 +484,12 @@ fn buy_property_token_doesnt_work() {
 fn buy_property_token_doesnt_work_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -472,12 +500,12 @@ fn buy_property_token_doesnt_work_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -510,8 +538,12 @@ fn buy_property_token_doesnt_work_2() {
 fn buy_property_token_fails_insufficient_balance() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -522,12 +554,12 @@ fn buy_property_token_fails_insufficient_balance() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [14; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -556,8 +588,12 @@ fn buy_property_token_fails_insufficient_balance() {
 fn listing_and_selling_multiple_objects() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -568,37 +604,37 @@ fn listing_and_selling_multiple_objects() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [15; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -660,6 +696,15 @@ fn listing_and_selling_multiple_objects() {
             1,
             crate::LegalProperty::RealEstateDeveloperSide,
             4_000,
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            1,
         ));
         assert_ok!(Marketplace::approve_developer_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
@@ -774,8 +819,12 @@ fn listing_and_selling_multiple_objects() {
 fn claim_property_token_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -786,17 +835,17 @@ fn claim_property_token_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -934,8 +983,12 @@ fn claim_property_token_works() {
 fn claim_property_token_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -946,17 +999,17 @@ fn claim_property_token_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1013,8 +1066,12 @@ fn claim_property_token_fails() {
 fn claim_property_works1() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1025,22 +1082,22 @@ fn claim_property_works1() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1104,8 +1161,12 @@ fn claim_property_works1() {
 fn claim_property_works2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1116,27 +1177,27 @@ fn claim_property_works2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [9; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1190,6 +1251,15 @@ fn claim_property_works2() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -1249,8 +1319,12 @@ fn claim_property_works2() {
 fn claim_property_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1261,22 +1335,22 @@ fn claim_property_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1453,8 +1527,12 @@ fn claim_property_fails() {
 fn approve_developer_lawyer_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1465,22 +1543,22 @@ fn approve_developer_lawyer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1554,8 +1632,12 @@ fn approve_developer_lawyer_works() {
 fn approve_developer_lawyer_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1566,27 +1648,27 @@ fn approve_developer_lawyer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1639,8 +1721,12 @@ fn approve_developer_lawyer_fails() {
 fn vote_on_spv_lawyer_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1651,27 +1737,32 @@ fn vote_on_spv_lawyer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1706,6 +1797,10 @@ fn vote_on_spv_lawyer_works() {
         ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
@@ -1764,8 +1859,12 @@ fn vote_on_spv_lawyer_works() {
 fn vote_on_spv_lawyer_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1776,32 +1875,32 @@ fn vote_on_spv_lawyer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1858,6 +1957,23 @@ fn vote_on_spv_lawyer_fails() {
                 0,
                 crate::Vote::No
             ),
+            RealEstateAssetError::<Test>::SpvNotCreated
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::Vote::No
+            ),
             Error::<Test>::NoPermission
         );
         run_to_block(100);
@@ -1877,8 +1993,12 @@ fn vote_on_spv_lawyer_fails() {
 fn finalize_spv_lawyer_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -1889,32 +2009,32 @@ fn finalize_spv_lawyer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -1949,6 +2069,15 @@ fn finalize_spv_lawyer_works() {
         ));
         assert_ok!(Marketplace::claim_property_token(
             RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
@@ -2030,8 +2159,12 @@ fn finalize_spv_lawyer_works() {
 fn finalize_spv_lawyer_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -2042,32 +2175,32 @@ fn finalize_spv_lawyer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2112,6 +2245,15 @@ fn finalize_spv_lawyer_fails() {
             Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([0; 32].into()), 0,),
             Error::<Test>::NoLawyerProposed
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -2145,8 +2287,12 @@ fn finalize_spv_lawyer_fails() {
 fn remove_lawyer_claim_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -2157,27 +2303,27 @@ fn remove_lawyer_claim_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [12; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2229,6 +2375,15 @@ fn remove_lawyer_claim_works() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -2287,8 +2442,12 @@ fn remove_lawyer_claim_works() {
 fn remove_lawyer_claim_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -2299,22 +2458,22 @@ fn remove_lawyer_claim_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2373,8 +2532,12 @@ fn remove_lawyer_claim_fails() {
 fn finalize_property_deal() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -2385,22 +2548,22 @@ fn finalize_property_deal() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2458,6 +2621,15 @@ fn finalize_property_deal() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -2536,8 +2708,12 @@ fn finalize_property_deal() {
 fn finalize_property_deal_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -2548,22 +2724,22 @@ fn finalize_property_deal_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2611,6 +2787,15 @@ fn finalize_property_deal_2() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -2675,13 +2860,17 @@ fn finalize_property_deal_2() {
 fn finalize_property_deal_3() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RegionalOperator
         ));
@@ -2713,22 +2902,22 @@ fn finalize_property_deal_3() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2786,6 +2975,15 @@ fn finalize_property_deal_3() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -2880,13 +3078,17 @@ fn finalize_property_deal_3() {
 fn finalize_property_deal_4() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RegionalOperator
         ));
@@ -2918,27 +3120,27 @@ fn finalize_property_deal_4() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -2996,6 +3198,15 @@ fn finalize_property_deal_4() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -3096,8 +3307,12 @@ fn finalize_property_deal_4() {
 fn reject_contract_and_refund() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3108,22 +3323,22 @@ fn reject_contract_and_refund() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3177,6 +3392,15 @@ fn reject_contract_and_refund() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -3310,8 +3534,12 @@ fn reject_contract_and_refund() {
 fn reject_contract_and_refund_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3322,32 +3550,32 @@ fn reject_contract_and_refund_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [7; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3415,6 +3643,15 @@ fn reject_contract_and_refund_2() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -3514,8 +3751,12 @@ fn reject_contract_and_refund_2() {
 fn second_attempt_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3526,22 +3767,22 @@ fn second_attempt_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3589,6 +3830,15 @@ fn second_attempt_works() {
                 .real_estate_developer_lawyer,
             Some([10; 32].into())
         );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -3669,35 +3919,39 @@ fn second_attempt_works() {
 fn lawyer_confirm_documents_fails() {
     new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+		assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
 		new_region_helper();
 		assert_ok!(Regions::create_new_location(RuntimeOrigin::signed([8; 32].into()), 3, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
 		assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [12; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3727,6 +3981,15 @@ fn lawyer_confirm_documents_fails() {
             true
 		));
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_lawyer, Some([10; 32].into()));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
 		assert_ok!(Marketplace::lawyer_claim_property(
 			RuntimeOrigin::signed([11; 32].into()),
 			0,
@@ -3772,8 +4035,12 @@ fn lawyer_confirm_documents_fails() {
 fn relist_a_nft() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3784,22 +4051,22 @@ fn relist_a_nft() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3840,6 +4107,15 @@ fn relist_a_nft() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -3888,13 +4164,17 @@ fn relist_a_nft() {
 fn relist_property_token_not_created_with_marketplace_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3911,7 +4191,7 @@ fn relist_property_token_not_created_with_marketplace_fails() {
             None
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3927,8 +4207,12 @@ fn relist_property_token_not_created_with_marketplace_fails() {
 fn relist_a_nft_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -3939,27 +4223,27 @@ fn relist_a_nft_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -3992,7 +4276,7 @@ fn relist_a_nft_fails() {
         ));
         assert_noop!(
             Marketplace::relist_token(RuntimeOrigin::signed([1; 32].into()), 0, 1000, 10),
-            RealEstateAssetError::<Test>::SpvNotCreated
+            RealEstateAssetError::<Test>::PropertyNotFinalized
         );
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([10; 32].into()),
@@ -4004,6 +4288,15 @@ fn relist_a_nft_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4052,8 +4345,12 @@ fn relist_a_nft_fails() {
 fn buy_relisted_token_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4064,32 +4361,32 @@ fn buy_relisted_token_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4140,6 +4437,15 @@ fn buy_relisted_token_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4231,8 +4537,12 @@ fn buy_relisted_token_works() {
 fn buy_relisted_token_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4243,27 +4553,27 @@ fn buy_relisted_token_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4304,6 +4614,15 @@ fn buy_relisted_token_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4360,8 +4679,12 @@ fn buy_relisted_token_fails() {
 #[test]
 fn make_offer_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4372,27 +4695,27 @@ fn make_offer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4433,6 +4756,15 @@ fn make_offer_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4497,8 +4829,12 @@ fn make_offer_works() {
 #[test]
 fn make_offer_fails() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4509,32 +4845,32 @@ fn make_offer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4575,6 +4911,15 @@ fn make_offer_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4665,8 +5010,12 @@ fn make_offer_fails() {
 #[test]
 fn handle_offer_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4677,32 +5026,32 @@ fn handle_offer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4743,6 +5092,15 @@ fn handle_offer_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -4863,8 +5221,12 @@ fn handle_offer_works() {
 #[test]
 fn handle_offer_fails() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -4875,27 +5237,27 @@ fn handle_offer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -4936,6 +5298,15 @@ fn handle_offer_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5010,8 +5381,12 @@ fn handle_offer_fails() {
 #[test]
 fn cancel_offer_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5022,27 +5397,27 @@ fn cancel_offer_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5083,6 +5458,15 @@ fn cancel_offer_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5157,8 +5541,12 @@ fn cancel_offer_works() {
 #[test]
 fn cancel_offer_fails() {
     new_test_ext().execute_with(|| {
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5169,27 +5557,27 @@ fn cancel_offer_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5230,6 +5618,15 @@ fn cancel_offer_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5300,8 +5697,12 @@ fn cancel_offer_fails() {
 fn upgrade_object_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5312,7 +5713,7 @@ fn upgrade_object_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
@@ -5341,8 +5742,12 @@ fn upgrade_object_works() {
 fn upgrade_object_and_distribute_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5353,27 +5758,27 @@ fn upgrade_object_and_distribute_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5430,6 +5835,15 @@ fn upgrade_object_and_distribute_works() {
             0,
             true
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -5474,8 +5888,12 @@ fn upgrade_object_and_distribute_works() {
 fn upgrade_object_for_relisted_nft_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5486,22 +5904,22 @@ fn upgrade_object_for_relisted_nft_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5542,6 +5960,15 @@ fn upgrade_object_for_relisted_nft_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5586,8 +6013,12 @@ fn upgrade_object_for_relisted_nft_fails() {
 fn upgrade_object_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5598,17 +6029,17 @@ fn upgrade_object_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5657,8 +6088,12 @@ fn upgrade_object_fails() {
 fn delist_single_token_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5669,27 +6104,27 @@ fn delist_single_token_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5730,6 +6165,15 @@ fn delist_single_token_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5807,8 +6251,12 @@ fn delist_single_token_works() {
 fn delist_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5819,27 +6267,27 @@ fn delist_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -5880,6 +6328,15 @@ fn delist_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -5928,8 +6385,12 @@ fn delist_fails() {
 fn listing_objects_in_different_regions() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -5994,47 +6455,47 @@ fn listing_objects_in_different_regions() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [12; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [13; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [14; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [15; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -6120,6 +6581,15 @@ fn listing_objects_in_different_regions() {
             1,
             true
         ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            1,
+        ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([13; 32].into()),
             1,
@@ -6162,6 +6632,10 @@ fn listing_objects_in_different_regions() {
             RuntimeOrigin::signed([0; 32].into()),
             2,
             true
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            2,
         ));
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
@@ -6206,8 +6680,12 @@ fn listing_objects_in_different_regions() {
 fn cancel_property_purchase_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6218,17 +6696,17 @@ fn cancel_property_purchase_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6322,8 +6800,12 @@ fn cancel_property_purchase_works() {
 fn cancel_property_purchase_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6334,22 +6816,22 @@ fn cancel_property_purchase_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6399,8 +6881,12 @@ fn cancel_property_purchase_fails() {
 fn cancel_property_purchase_fails_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6411,17 +6897,17 @@ fn cancel_property_purchase_fails_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6458,8 +6944,12 @@ fn cancel_property_purchase_fails_2() {
 fn withdraw_expired_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6470,12 +6960,12 @@ fn withdraw_expired_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6545,8 +7035,12 @@ fn withdraw_expired_works() {
 fn withdraw_expired_works_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6557,22 +7051,22 @@ fn withdraw_expired_works_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6710,8 +7204,12 @@ fn withdraw_expired_works_2() {
 fn withdraw_expired_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6722,12 +7220,12 @@ fn withdraw_expired_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6766,8 +7264,12 @@ fn withdraw_expired_fails() {
 fn withdraw_expired_fails_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6778,22 +7280,22 @@ fn withdraw_expired_fails_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6824,8 +7326,12 @@ fn withdraw_expired_fails_2() {
 fn send_property_token_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6836,32 +7342,32 @@ fn send_property_token_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -6902,6 +7408,15 @@ fn send_property_token_works() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -6983,8 +7498,12 @@ fn send_property_token_works() {
 fn send_property_token_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -6995,7 +7514,7 @@ fn send_property_token_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
@@ -7009,7 +7528,7 @@ fn send_property_token_fails() {
             BadOrigin
         );
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7042,7 +7561,7 @@ fn send_property_token_fails() {
             Error::<Test>::UserNotWhitelisted
         );
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7056,12 +7575,12 @@ fn send_property_token_fails() {
             RealEstateAssetError::<Test>::NotEnoughToken
         );
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -7083,6 +7602,15 @@ fn send_property_token_fails() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -7126,8 +7654,12 @@ fn send_property_token_fails() {
 fn send_property_token_fails_if_relist() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7138,32 +7670,32 @@ fn send_property_token_fails_if_relist() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [3; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [10; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
@@ -7214,6 +7746,16 @@ fn send_property_token_fails_if_relist() {
             RuntimeOrigin::signed([0; 32].into()),
             0,
             true
+        ));
+
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_claim_property(
             RuntimeOrigin::signed([11; 32].into()),
@@ -7269,8 +7811,12 @@ fn send_property_token_fails_if_relist() {
 fn withdraw_deposit_unsold_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7281,12 +7827,12 @@ fn withdraw_deposit_unsold_works() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7321,8 +7867,12 @@ fn withdraw_deposit_unsold_works() {
 fn withdraw_deposit_unsold_fails() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7333,17 +7883,17 @@ fn withdraw_deposit_unsold_fails() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7387,8 +7937,12 @@ fn withdraw_deposit_unsold_fails() {
 fn withdraw_deposit_unsold_fails_2() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
-        assert_ok!(XcavateWhitelist::assign_role(
+        assert_ok!(XcavateWhitelist::add_admin(
             RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
             [8; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
@@ -7399,17 +7953,17 @@ fn withdraw_deposit_unsold_fails_2() {
             bvec![10, 10]
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateDeveloper
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));
         assert_ok!(XcavateWhitelist::assign_role(
-            RuntimeOrigin::root(),
+            RuntimeOrigin::signed([20; 32].into()),
             [1; 32].into(),
             pallet_xcavate_whitelist::Role::RealEstateInvestor
         ));

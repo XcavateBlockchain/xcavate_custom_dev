@@ -982,7 +982,7 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-            <T as pallet::Config>::PropertyToken::ensure_spv_created(asset_id)?;
+            <T as pallet::Config>::PropertyToken::ensure_property_finalized(asset_id)?;
 
             ensure!(
                 PropertySale::<T>::get(asset_id).is_none(),

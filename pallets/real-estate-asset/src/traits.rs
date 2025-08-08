@@ -40,6 +40,8 @@ pub trait PropertyTokenOwnership<T: Config> {
 pub trait PropertyTokenSpvControl<T: Config> {
     fn register_spv(asset_id: u32) -> DispatchResult;
 
+    fn finalize_property(asset_id: u32) -> DispatchResult;
+
     fn ensure_spv_not_created(asset_id: u32) -> DispatchResult;
 
     fn ensure_spv_created(asset_id: u32) -> DispatchResult;
@@ -55,7 +57,7 @@ pub trait PropertyTokenSpvControl<T: Config> {
         DispatchError,
     >;
 
-    fn get_if_spv_created(
+    fn get_if_property_finalized(
         asset_id: u32,
     ) -> Result<
         PropertyAssetDetails<
@@ -65,6 +67,8 @@ pub trait PropertyTokenSpvControl<T: Config> {
         >,
         DispatchError,
     >;
+
+    fn ensure_property_finalized(asset_id: u32) -> DispatchResult;
 }
 
 pub trait PropertyTokenInspect<T: Config> {
@@ -144,6 +148,10 @@ impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
         Self::do_register_spv(asset_id)
     }
 
+    fn finalize_property(asset_id: u32) -> DispatchResult {
+        Self::do_finalize_property(asset_id)
+    }
+
     fn ensure_spv_not_created(asset_id: u32) -> DispatchResult {
         Self::do_ensure_spv_not_created(asset_id)
     }
@@ -165,7 +173,7 @@ impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
         Self::do_get_if_spv_not_created(asset_id)
     }
 
-    fn get_if_spv_created(
+    fn get_if_property_finalized(
         asset_id: u32,
     ) -> Result<
         PropertyAssetDetails<
@@ -175,7 +183,11 @@ impl<T: Config> PropertyTokenSpvControl<T> for Pallet<T> {
         >,
         DispatchError,
     > {
-        Self::do_get_if_spv_created(asset_id)
+        Self::do_get_if_property_finalized(asset_id)
+    }
+
+    fn ensure_property_finalized(asset_id: u32) -> DispatchResult {
+        Self::do_ensure_property_finalized(asset_id)
     }
 }
 

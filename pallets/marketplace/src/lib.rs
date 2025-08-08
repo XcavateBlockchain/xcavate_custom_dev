@@ -445,6 +445,15 @@ pub mod pallet {
             owner: AccountIdOf<T>,
             amount: u32,
         },
+        SpvCreated {
+            listing_id: ListingId,
+            asset_id: u32,
+        },
+        /// All token of a property have been sold.
+        PropertySoldOut {
+            listing_id: ListingId,
+            asset_id: u32,
+        }
     }
 
     // Errors inform users that something went wrong.
@@ -811,6 +820,10 @@ pub mod pallet {
                     second_attempt: false,
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+                Self::deposit_event(Event::<T>::PropertySoldOut {
+                    listing_id,
+                    asset_id,
+                });
             }
             Self::deposit_event(Event::<T>::PropertyTokenBought {
                 listing_index: listing_id,
@@ -942,6 +955,36 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Claim purchased property token once all token are sold.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing that the investor wants to claim token from.
+        ///
+        /// Emits `PropertyTokenClaimed` event when succesfful.
+        #[pallet::call_index(23)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+            let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::SpvConfirmation,
+            )?;
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::NoObjectFound)?;
+            ensure!(
+                PropertyLawyer::<T>::get(listing_id).is_some(),
+                Error::<T>::PropertyHasNotBeenSoldYet
+            );
+            T::PropertyToken::ensure_spv_not_created(property_details.asset_id)?;
+            T::PropertyToken::register_spv(property_details.asset_id)?;
+            Self::deposit_event(Event::<T>::SpvCreated {
+                listing_id,
+                asset_id: property_details.asset_id,
+            });
+            Ok(())
+        }
+
         /// Relist token on the marketplace.
         /// The property must be registered on the marketplace.
         ///
@@ -969,7 +1012,7 @@ pub mod pallet {
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
 
-            let asset_details = T::PropertyToken::get_if_spv_created(asset_id)?;
+            let asset_details = T::PropertyToken::get_if_property_finalized(asset_id)?;
 
             let property_account = Self::property_account_id(asset_id);
             <T as pallet::Config>::LocalCurrency::transfer(
@@ -1521,7 +1564,10 @@ pub mod pallet {
                     property_details.real_estate_developer == signer,
                     Error::<T>::NoPermission
                 );
-                T::PropertyToken::ensure_spv_not_created(property_details.asset_id)?;
+                ensure!(
+                    !property_details.listed_token_amount.is_zero(),
+                    Error::<T>::PropertyAlreadySold
+                );
                 property_details.token_price = new_price;
                 Ok::<(), DispatchError>(())
             })?;
@@ -1713,6 +1759,7 @@ pub mod pallet {
             )?;
             let proposal_details =
                 SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            T::PropertyToken::ensure_spv_created(proposal_details.asset_id)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,
@@ -2270,9 +2317,7 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
             }
-
-            // Update registered property details to mark SPV as created
-            T::PropertyToken::register_spv(property_details.asset_id)?;
+            T::PropertyToken::finalize_property(property_details.asset_id)?;
             // Release deposit
             if let Some((depositor, deposit_amount)) = ListingDeposits::<T>::take(listing_id) {
                 <T as pallet::Config>::NativeCurrency::release(

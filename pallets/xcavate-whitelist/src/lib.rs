@@ -43,6 +43,7 @@ pub mod pallet {
         RealEstateDeveloper,
         Lawyer,
         LettingAgent,
+        SpvConfirmation,
     }
 
     /// Configure the pallet by specifying the parameters and types on which it depends.
@@ -59,6 +60,16 @@ pub mod pallet {
         #[pallet::constant]
         type MaxUsersInWhitelist: Get<u32>;
     }
+
+    /// Mapping of the admin accounts.
+    #[pallet::storage]
+    pub type AdminAccounts<T: Config> = StorageMap<
+        _,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        (),
+        OptionQuery,
+    >;
 
     /// Mapping of the accounts to the assigned roles.
     #[pallet::storage]
@@ -79,6 +90,10 @@ pub mod pallet {
         RoleAssigned { user: T::AccountId, role: Role },
         /// A role has been removed from a user.
         RoleRemoved { user: T::AccountId, role: Role },
+        /// A new admin has been registered.
+        AdminRegistered { admin: T::AccountId },
+        /// An admin has been removed.
+        AdminRemoved { admin: T::AccountId },
     }
 
     // Errors inform users that something went wrong.
@@ -88,10 +103,63 @@ pub mod pallet {
         RoleAlreadyAssigned,
         /// The role has not been assigned to the user.
         RoleNotAssigned,
+        /// The acount is already registered as an admin.
+        AlreadyAdmin,
+        /// The acount is not registered as an admin.
+        AccountNotAdmin,
     }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+
+        /// Adds an whitelisst admin.
+        ///
+        /// The origin must be the sudo.
+        ///
+        /// Parameters:
+        /// - `user`: The address of the accounts that is added as an admin.
+        ///
+        /// Emits `RoleAssigned` event when succesfful
+        #[pallet::call_index(0)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn add_admin(
+            origin: OriginFor<T>,
+            admin: AccountIdOf<T>,
+        ) -> DispatchResult {
+            T::WhitelistOrigin::ensure_origin(origin)?;
+            ensure!(
+                !AdminAccounts::<T>::contains_key(&admin),
+                Error::<T>::AlreadyAdmin
+            );
+            AdminAccounts::<T>::insert(&admin, ());
+            Self::deposit_event(Event::<T>::AdminRegistered { admin });
+            Ok(())
+        }
+
+        /// Adds an whitelisst admin.
+        ///
+        /// The origin must be the sudo.
+        ///
+        /// Parameters:
+        /// - `user`: The address of the accounts that is added as an admin.
+        ///
+        /// Emits `RoleAssigned` event when succesfful
+        #[pallet::call_index(1)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn remove_admin(
+            origin: OriginFor<T>,
+            admin: AccountIdOf<T>,
+        ) -> DispatchResult {
+            T::WhitelistOrigin::ensure_origin(origin)?;
+            ensure!(
+                AdminAccounts::<T>::contains_key(&admin),
+                Error::<T>::AccountNotAdmin
+            );
+            AdminAccounts::<T>::remove(&admin);
+            Self::deposit_event(Event::<T>::AdminRemoved { admin });
+            Ok(())
+        }
+
         /// Adds a role to a user.
         ///
         /// The origin must be the sudo.
@@ -101,14 +169,15 @@ pub mod pallet {
         /// - `role`: The role that is getting assigned to the user.
         ///
         /// Emits `RoleAssigned` event when succesfful
-        #[pallet::call_index(0)]
+        #[pallet::call_index(2)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn assign_role(
             origin: OriginFor<T>,
             user: AccountIdOf<T>,
             role: Role,
         ) -> DispatchResult {
-            T::WhitelistOrigin::ensure_origin(origin)?;
+            let signer = ensure_signed(origin)?;
+            ensure!(AdminAccounts::<T>::contains_key(&signer), Error::<T>::AccountNotAdmin);
             ensure!(
                 !AccountRoles::<T>::contains_key(&user, &role),
                 Error::<T>::RoleAlreadyAssigned
@@ -127,14 +196,15 @@ pub mod pallet {
         /// - `role`: The role that is getting removed from the user.
         ///
         /// Emits `UserRemoved` event when succesfful
-        #[pallet::call_index(1)]
+        #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_role(
             origin: OriginFor<T>,
             user: AccountIdOf<T>,
             role: Role,
         ) -> DispatchResult {
-            T::WhitelistOrigin::ensure_origin(origin)?;
+            let signer = ensure_signed(origin)?;
+            ensure!(AdminAccounts::<T>::contains_key(&signer), Error::<T>::AccountNotAdmin);
             ensure!(
                 AccountRoles::<T>::contains_key(&user, &role),
                 Error::<T>::RoleNotAssigned
