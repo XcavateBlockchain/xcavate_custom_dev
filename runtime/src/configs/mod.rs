@@ -610,6 +610,7 @@ parameter_types! {
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const LawyerVotingDuration: BlockNumber = 20;
+    pub const LegalProcessDuration: BlockNumber = 30;
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -633,6 +634,7 @@ impl pallet_marketplace::Config for Runtime {
     type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
+    type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
 }

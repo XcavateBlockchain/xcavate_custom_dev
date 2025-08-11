@@ -114,6 +114,7 @@ pub struct PropertyLawyerDetails<T: Config> {
         <T as pallet::Config>::Balance,
         <T as pallet::Config>::MaxAcceptedAssets,
     >,
+    pub legal_process_expiry: BlockNumberFor<T>,
     pub second_attempt: bool,
 }
 
@@ -141,6 +142,11 @@ pub struct TokenOwnerDetails<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct TokenOwnerFunds<T: Config> {
     pub paid_funds: BoundedBTreeMap<
+        u32,
+        <T as pallet::Config>::Balance,
+        <T as pallet::Config>::MaxAcceptedAssets,
+    >,
+    pub paid_fee: BoundedBTreeMap<
         u32,
         <T as pallet::Config>::Balance,
         <T as pallet::Config>::MaxAcceptedAssets,

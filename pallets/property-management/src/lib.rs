@@ -415,6 +415,7 @@ pub mod pallet {
                 T::PropertyToken::get_property_asset_info(asset_id).is_some(),
                 Error::<T>::NoObjectFound
             );
+            T::PropertyToken::ensure_spv_created(asset_id)?;
             ensure!(
                 LettingStorage::<T>::get(asset_id).is_none(),
                 Error::<T>::LettingAgentAlreadySet
@@ -470,7 +471,6 @@ pub mod pallet {
             )?;
             let proposal_details = LettingAgentProposal::<T>::get(asset_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
-            T::PropertyToken::ensure_spv_created(asset_id)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,

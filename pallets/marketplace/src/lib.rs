@@ -177,6 +177,10 @@ pub mod pallet {
         #[pallet::constant]
         type LawyerVotingTime: Get<BlockNumberFor<Self>>;
 
+        /// The amount of time given for the lawyer to handle the legal process.
+        #[pallet::constant]
+        type LegalProcessTime: Get<BlockNumberFor<Self>>;
+
         type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
 
         type PermissionOrigin: EnsureOriginWithArg<
@@ -250,6 +254,11 @@ pub mod pallet {
     #[pallet::storage]
     pub type RefundToken<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, RefundInfos<T>, OptionQuery>;
+
+    /// Stores required infos in case of a refund is a legal process expired.
+    #[pallet::storage]
+    pub type RefundLegalExpired<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, u32, OptionQuery>;
 
     /// Stores the deposit information of a listing.
     #[pallet::storage]
@@ -453,7 +462,7 @@ pub mod pallet {
         PropertySoldOut {
             listing_id: ListingId,
             asset_id: u32,
-        }
+        },
     }
 
     // Errors inform users that something went wrong.
@@ -538,6 +547,10 @@ pub mod pallet {
         VotingStillOngoing,
         /// Property has not been sold yet.
         PropertyHasNotBeenSoldYet,
+        /// The legal process was not finished on time.
+        LegalProcessFailed,
+        /// The legal process is currently ongoing.
+        LegalProcessOngoing,
     }
 
     #[pallet::call]
@@ -810,6 +823,8 @@ pub mod pallet {
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
             if listed_token == 0 {
                 let initial_funds = Self::create_initial_funds()?;
+                let current_block_number = <frame_system::Pallet<T>>::block_number();
+                let expiry_block = current_block_number.saturating_add(T::LegalProcessTime::get());
                 let property_lawyer_details = PropertyLawyerDetails {
                     real_estate_developer_lawyer: None,
                     spv_lawyer: None,
@@ -817,6 +832,7 @@ pub mod pallet {
                     spv_status: DocumentStatus::Pending,
                     real_estate_developer_lawyer_costs: initial_funds.clone(),
                     spv_lawyer_costs: initial_funds,
+                    legal_process_expiry: expiry_block,
                     second_attempt: false,
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
@@ -924,14 +940,31 @@ pub mod pallet {
                                 .try_insert(*asset, investor_net_contribution)
                                 .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
                         }
+                        let paid_fee = &mut token_funds.paid_fee;
+                        if let Some(existing) = paid_fee.get_mut(asset) {
+                            *existing = existing
+                                .checked_add(&investor_fee)
+                                .ok_or(Error::<T>::ArithmeticOverflow)?;
+                        } else {
+                            paid_fee
+                                .try_insert(*asset, investor_fee)
+                                .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                        }
                     }
                     None => {
                         let mut paid_funds = BoundedBTreeMap::new();
                         paid_funds
                             .try_insert(*asset, investor_net_contribution)
                             .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                        let mut paid_fee = BoundedBTreeMap::new();
+                        paid_fee
+                            .try_insert(*asset, investor_fee)
+                            .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 
-                        let new_entry = TokenOwnerFunds { paid_funds };
+                        let new_entry = TokenOwnerFunds {
+                            paid_funds,
+                            paid_fee,
+                        };
                         property_details
                             .investor_funds
                             .try_insert(signer.clone(), new_entry)
@@ -955,14 +988,14 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Claim purchased property token once all token are sold.
+        /// Confirm that a spv has been created.
         ///
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
-        /// - `listing_id`: The listing that the investor wants to claim token from.
+        /// - `listing_id`: The listing that the spv has been created for.
         ///
-        /// Emits `PropertyTokenClaimed` event when succesfful.
+        /// Emits `SpvCreated` event when succesfful.
         #[pallet::call_index(23)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1392,6 +1425,102 @@ pub mod pallet {
             Ok(())
         }
 
+        #[pallet::call_index(24)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn withdraw_legal_process_expired(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+        ) -> DispatchResult {
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let property_account = Self::property_account_id(property_details.asset_id);
+            let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
+                property_details.asset_id,
+                &signer,
+            );
+            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
+
+            let mut refund_infos = match RefundLegalExpired::<T>::get(listing_id) {
+                Some(refund_infos) => refund_infos,
+                None => {
+                    let property_lawyer_details = PropertyLawyer::<T>::take(listing_id)
+                        .ok_or(Error::<T>::TokenNotRefunded)?;
+                    let current_block_number = <frame_system::Pallet<T>>::block_number();
+                    ensure!(
+                        property_lawyer_details.legal_process_expiry < current_block_number,
+                        Error::<T>::LegalProcessOngoing
+                    );
+                    RefundLegalExpired::<T>::insert(listing_id, property_details.token_amount);
+                    property_details.token_amount
+                }
+            };
+
+            refund_infos = refund_infos
+                .checked_sub(token_amount)
+                .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+
+            for &asset in T::AcceptedAssets::get().iter() {
+                if let Some(investor_funds) = property_details.investor_funds.get(&signer).cloned()
+                {
+                    if let Some(paid_funds) = investor_funds.paid_funds.get(&asset).copied() {
+                        if let Some(paid_fee) = investor_funds.paid_fee.get(&asset).copied() {
+                            let transfer_amount = paid_funds
+                                .checked_add(&paid_fee)
+                                .ok_or(Error::<T>::ArithmeticOverflow)?;
+                            Self::transfer_funds(
+                                &property_account,
+                                &signer,
+                                transfer_amount,
+                                asset,
+                            )?;
+                        } else {
+                            Self::transfer_funds(&property_account, &signer, paid_funds, asset)?;
+                        }
+                    }
+                }
+            }
+            <T as pallet::Config>::LocalCurrency::transfer(
+                property_details.asset_id,
+                &signer,
+                &property_account,
+                token_amount.into(),
+                Preservation::Expendable,
+            )?;
+            if refund_infos == 0 {
+                T::PropertyToken::burn_property_token(property_details.asset_id)?;
+                T::PropertyToken::clear_token_owners(property_details.asset_id)?;
+                let (depositor, deposit_amount) =
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                <T as pallet::Config>::NativeCurrency::release(
+                    &HoldReason::ListingDepositReserve.into(),
+                    &depositor,
+                    deposit_amount,
+                    Precision::Exact,
+                )?;
+                let native_balance =
+                    <T as pallet::Config>::NativeCurrency::balance(&property_account);
+                if !native_balance.is_zero() {
+                    <T as pallet::Config>::NativeCurrency::transfer(
+                        &property_account,
+                        &property_details.real_estate_developer,
+                        native_balance,
+                        Preservation::Expendable,
+                    )?;
+                }
+                OngoingObjectListing::<T>::remove(listing_id);
+                RefundLegalExpired::<T>::remove(listing_id);
+            } else {
+                RefundLegalExpired::<T>::insert(listing_id, refund_infos);
+            }
+            T::PropertyToken::remove_property_token_ownership(property_details.asset_id, &signer)?;
+            Self::deposit_event(Event::<T>::RejectedFundsWithdrawn { signer, listing_id });
+            Ok(())
+        }
+
         /// Lets the investor unfreeze his funds after a property listing expired.
         ///
         /// The origin must be Signed and the sender must have sufficient funds free.
@@ -1689,6 +1818,7 @@ pub mod pallet {
                     );
                 }
                 LegalProperty::SpvSide => {
+                    T::PropertyToken::ensure_spv_created(property_details.asset_id)?;
                     ensure!(
                         !SpvLawyerProposal::<T>::contains_key(listing_id),
                         Error::<T>::LawyerProposalOngoing
@@ -1759,7 +1889,6 @@ pub mod pallet {
             )?;
             let proposal_details =
                 SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
-            T::PropertyToken::ensure_spv_created(proposal_details.asset_id)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,
@@ -2038,6 +2167,11 @@ pub mod pallet {
             )?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            ensure!(
+                property_lawyer_details.legal_process_expiry >= current_block_number,
+                Error::<T>::LegalProcessFailed
+            );
             if property_lawyer_details
                 .real_estate_developer_lawyer
                 .as_ref()

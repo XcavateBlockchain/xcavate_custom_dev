@@ -331,6 +331,7 @@ parameter_types! {
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const LawyerVotingDuration: BlockNumber = 30;
+    pub const LegalProcessDuration: BlockNumber = 100;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -354,6 +355,7 @@ impl pallet_marketplace::Config for Test {
     type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
+    type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
 }
