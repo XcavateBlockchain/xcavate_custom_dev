@@ -387,11 +387,6 @@ pub mod pallet {
             signer: AccountIdOf<T>,
             listing_id: ListingId,
         },
-        /// Funds has been withdrawn.
-        ExpiredFundsWithdrawn {
-            signer: AccountIdOf<T>,
-            listing_id: ListingId,
-        },
         /// Funds have been refunded after expired listing.
         ExpiredFundsWithdrawn {
             signer: AccountIdOf<T>,
@@ -2247,25 +2242,7 @@ pub mod pallet {
                     Self::execute_deal(listing_id, property_lawyer_details.clone())?;
                 }
                 (DocumentStatus::Rejected, DocumentStatus::Rejected) => {
-                    let property_details = OngoingObjectListing::<T>::get(listing_id)
-                        .ok_or(Error::<T>::InvalidIndex)?;
-                    let real_estate_developer_lawyer_id = property_lawyer_details
-                        .real_estate_developer_lawyer
-                        .clone()
-                        .ok_or(Error::<T>::LawyerNotFound)?;
-                    let spv_lawyer_id = property_lawyer_details
-                        .spv_lawyer
-                        .clone()
-                        .ok_or(Error::<T>::LawyerNotFound)?;
-                    PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
-                    PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
-                    RefundToken::<T>::insert(
-                        listing_id,
-                        RefundInfos {
-                            refund_amount: property_details.token_amount,
-                            property_lawyer_details: property_lawyer_details.clone(),
-                        },
-                    );
+                    Self::reject_and_refund(listing_id, &property_lawyer_details)?;
                 }
                 (DocumentStatus::Approved, DocumentStatus::Rejected) => {
                     if !property_lawyer_details.second_attempt {
@@ -2275,27 +2252,7 @@ pub mod pallet {
                         property_lawyer_details.second_attempt = true;
                         PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                     } else {
-                        let property_details = OngoingObjectListing::<T>::get(listing_id)
-                            .ok_or(Error::<T>::InvalidIndex)?;
-                        let real_estate_developer_lawyer_id = property_lawyer_details
-                            .real_estate_developer_lawyer
-                            .clone()
-                            .ok_or(Error::<T>::LawyerNotFound)?;
-                        let spv_lawyer_id = property_lawyer_details
-                            .spv_lawyer
-                            .clone()
-                            .ok_or(Error::<T>::LawyerNotFound)?;
-                        PalletRegions::<T>::decrement_active_cases(
-                            &real_estate_developer_lawyer_id,
-                        )?;
-                        PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
-                        RefundToken::<T>::insert(
-                            listing_id,
-                            RefundInfos {
-                                refund_amount: property_details.token_amount,
-                                property_lawyer_details: property_lawyer_details.clone(),
-                            },
-                        );
+                        Self::reject_and_refund(listing_id, &property_lawyer_details)?;
                     }
                 }
                 (DocumentStatus::Rejected, DocumentStatus::Approved) => {
@@ -2306,27 +2263,7 @@ pub mod pallet {
                         property_lawyer_details.second_attempt = true;
                         PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
                     } else {
-                        let property_details = OngoingObjectListing::<T>::get(listing_id)
-                            .ok_or(Error::<T>::InvalidIndex)?;
-                        let real_estate_developer_lawyer_id = property_lawyer_details
-                            .real_estate_developer_lawyer
-                            .clone()
-                            .ok_or(Error::<T>::LawyerNotFound)?;
-                        let spv_lawyer_id = property_lawyer_details
-                            .spv_lawyer
-                            .clone()
-                            .ok_or(Error::<T>::LawyerNotFound)?;
-                        PalletRegions::<T>::decrement_active_cases(
-                            &real_estate_developer_lawyer_id,
-                        )?;
-                        PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
-                        RefundToken::<T>::insert(
-                            listing_id,
-                            RefundInfos {
-                                refund_amount: property_details.token_amount,
-                                property_lawyer_details: property_lawyer_details.clone(),
-                            },
-                        );
+                        Self::reject_and_refund(listing_id, &property_lawyer_details)?;
                     }
                 }
                 _ => {
@@ -2529,6 +2466,32 @@ pub mod pallet {
                 item_index: property_details.item_id,
                 asset_id: property_details.asset_id,
             });
+            Ok(())
+        }
+
+        fn reject_and_refund(
+            listing_id: u32,
+            property_lawyer_details: &PropertyLawyerDetails<T>,
+        ) -> DispatchResult {
+            let property_details = OngoingObjectListing::<T>::get(listing_id)
+                .ok_or(Error::<T>::InvalidIndex)?;
+            let real_estate_developer_lawyer_id = property_lawyer_details
+                .real_estate_developer_lawyer
+                .clone()
+                .ok_or(Error::<T>::LawyerNotFound)?;
+            let spv_lawyer_id = property_lawyer_details
+                .spv_lawyer
+                .clone()
+                .ok_or(Error::<T>::LawyerNotFound)?;
+            PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
+            PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
+            RefundToken::<T>::insert(
+                listing_id,
+                RefundInfos {
+                    refund_amount: property_details.token_amount,
+                    property_lawyer_details: property_lawyer_details.clone(),
+                },
+            );
             Ok(())
         }
 

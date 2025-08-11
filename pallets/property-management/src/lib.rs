@@ -67,7 +67,7 @@ pub mod pallet {
     pub struct LettingAgentInfo<T: Config> {
         pub region: u16,
         pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
-        pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
+        pub assigned_properties: u32,
         pub deposit: <T as pallet::Config>::Balance,
         pub active_strikes: BoundedBTreeMap<u32, u8, T::MaxProperties>,
     }
@@ -383,7 +383,7 @@ pub mod pallet {
                 let mut letting_info = LettingAgentInfo {
                     region,
                     locations: Default::default(),
-                    assigned_properties: Default::default(),
+                    assigned_properties: 0,
                     deposit: deposit_amount,
                     active_strikes: Default::default(),
                 };
@@ -568,24 +568,15 @@ pub mod pallet {
                             LettingStorage::<T>::get(asset_id).is_none(),
                             Error::<T>::LettingAgentAlreadySet
                         );
-                        match letting_info.assigned_properties.try_push(asset_id) {
-                            Ok(()) => {
-                                LettingStorage::<T>::insert(
-                                    asset_id,
-                                    proposal.letting_agent.clone(),
-                                );
-                                Self::deposit_event(Event::<T>::LettingAgentSet {
-                                    asset_id,
-                                    who: proposal.letting_agent,
-                                });
-                            }
-                            Err(_) => {
-                                Self::deposit_event(Event::LettingAgentRejected {
-                                    asset_id,
-                                    letting_agent: proposal.letting_agent,
-                                });
-                            }
-                        }
+                        letting_info.assigned_properties = letting_info
+                            .assigned_properties
+                            .checked_add(1)
+                            .ok_or(Error::<T>::ArithmeticOverflow)?;
+                        LettingStorage::<T>::insert(asset_id, proposal.letting_agent.clone());
+                        Self::deposit_event(Event::<T>::LettingAgentSet {
+                            asset_id,
+                            who: proposal.letting_agent,
+                        });
                         Ok::<(), DispatchError>(())
                     },
                 )?;
@@ -721,7 +712,17 @@ pub mod pallet {
 
         /// Removes bad letting agents.
         pub fn remove_bad_letting_agent(asset_id: u32) -> DispatchResult {
-            LettingStorage::<T>::remove(asset_id);
+            let letting_agent =
+                LettingStorage::<T>::take(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
+
+            LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
+                let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
+                letting_info.assigned_properties = letting_info
+                    .assigned_properties
+                    .checked_sub(1)
+                    .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                Ok::<(), DispatchError>(())
+            })?;
             Ok(())
         }
     }

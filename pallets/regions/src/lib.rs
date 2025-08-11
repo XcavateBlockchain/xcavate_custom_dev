@@ -1433,8 +1433,12 @@ pub mod pallet {
                 RegionDetails::<T>::contains_key(region),
                 Error::<T>::RegionUnknown
             );
-            let lawyer_info = RealEstateLawyer::<T>::get(&signer).ok_or(Error::<T>::NoPermission)?;
-            ensure!(lawyer_info.active_cases.is_zero(), Error::<T>::LawyerStillActive);
+            let lawyer_info =
+                RealEstateLawyer::<T>::get(&signer).ok_or(Error::<T>::NoPermission)?;
+            ensure!(
+                lawyer_info.active_cases.is_zero(),
+                Error::<T>::LawyerStillActive
+            );
             <T as pallet::Config>::NativeCurrency::release(
                 &HoldReason::LawyerDepositReserve.into(),
                 &signer,

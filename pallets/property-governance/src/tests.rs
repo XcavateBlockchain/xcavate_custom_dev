@@ -1409,6 +1409,12 @@ fn challenge_pass() {
                 .unwrap(),
             &2u8
         );
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .assigned_properties,
+            1
+        );
         run_to_block(211);
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -1417,6 +1423,12 @@ fn challenge_pass() {
                 .get(&0u32)
                 .is_none(),
             true
+        );
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .assigned_properties,
+            1
         );
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
         assert_eq!(
