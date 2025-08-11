@@ -1,7 +1,7 @@
 use crate::{mock::*, Error, Event};
 use frame_support::{
     assert_noop, assert_ok,
-    sp_runtime::{Percent, Permill, traits::BadOrigin},
+    sp_runtime::{traits::BadOrigin, Percent, Permill},
     traits::{
         fungible::InspectHold,
         fungibles::{Inspect, InspectHold as FungiblesInspectHold},
@@ -21,7 +21,7 @@ use pallet_marketplace::types::LegalProperty;
 
 use pallet_real_estate_asset::{Error as RealEstateAssetError, PropertyAssetInfo, PropertyOwner};
 
-use pallet_regions::RegionIdentifier;
+use pallet_regions::{RealEstateLawyer, RegionIdentifier};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -43,7 +43,7 @@ fn run_to_block(n: u64) {
 }
 
 fn new_region_helper() {
-        assert_ok!(XcavateWhitelist::assign_role(
+    assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::signed([20; 32].into()),
         [6; 32].into(),
         pallet_xcavate_whitelist::Role::RegionalOperator
@@ -3169,6 +3169,18 @@ fn lawyer_claim_sale_works() {
             PropertySale::<Test>::get(0).unwrap().spv_lawyer.unwrap(),
             [11; 32].into()
         );
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            1
+        );
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([11; 32].into())
+                .unwrap()
+                .active_cases,
+            1
+        );
     });
 }
 
@@ -4360,6 +4372,18 @@ fn lawyer_confirm_sale_works_deny_2() {
             0
         );
         assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([11; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
     });
 }
 
@@ -5183,6 +5207,18 @@ fn claim_sale_funds_works() {
         assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);
         assert_eq!(LocalAssets::total_issuance(0), 0);
         assert_eq!(PropertySale::<Test>::get(0).is_none(), true);
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([11; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
     });
 }
 

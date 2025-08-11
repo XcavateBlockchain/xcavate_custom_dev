@@ -1,9 +1,9 @@
 use crate::{mock::*, Error, Event};
 use crate::{
-    HoldReason, LastRegionProposalBlock, LocationRegistration, OngoingRegionOwnerProposalVotes,
-    OngoingRegionProposalVotes, ProposedRegionIds, RealEstateLawyer, RegionAuctions, RegionDetails,
-    RegionOwnerProposals, RegionProposals, RegionReplacementAuctions, UserRegionOwnerVote,
-    UserRegionVote, VoteStats,
+    HoldReason, LastRegionProposalBlock, LawyerManagement, LocationRegistration,
+    OngoingRegionOwnerProposalVotes, OngoingRegionProposalVotes, ProposedRegionIds,
+    RealEstateLawyer, RegionAuctions, RegionDetails, RegionOwnerProposals, RegionProposals,
+    RegionReplacementAuctions, UserRegionOwnerVote, UserRegionVote, VoteStats,
 };
 use frame_support::BoundedVec;
 use frame_support::{
@@ -2259,6 +2259,180 @@ fn register_lawyer_fails() {
         assert_noop!(
             Regions::register_lawyer(RuntimeOrigin::signed([0; 32].into()), 2),
             Error::<Test>::LawyerAlreadyRegistered
+        );
+    })
+}
+
+// unregister_lawyer function
+#[test]
+fn unregister_lawyer_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        new_region_helper();
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(),
+            true
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_some(),
+            true
+        );
+        assert_ok!(Regions::unregister_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).is_none(),
+            true
+        );
+    })
+}
+
+#[test]
+fn unregister_lawyer_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        assert_noop!(
+            Regions::unregister_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            BadOrigin
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_noop!(
+            Regions::unregister_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            Error::<Test>::RegionUnknown
+        );
+        new_region_helper();
+        assert_noop!(
+            Regions::unregister_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            Error::<Test>::NoPermission
+        );
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+        ));
+        let mut lawyer_info = RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        lawyer_info.active_cases = 10;
+        let account: AccountId = [0u8; 32].into();
+        RealEstateLawyer::<Test>::insert(account, lawyer_info);
+        assert_noop!(
+            Regions::unregister_lawyer(RuntimeOrigin::signed([0; 32].into()), 3),
+            Error::<Test>::LawyerStillActive
+        );
+    })
+}
+
+#[test]
+fn increment_active_cases_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            crate::RegionIdentifier::England
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            crate::Vote::Yes
+        ));
+        run_to_block(31);
+        assert_ok!(Regions::bid_on_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            100_000
+        ));
+        run_to_block(61);
+        assert_ok!(Regions::create_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            30,
+            Permill::from_percent(3)
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
+        assert_ok!(Regions::increment_active_cases(&[0; 32].into(),));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .active_cases,
+            1
         );
     })
 }

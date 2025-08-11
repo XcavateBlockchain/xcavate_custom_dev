@@ -1,6 +1,9 @@
 use super::*;
 
-use frame_support::{derive_impl, parameter_types, traits::{AsEnsureOriginWithArg, EnsureOriginWithArg, OriginTrait}};
+use frame_support::{
+    derive_impl, parameter_types,
+    traits::{AsEnsureOriginWithArg, EnsureOriginWithArg, OriginTrait},
+};
 use sp_runtime::{
     traits::{AccountIdLookup, BlakeTwo256, ConstU128, ConstU32, IdentifyAccount, Verify},
     BuildStorage, MultiSignature, Percent,

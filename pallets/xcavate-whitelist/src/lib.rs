@@ -63,13 +63,8 @@ pub mod pallet {
 
     /// Mapping of the admin accounts.
     #[pallet::storage]
-    pub type AdminAccounts<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        AccountIdOf<T>,
-        (),
-        OptionQuery,
-    >;
+    pub type AdminAccounts<T: Config> =
+        StorageMap<_, Blake2_128Concat, AccountIdOf<T>, (), OptionQuery>;
 
     /// Mapping of the accounts to the assigned roles.
     #[pallet::storage]
@@ -111,7 +106,6 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-
         /// Adds an whitelisst admin.
         ///
         /// The origin must be the sudo.
@@ -122,10 +116,7 @@ pub mod pallet {
         /// Emits `RoleAssigned` event when succesfful
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn add_admin(
-            origin: OriginFor<T>,
-            admin: AccountIdOf<T>,
-        ) -> DispatchResult {
+        pub fn add_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
                 !AdminAccounts::<T>::contains_key(&admin),
@@ -146,10 +137,7 @@ pub mod pallet {
         /// Emits `RoleAssigned` event when succesfful
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn remove_admin(
-            origin: OriginFor<T>,
-            admin: AccountIdOf<T>,
-        ) -> DispatchResult {
+        pub fn remove_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
             T::WhitelistOrigin::ensure_origin(origin)?;
             ensure!(
                 AdminAccounts::<T>::contains_key(&admin),
@@ -177,7 +165,10 @@ pub mod pallet {
             role: Role,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            ensure!(AdminAccounts::<T>::contains_key(&signer), Error::<T>::AccountNotAdmin);
+            ensure!(
+                AdminAccounts::<T>::contains_key(&signer),
+                Error::<T>::AccountNotAdmin
+            );
             ensure!(
                 !AccountRoles::<T>::contains_key(&user, &role),
                 Error::<T>::RoleAlreadyAssigned
@@ -204,7 +195,10 @@ pub mod pallet {
             role: Role,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            ensure!(AdminAccounts::<T>::contains_key(&signer), Error::<T>::AccountNotAdmin);
+            ensure!(
+                AdminAccounts::<T>::contains_key(&signer),
+                Error::<T>::AccountNotAdmin
+            );
             ensure!(
                 AccountRoles::<T>::contains_key(&user, &role),
                 Error::<T>::RoleNotAssigned

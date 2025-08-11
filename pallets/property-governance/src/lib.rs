@@ -20,7 +20,7 @@ use frame_support::{
         fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
         tokens::{fungible, fungibles},
         tokens::{imbalance::OnUnbalanced, Balance, Precision, Preservation},
-        EnsureOriginWithArg
+        EnsureOriginWithArg,
     },
     PalletId,
 };
@@ -32,6 +32,8 @@ use primitives::MarketplaceHoldReason;
 use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
 };
+
+use pallet_regions::{LawyerManagement, Pallet as PalletRegions};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -1206,6 +1208,7 @@ pub mod pallet {
                     );
                     property_sale_info.spv_lawyer = Some(signer.clone());
                     property_sale_info.spv_lawyer_costs = costs;
+                    PalletRegions::<T>::increment_active_cases(&signer)?;
                     PropertySale::<T>::insert(asset_id, property_sale_info);
                 }
                 LegalSale::BuyerSide => {
@@ -1219,6 +1222,7 @@ pub mod pallet {
                     );
                     property_sale_info.buyer_lawyer = Some(signer.clone());
                     property_sale_info.buyer_lawyer_costs = costs;
+                    PalletRegions::<T>::increment_active_cases(&signer)?;
                     PropertySale::<T>::insert(asset_id, property_sale_info);
                 }
             }
@@ -1307,6 +1311,16 @@ pub mod pallet {
                     Self::deposit_event(Event::SaleApproved { asset_id });
                 }
                 (DocumentStatus::Rejected, DocumentStatus::Rejected) => {
+                    let spv_lawyer_account = property_sale_info
+                        .spv_lawyer
+                        .clone()
+                        .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                    let buyer_lawyer_account = property_sale_info
+                        .buyer_lawyer
+                        .clone()
+                        .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                    PalletRegions::<T>::decrement_active_cases(&spv_lawyer_account)?;
+                    PalletRegions::<T>::decrement_active_cases(&buyer_lawyer_account)?;
                     Self::release_token(property_sale_info)?;
                     Self::deposit_event(Event::SaleRejected { asset_id });
                 }
@@ -1317,6 +1331,16 @@ pub mod pallet {
                         property_sale_info.second_attempt = true;
                         PropertySale::<T>::insert(asset_id, property_sale_info);
                     } else {
+                        let spv_lawyer_account = property_sale_info
+                            .spv_lawyer
+                            .clone()
+                            .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                        let buyer_lawyer_account = property_sale_info
+                            .buyer_lawyer
+                            .clone()
+                            .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                        PalletRegions::<T>::decrement_active_cases(&spv_lawyer_account)?;
+                        PalletRegions::<T>::decrement_active_cases(&buyer_lawyer_account)?;
                         Self::release_token(property_sale_info)?;
                         Self::deposit_event(Event::SaleRejected { asset_id });
                     }
@@ -1328,6 +1352,16 @@ pub mod pallet {
                         property_sale_info.second_attempt = true;
                         PropertySale::<T>::insert(asset_id, property_sale_info);
                     } else {
+                        let spv_lawyer_account = property_sale_info
+                            .spv_lawyer
+                            .clone()
+                            .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                        let buyer_lawyer_account = property_sale_info
+                            .buyer_lawyer
+                            .clone()
+                            .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                        PalletRegions::<T>::decrement_active_cases(&spv_lawyer_account)?;
+                        PalletRegions::<T>::decrement_active_cases(&buyer_lawyer_account)?;
                         Self::release_token(property_sale_info)?;
                         Self::deposit_event(Event::SaleRejected { asset_id });
                     }
@@ -1564,6 +1598,16 @@ pub mod pallet {
             if property_sale_info.property_token_amount == 0 {
                 <T as pallet::Config>::PropertyToken::burn_property_token(asset_id)?;
                 <T as pallet::Config>::PropertyToken::clear_token_owners(asset_id)?;
+                let spv_lawyer_account = property_sale_info
+                    .spv_lawyer
+                    .clone()
+                    .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                let buyer_lawyer_account = property_sale_info
+                    .buyer_lawyer
+                    .clone()
+                    .ok_or(Error::<T>::SpvLawyerNotSet)?;
+                PalletRegions::<T>::decrement_active_cases(&spv_lawyer_account)?;
+                PalletRegions::<T>::decrement_active_cases(&buyer_lawyer_account)?;
             } else {
                 PropertySale::<T>::insert(asset_id, property_sale_info);
             }

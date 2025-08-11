@@ -3,15 +3,15 @@ use frame_support::traits::Currency;
 use frame_support::BoundedVec;
 use frame_support::{
     assert_noop, assert_ok,
-    traits::{OnFinalize, OnInitialize, fungible::InspectHold},
+    traits::{fungible::InspectHold, OnFinalize, OnInitialize},
 };
 
 use crate::{
-    InvestorFunds, LettingAgentProposal, LettingInfo, LettingStorage, OngoingLettingAgentVoting,
-    UserLettingAgentVote, HoldReason
+    HoldReason, InvestorFunds, LettingAgentProposal, LettingInfo, LettingStorage,
+    OngoingLettingAgentVoting, UserLettingAgentVote,
 };
 
-use sp_runtime::{Permill, TokenError, traits::BadOrigin};
+use sp_runtime::{traits::BadOrigin, Permill, TokenError};
 
 use pallet_marketplace::types::LegalProperty;
 
@@ -192,7 +192,6 @@ fn add_letting_agent_works2() {
         );
     });
 }
-
 
 #[test]
 fn add_letting_agent_fails() {

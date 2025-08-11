@@ -99,12 +99,13 @@ pub mod pallet {
         pub power: T::Balance,
     }
 
-     /// Infos of a lawyer.
+    /// Infos of a lawyer.
     #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
     #[scale_info(skip_type_params(T))]
     pub struct LawyerInfo<T: Config> {
         pub region: RegionId,
         pub deposit: T::Balance,
+        pub active_cases: u32,
     }
 
     /// Vote enum.
@@ -517,6 +518,11 @@ pub mod pallet {
             lawyer: T::AccountId,
             region_id: RegionId,
         },
+        /// Lawyer has been unregistered.
+        LawyerUnregistered {
+            lawyer: T::AccountId,
+            region_id: RegionId,
+        },
     }
 
     #[pallet::error]
@@ -528,6 +534,7 @@ pub mod pallet {
         /// Listing limit is set too high.
         ListingDurationTooHigh,
         ArithmeticOverflow,
+        ArithmeticUnderflow,
         /// This Region is not known.
         RegionUnknown,
         /// No sufficient permission.
@@ -588,6 +595,10 @@ pub mod pallet {
         TooManyVoters,
         /// The account can has not lawyer permission.
         AccountNotLawyer,
+        /// Lawyer is not registered.
+        LawyerNotRegistered,
+        /// The lawyer is still active in some cases.
+        LawyerStillActive,
     }
 
     #[pallet::hooks]
@@ -1361,7 +1372,6 @@ pub mod pallet {
             Ok(())
         }
 
-        /// !!!!To be removed!!!!
         /// Registers a new lawyer.
         ///
         /// The origin must be Signed and the sender must have sufficient funds free.
@@ -1372,15 +1382,15 @@ pub mod pallet {
         /// Emits `LawyerRegistered` event when succesfful.
         #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::register_lawyer())]
-        pub fn register_lawyer(
-            origin: OriginFor<T>,
-            region: RegionId,
-        ) -> DispatchResult {
+        pub fn register_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::Lawyer,
             )?;
-            ensure!(RegionDetails::<T>::contains_key(region), Error::<T>::RegionUnknown);
+            ensure!(
+                RegionDetails::<T>::contains_key(region),
+                Error::<T>::RegionUnknown
+            );
             ensure!(
                 RealEstateLawyer::<T>::get(&signer).is_none(),
                 Error::<T>::LawyerAlreadyRegistered
@@ -1394,9 +1404,45 @@ pub mod pallet {
             let lawyer_info = LawyerInfo {
                 region,
                 deposit: deposit_amount,
+                active_cases: 0,
             };
             RealEstateLawyer::<T>::insert(&signer, lawyer_info);
             Self::deposit_event(Event::<T>::LawyerRegistered {
+                lawyer: signer,
+                region_id: region,
+            });
+            Ok(())
+        }
+
+        /// Unegisters a new lawyer.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `lawyer`: The lawyer that should be runegistered.
+        ///
+        /// Emits `LawyerUnregistered` event when succesfful.
+        #[pallet::call_index(14)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unregister_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
+            let signer = T::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::Lawyer,
+            )?;
+            ensure!(
+                RegionDetails::<T>::contains_key(region),
+                Error::<T>::RegionUnknown
+            );
+            let lawyer_info = RealEstateLawyer::<T>::get(&signer).ok_or(Error::<T>::NoPermission)?;
+            ensure!(lawyer_info.active_cases.is_zero(), Error::<T>::LawyerStillActive);
+            <T as pallet::Config>::NativeCurrency::release(
+                &HoldReason::LawyerDepositReserve.into(),
+                &signer,
+                lawyer_info.deposit,
+                Precision::Exact,
+            )?;
+            RealEstateLawyer::<T>::remove(&signer);
+            Self::deposit_event(Event::<T>::LawyerUnregistered {
                 lawyer: signer,
                 region_id: region,
             });
@@ -1609,5 +1655,38 @@ pub mod pallet {
                 mint_settings: MintSettings::default(),
             }
         }
+    }
+}
+
+pub trait LawyerManagement<T: Config> {
+    fn increment_active_cases(lawyer: &<T as frame_system::Config>::AccountId) -> DispatchResult;
+    fn decrement_active_cases(lawyer: &<T as frame_system::Config>::AccountId) -> DispatchResult;
+}
+
+impl<T: Config> LawyerManagement<T> for Pallet<T> {
+    fn increment_active_cases(lawyer: &<T as frame_system::Config>::AccountId) -> DispatchResult {
+        RealEstateLawyer::<T>::try_mutate(lawyer, |maybe_lawyer_info| {
+            let lawyer_info = maybe_lawyer_info
+                .as_mut()
+                .ok_or(Error::<T>::LawyerNotRegistered)?;
+            lawyer_info.active_cases = lawyer_info
+                .active_cases
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            Ok(())
+        })
+    }
+
+    fn decrement_active_cases(lawyer: &<T as frame_system::Config>::AccountId) -> DispatchResult {
+        RealEstateLawyer::<T>::try_mutate(lawyer, |maybe_lawyer_info| {
+            let lawyer_info = maybe_lawyer_info
+                .as_mut()
+                .ok_or(Error::<T>::LawyerNotRegistered)?;
+            lawyer_info.active_cases = lawyer_info
+                .active_cases
+                .checked_sub(1)
+                .ok_or(Error::<T>::ArithmeticUnderflow)?;
+            Ok(())
+        })
     }
 }

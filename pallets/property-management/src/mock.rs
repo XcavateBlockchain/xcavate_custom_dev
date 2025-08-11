@@ -1,7 +1,11 @@
 use super::*;
 
 use crate as pallet_property_management;
-use frame_support::{derive_impl, parameter_types, traits::{AsEnsureOriginWithArg, OriginTrait}, BoundedVec};
+use frame_support::{
+    derive_impl, parameter_types,
+    traits::{AsEnsureOriginWithArg, OriginTrait},
+    BoundedVec,
+};
 use sp_core::{ConstU128, ConstU32};
 use sp_runtime::{
     traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
@@ -333,6 +337,7 @@ parameter_types! {
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const LawyerVotingDuration: BlockNumber = 30;
+    pub const LegalProcessDuration: BlockNumber = 100;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -356,6 +361,7 @@ impl pallet_marketplace::Config for Test {
     type MaxAcceptedAssets = MaximumAcceptedAssets;
     type PropertyToken = RealEstateAsset;
     type LawyerVotingTime = LawyerVotingDuration;
+    type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
 }

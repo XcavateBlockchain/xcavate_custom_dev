@@ -13,7 +13,7 @@ use pallet_real_estate_asset::{
     Error as RealEstateAssetError, NextAssetId, NextNftId, PropertyAssetInfo, PropertyOwner,
     PropertyOwnerToken,
 };
-use pallet_regions::{RegionDetails, RegionIdentifier};
+use pallet_regions::{RealEstateLawyer, RegionDetails, RegionIdentifier};
 use sp_runtime::{traits::BadOrigin, Permill, TokenError};
 
 macro_rules! bvec {
@@ -1751,6 +1751,27 @@ fn approve_developer_lawyer_works() {
             0,
             false
         ));
+        assert_ok!(Marketplace::list_property(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            1_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+            100,
+            1984
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
         assert_eq!(ProposedLawyers::<Test>::get(0).is_none(), true);
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
@@ -1769,6 +1790,29 @@ fn approve_developer_lawyer_works() {
             0,
             true
         ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            1
+        );
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([10; 32].into()),
+            1,
+            crate::LegalProperty::RealEstateDeveloperSide,
+            300,
+        ));
+        assert_ok!(Marketplace::approve_developer_lawyer(
+            RuntimeOrigin::signed([0; 32].into()),
+            1,
+            true
+        ));
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            2
+        );
         assert_eq!(ProposedLawyers::<Test>::get(0).is_none(), true);
         assert_eq!(
             PropertyLawyer::<Test>::get(0)
@@ -2823,6 +2867,12 @@ fn finalize_property_deal() {
             true,
         ));
         assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
+        assert_eq!(
             Balances::balance_on_hold(&HoldReason::ListingDepositReserve.into(), &([0; 32].into())),
             0
         );
@@ -3678,6 +3728,12 @@ fn reject_contract_and_refund() {
         assert_eq!(Balances::balance(&(Marketplace::property_account_id(0))), 0);
         assert_eq!(Nfts::owner(0, 0), None);
         assert_eq!(PropertyAssetInfo::<Test>::get(0), None);
+        assert_eq!(
+            RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into())
+                .unwrap()
+                .active_cases,
+            0
+        );
     })
 }
 
@@ -4058,6 +4114,8 @@ fn withdraw_legal_process_expired_works() {
         assert_eq!(PropertyLawyer::<Test>::get(0), None);
         assert_eq!(RefundLegalExpired::<Test>::get(0), None);
         assert_eq!(PropertyOwner::<Test>::get(0).len(), 0);
+        assert_eq!(RealEstateLawyer::<Test>::get::<AccountId>([10; 32].into()).unwrap().active_cases, 0);
+        assert_eq!(RealEstateLawyer::<Test>::get::<AccountId>([11; 32].into()).unwrap().active_cases, 0);
     })
 }
 

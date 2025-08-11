@@ -346,7 +346,10 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            ensure!(pallet_regions::RegionDetails::<T>::contains_key(region), Error::<T>::RegionUnknown);
+            ensure!(
+                pallet_regions::RegionDetails::<T>::contains_key(region),
+                Error::<T>::RegionUnknown
+            );
             ensure!(
                 pallet_regions::LocationRegistration::<T>::get(region, &location),
                 Error::<T>::LocationUnknown
@@ -362,7 +365,8 @@ pub mod pallet {
                     &signer,
                     deposit_amount,
                 )?;
-                letting_info.deposit = letting_info.deposit
+                letting_info.deposit = letting_info
+                    .deposit
                     .checked_add(&deposit_amount)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 letting_info
@@ -388,7 +392,7 @@ pub mod pallet {
                     .try_push(location)
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
-            }     
+            }
             Self::deposit_event(Event::<T>::LettingAgentAdded {
                 region,
                 who: signer,
@@ -424,7 +428,10 @@ pub mod pallet {
                 !LettingAgentProposal::<T>::contains_key(asset_id),
                 Error::<T>::LettingAgentProposalOngoing
             );
-            ensure!(LettingInfo::<T>::contains_key(&signer), Error::<T>::AgentNotFound);
+            ensure!(
+                LettingInfo::<T>::contains_key(&signer),
+                Error::<T>::AgentNotFound
+            );
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::LettingAgentVotingTime::get());
