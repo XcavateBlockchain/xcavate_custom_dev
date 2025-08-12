@@ -337,7 +337,7 @@ parameter_types! {
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const LawyerVotingDuration: BlockNumber = 30;
-    pub const LegalProcessDuration: BlockNumber = 100;
+    pub const LegalProcessDuration: BlockNumber = 150;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.

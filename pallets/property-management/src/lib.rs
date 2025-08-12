@@ -334,7 +334,7 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Adds an account as a letting agent.
         ///
-        /// The origin must be the AgentOrigin.
+        /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Parameters:
         /// - `region`: The region number where the letting agent should be added to.
@@ -406,7 +406,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(10)]
+        /// Removes a letting agent from a location.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `location`: The location where the letting agent should be removed from.
+        ///
+        /// Emits `LettingAgentRemoved` event when succesfful.
+        #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_letting_agent(
             origin: OriginFor<T>,
@@ -443,7 +451,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         ///
         /// Emits `LettingAgentProposed` event when succesfful.
-        #[pallet::call_index(3)]
+        #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_propose())]
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -454,7 +462,7 @@ pub mod pallet {
             let letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
             ensure!(letting_info.locations.contains_key(&property_info.location),
             Error::<T>::NoPermission);
-            T::PropertyToken::ensure_spv_created(asset_id)?;
+            T::PropertyToken::ensure_property_finalized(asset_id)?;
             ensure!(
                 LettingStorage::<T>::get(asset_id).is_none(),
                 Error::<T>::LettingAgentAlreadySet
@@ -501,7 +509,7 @@ pub mod pallet {
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
         /// Emits `VotedOnLettingAgent` event when succesfful.
-        #[pallet::call_index(4)]
+        #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent())]
         pub fn vote_on_letting_agent(
             origin: OriginFor<T>,
@@ -574,7 +582,7 @@ pub mod pallet {
         ///
         /// Emits `LettingAgentSet` event when vote successful.
         /// Emits `LettingAgentRejected` event when vote unsuccessful.
-        #[pallet::call_index(5)]
+        #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_letting_agent())]
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -639,7 +647,7 @@ pub mod pallet {
         /// - `amount`: The amount of funds that should be distributed.
         ///
         /// Emits `IncomeDistributed` event when succesfful.
-        #[pallet::call_index(6)]
+        #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::distribute_income())]
         pub fn distribute_income(
             origin: OriginFor<T>,
@@ -701,7 +709,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Emits `WithdrawFunds` event when succesfful.
-        #[pallet::call_index(7)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
         pub fn claim_income(
             origin: OriginFor<T>,

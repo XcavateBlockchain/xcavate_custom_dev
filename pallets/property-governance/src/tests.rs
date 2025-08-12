@@ -220,6 +220,7 @@ fn propose_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
+        lawyer_process();
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -271,6 +272,7 @@ fn proposal_with_low_amount_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
+        lawyer_process();
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -350,6 +352,7 @@ fn propose_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
+        lawyer_process();
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -2256,6 +2259,11 @@ fn propose_property_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
+        assert_noop!(
+            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
+            RealEstateAssetError::<Test>::PropertyNotFinalized
+        );
+        lawyer_process();
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2263,11 +2271,6 @@ fn propose_property_sale_fails() {
         ));
         setting_letting_agent([2; 32].into(), [1; 32].into());
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
-        assert_noop!(
-            PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
-            RealEstateAssetError::<Test>::PropertyNotFinalized
-        );
-        lawyer_process();
         assert_noop!(
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0),
             Error::<Test>::NoPermission
