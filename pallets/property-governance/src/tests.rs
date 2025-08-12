@@ -1412,7 +1412,10 @@ fn challenge_pass() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             1
         );
         run_to_block(211);
@@ -1427,7 +1430,10 @@ fn challenge_pass() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             1
         );
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);

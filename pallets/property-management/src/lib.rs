@@ -18,7 +18,7 @@ use frame_support::{
         fungible::MutateHold,
         fungibles::Mutate as FungiblesMutate,
         tokens::Preservation,
-        tokens::{fungible, fungibles, Balance},
+        tokens::{fungible, fungibles, Balance, Precision},
         EnsureOriginWithArg,
     },
     PalletId,
@@ -66,8 +66,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct LettingAgentInfo<T: Config> {
         pub region: u16,
-        pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
-        pub assigned_properties: u32,
+        pub locations: BoundedBTreeMap<LocationId<T>, u32, T::MaxLocations>,
         pub deposit: <T as pallet::Config>::Balance,
         pub active_strikes: BoundedBTreeMap<u32, u8, T::MaxProperties>,
     }
@@ -84,6 +83,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct ProposedLettingAgent<T: Config> {
         pub letting_agent: AccountIdOf<T>,
+        pub location: LocationId<T>,
         pub expiry_block: BlockNumberFor<T>,
     }
 
@@ -174,7 +174,7 @@ pub mod pallet {
 
         type PropertyToken: PropertyTokenInspect<Self> + PropertyTokenSpvControl<Self>;
 
-        /// The amount of time given to vote for a lawyer proposal.
+        /// The amount of time given to vote for a letting agent proposal.
         #[pallet::constant]
         type LettingAgentVotingTime: Get<BlockNumberFor<Self>>;
 
@@ -238,6 +238,11 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// A new letting agent got set.
         LettingAgentAdded { region: u16, who: T::AccountId },
+        /// A new letting has been removed from a location.
+        LettingAgentRemoved {
+            location: LocationId<T>,
+            who: T::AccountId,
+        },
         /// A letting agent has been added to a property.
         LettingAgentSet { asset_id: u32, who: T::AccountId },
         /// The rental income has been distributed.
@@ -321,6 +326,8 @@ pub mod pallet {
         TooManyVoters,
         /// The account has not the role of a letting agent.
         AccountIsNotLettingAgent,
+        /// The letting agent has is not responsible for this location.
+        LocationNotFound,
     }
 
     #[pallet::call]
@@ -357,7 +364,7 @@ pub mod pallet {
             let deposit_amount = <T as Config>::LettingAgentDeposit::get();
             if let Some(mut letting_info) = LettingInfo::<T>::get(&signer) {
                 ensure!(
-                    !letting_info.locations.contains(&location),
+                    !letting_info.locations.contains_key(&location),
                     Error::<T>::LettingAgentInLocation
                 );
                 <T as pallet::Config>::NativeCurrency::hold(
@@ -371,7 +378,7 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 letting_info
                     .locations
-                    .try_push(location.clone())
+                    .try_insert(location, 0)
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             } else {
@@ -383,18 +390,46 @@ pub mod pallet {
                 let mut letting_info = LettingAgentInfo {
                     region,
                     locations: Default::default(),
-                    assigned_properties: 0,
                     deposit: deposit_amount,
                     active_strikes: Default::default(),
                 };
                 letting_info
                     .locations
-                    .try_push(location)
+                    .try_insert(location, 0)
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             }
             Self::deposit_event(Event::<T>::LettingAgentAdded {
                 region,
+                who: signer,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(10)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn remove_letting_agent(
+            origin: OriginFor<T>,
+            location: LocationId<T>,
+        ) -> DispatchResult {
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::LettingAgent,
+            )?;
+            let deposit_amount = <T as Config>::LettingAgentDeposit::get();
+            let mut letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
+            letting_info.locations
+                .remove(&location)
+                .ok_or(Error::<T>::LocationNotFound)?;
+            <T as pallet::Config>::NativeCurrency::release(
+                &HoldReason::LettingAgent.into(),
+                &signer,
+                deposit_amount,
+                Precision::Exact,
+            )?;
+            LettingInfo::<T>::insert(signer.clone(), letting_info);
+            Self::deposit_event(Event::<T>::LettingAgentRemoved {
+                location,
                 who: signer,
             });
             Ok(())
@@ -415,10 +450,10 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            ensure!(
-                T::PropertyToken::get_property_asset_info(asset_id).is_some(),
-                Error::<T>::NoObjectFound
-            );
+            let property_info = T::PropertyToken::get_property_asset_info(asset_id).ok_or(Error::<T>::NoObjectFound)?;
+            let letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
+            ensure!(letting_info.locations.contains_key(&property_info.location),
+            Error::<T>::NoPermission);
             T::PropertyToken::ensure_spv_created(asset_id)?;
             ensure!(
                 LettingStorage::<T>::get(asset_id).is_none(),
@@ -439,6 +474,7 @@ pub mod pallet {
                 asset_id,
                 ProposedLettingAgent {
                     letting_agent: signer.clone(),
+                    location: property_info.location,
                     expiry_block,
                 },
             );
@@ -568,10 +604,11 @@ pub mod pallet {
                             LettingStorage::<T>::get(asset_id).is_none(),
                             Error::<T>::LettingAgentAlreadySet
                         );
-                        letting_info.assigned_properties = letting_info
-                            .assigned_properties
-                            .checked_add(1)
-                            .ok_or(Error::<T>::ArithmeticOverflow)?;
+                        if let Some(count) = letting_info.locations.get_mut(&proposal.location) {
+                            *count = count.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+                        } else {
+                            return Err(Error::<T>::LocationNotFound.into());
+                        }
                         LettingStorage::<T>::insert(asset_id, proposal.letting_agent.clone());
                         Self::deposit_event(Event::<T>::LettingAgentSet {
                             asset_id,
@@ -714,13 +751,15 @@ pub mod pallet {
         pub fn remove_bad_letting_agent(asset_id: u32) -> DispatchResult {
             let letting_agent =
                 LettingStorage::<T>::take(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
-
+            let proposal_details = LettingAgentProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
                 let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
-                letting_info.assigned_properties = letting_info
-                    .assigned_properties
-                    .checked_sub(1)
-                    .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                if let Some(count) = letting_info.locations.get_mut(&proposal_details.location) {
+                    *count = count.checked_sub(1).ok_or(Error::<T>::ArithmeticUnderflow)?;
+                } else {
+                    return Err(Error::<T>::LocationNotFound.into());
+                }
                 Ok::<(), DispatchError>(())
             })?;
             Ok(())

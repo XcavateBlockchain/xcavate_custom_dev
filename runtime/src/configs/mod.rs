@@ -685,7 +685,7 @@ parameter_types! {
     pub const MinimumStakingAmount: Balance = 1000 * UNIT;
     pub const MaxProperty: u32 = 1000;
     pub const MaxLettingAgent: u32 = 100;
-    pub const MaxLocation: u32 = 100;
+    pub const MaxLocation: u32 = 50;
     pub const LettingAgentVotingDuration: BlockNumber = 20;
 }
 

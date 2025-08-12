@@ -109,8 +109,11 @@ fn add_letting_agent_works() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
                 .unwrap()
-                .locations[0],
-            location
+                .locations
+                .get(&location)
+                .copied()
+                .unwrap(),
+            0
         );
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -175,8 +178,11 @@ fn add_letting_agent_works2() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
                 .unwrap()
-                .locations[0],
-            location
+                .locations
+                .get(&location)
+                .copied()
+                .unwrap(),
+            0
         );
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
@@ -893,7 +899,10 @@ fn finalize_letting_agent_works() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             1
         );
         assert_ok!(Marketplace::create_spv(
@@ -938,13 +947,19 @@ fn finalize_letting_agent_works() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             2
         );
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([3; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             1
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
@@ -1115,7 +1130,10 @@ fn finalize_letting_agent_fails() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             MaxProperty::get()
         );
         assert_ok!(PropertyManagement::finalize_letting_agent(
@@ -1126,7 +1144,10 @@ fn finalize_letting_agent_fails() {
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
                 .unwrap()
-                .assigned_properties,
+                .locations
+                .get(&bvec![10, 10])
+                .copied()
+                .unwrap(),
             MaxProperty::get() + 1
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
