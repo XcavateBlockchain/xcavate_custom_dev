@@ -66,8 +66,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct LettingAgentInfo<T: Config> {
         pub region: u16,
-        pub locations: BoundedBTreeMap<LocationId<T>, u32, T::MaxLocations>,
-        pub deposit: <T as pallet::Config>::Balance,
+        pub locations: BoundedBTreeMap<LocationId<T>, LocationInfo<T>, T::MaxLocations>,
         pub active_strikes: BoundedBTreeMap<u32, u8, T::MaxProperties>,
     }
 
@@ -85,6 +84,14 @@ pub mod pallet {
         pub letting_agent: AccountIdOf<T>,
         pub location: LocationId<T>,
         pub expiry_block: BlockNumberFor<T>,
+    }
+
+    #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+    #[scale_info(skip_type_params(T))]
+    pub struct LocationInfo<T: Config> {
+        pub assigned_properties: u32,
+        pub deposit: <T as pallet::Config>::Balance,
     }
 
     /// Vote enum.
@@ -372,13 +379,12 @@ pub mod pallet {
                     &signer,
                     deposit_amount,
                 )?;
-                letting_info.deposit = letting_info
-                    .deposit
-                    .checked_add(&deposit_amount)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
                 letting_info
                     .locations
-                    .try_insert(location, 0)
+                    .try_insert(location, LocationInfo {
+                        assigned_properties: 0,
+                        deposit: deposit_amount,
+                    })
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             } else {
@@ -389,13 +395,15 @@ pub mod pallet {
                 )?;
                 let mut letting_info = LettingAgentInfo {
                     region,
-                    locations: Default::default(),
-                    deposit: deposit_amount,
+                    locations: Default::default(),  
                     active_strikes: Default::default(),
                 };
                 letting_info
                     .locations
-                    .try_insert(location, 0)
+                    .try_insert(location, LocationInfo {
+                        assigned_properties: 0,
+                        deposit: deposit_amount,
+                    })
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             }
@@ -612,8 +620,8 @@ pub mod pallet {
                             LettingStorage::<T>::get(asset_id).is_none(),
                             Error::<T>::LettingAgentAlreadySet
                         );
-                        if let Some(count) = letting_info.locations.get_mut(&proposal.location) {
-                            *count = count.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+                        if let Some(location_info) = letting_info.locations.get_mut(&proposal.location) {
+                            location_info.assigned_properties = location_info.assigned_properties.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
                         } else {
                             return Err(Error::<T>::LocationNotFound.into());
                         }
@@ -763,8 +771,8 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
                 let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
-                if let Some(count) = letting_info.locations.get_mut(&proposal_details.location) {
-                    *count = count.checked_sub(1).ok_or(Error::<T>::ArithmeticUnderflow)?;
+                if let Some(location_info) = letting_info.locations.get_mut(&proposal_details.location) {
+                    location_info.assigned_properties = location_info.assigned_properties.checked_sub(1).ok_or(Error::<T>::ArithmeticUnderflow)?;
                 } else {
                     return Err(Error::<T>::LocationNotFound.into());
                 }
