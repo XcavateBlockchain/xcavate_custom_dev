@@ -358,11 +358,18 @@ pub mod pallet {
             listing_id: ListingId,
             account_id: AccountIdOf<T>,
         },
-        /// A lawyer claimed a property.
-        LawyerClaimedProperty {
+        /// A real estate developer lawyer claimed a property.
+        DeveloperLawyerProposed {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
             costs: <T as pallet::Config>::Balance,
+        },
+        /// A spv lawyer claimed a property.
+        SpvLawyerProposed {
+            listing_id: ListingId,
+            lawyer: AccountIdOf<T>,
+            costs: <T as pallet::Config>::Balance,
+            expiry_block: BlockNumberFor<T>,
         },
         /// A lawyer stepped back from a legal case.
         LawyerRemovedFromCase {
@@ -429,11 +436,14 @@ pub mod pallet {
             listing_id: ListingId,
             voter: AccountIdOf<T>,
             vote: Vote,
+            voting_power: u32,
+            lawyer: AccountIdOf<T>
         },
         /// The real estate developer lawyer has been approved.
         RealEstateLawyerApproved {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
+            details: PropertyLawyerDetails<T>,
         },
         /// The real estate developer lawyer has been rejected.
         RealEstateLawyerRejected {
@@ -444,6 +454,7 @@ pub mod pallet {
         SpvLawyerApproved {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
+            details: PropertyLawyerDetails<T>,
         },
         /// The spv lawyer has been rejected.
         SpvLawyerRejected {
@@ -464,6 +475,7 @@ pub mod pallet {
         PropertySoldOut {
             listing_id: ListingId,
             asset_id: u32,
+            legal_process_expiry: BlockNumberFor<T>,
         },
     }
 
@@ -841,6 +853,7 @@ pub mod pallet {
                 Self::deposit_event(Event::<T>::PropertySoldOut {
                     listing_id,
                     asset_id,
+                    legal_process_expiry: expiry_block,
                 });
             }
             Self::deposit_event(Event::<T>::PropertyTokenBought {
@@ -1835,6 +1848,11 @@ pub mod pallet {
                             costs,
                         },
                     );
+                    Self::deposit_event(Event::<T>::DeveloperLawyerProposed {
+                        listing_id,
+                        lawyer: signer,
+                        costs,
+                    });
                 }
                 LegalProperty::SpvSide => {
                     T::PropertyToken::ensure_spv_created(property_details.asset_id)?;
@@ -1868,7 +1886,6 @@ pub mod pallet {
                             expiry_block,
                         },
                     );
-
                     OngoingLawyerVoting::<T>::insert(
                         listing_id,
                         VoteStats {
@@ -1876,13 +1893,14 @@ pub mod pallet {
                             no_voting_power: 0,
                         },
                     );
+                    Self::deposit_event(Event::<T>::SpvLawyerProposed {
+                        listing_id,
+                        lawyer: signer,
+                        costs,
+                        expiry_block,
+                    });
                 }
             }
-            Self::deposit_event(Event::<T>::LawyerClaimedProperty {
-                listing_id,
-                lawyer: signer,
-                costs,
-            });
             Ok(())
         }
 
@@ -1958,6 +1976,8 @@ pub mod pallet {
                 listing_id,
                 voter: signer,
                 vote,
+                voting_power,
+                lawyer: proposal_details.lawyer,
             });
             Ok(())
         }
@@ -2027,6 +2047,7 @@ pub mod pallet {
                 Self::deposit_event(Event::RealEstateLawyerApproved {
                     listing_id,
                     lawyer: proposal.lawyer,
+                    details: property_lawyer_details,
                 });
             } else {
                 Self::deposit_event(Event::RealEstateLawyerRejected {
@@ -2102,6 +2123,7 @@ pub mod pallet {
                 Self::deposit_event(Event::SpvLawyerApproved {
                     listing_id,
                     lawyer: proposal.lawyer,
+                    details: property_lawyer_details,
                 });
             } else {
                 Self::deposit_event(Event::SpvLawyerRejected {
