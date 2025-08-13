@@ -335,6 +335,10 @@ pub mod pallet {
         AccountIsNotLettingAgent,
         /// The letting agent has is not responsible for this location.
         LocationNotFound,
+        /// The letting agent is not active in this location.
+        LettingAgentNotActiveInLocation,
+        /// Letting agent still has active properties in location.
+        LettingAgentActive,
     }
 
     #[pallet::call]
@@ -381,10 +385,13 @@ pub mod pallet {
                 )?;
                 letting_info
                     .locations
-                    .try_insert(location, LocationInfo {
-                        assigned_properties: 0,
-                        deposit: deposit_amount,
-                    })
+                    .try_insert(
+                        location,
+                        LocationInfo {
+                            assigned_properties: 0,
+                            deposit: deposit_amount,
+                        },
+                    )
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             } else {
@@ -395,15 +402,18 @@ pub mod pallet {
                 )?;
                 let mut letting_info = LettingAgentInfo {
                     region,
-                    locations: Default::default(),  
+                    locations: Default::default(),
                     active_strikes: Default::default(),
                 };
                 letting_info
                     .locations
-                    .try_insert(location, LocationInfo {
-                        assigned_properties: 0,
-                        deposit: deposit_amount,
-                    })
+                    .try_insert(
+                        location,
+                        LocationInfo {
+                            assigned_properties: 0,
+                            deposit: deposit_amount,
+                        },
+                    )
                     .map_err(|_| Error::<T>::TooManyLocations)?;
                 LettingInfo::<T>::insert(&signer, letting_info);
             }
@@ -432,9 +442,19 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            let deposit_amount = <T as Config>::LettingAgentDeposit::get();
-            let mut letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
-            letting_info.locations
+            let mut letting_info =
+                LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
+            let location_info = letting_info
+                .locations
+                .get(&location)
+                .ok_or(Error::<T>::LettingAgentNotActiveInLocation)?;
+            ensure!(
+                location_info.assigned_properties.is_zero(),
+                Error::<T>::LettingAgentActive
+            );
+            let deposit_amount = location_info.deposit;
+            letting_info
+                .locations
                 .remove(&location)
                 .ok_or(Error::<T>::LocationNotFound)?;
             <T as pallet::Config>::NativeCurrency::release(
@@ -466,10 +486,13 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            let property_info = T::PropertyToken::get_property_asset_info(asset_id).ok_or(Error::<T>::NoObjectFound)?;
+            let property_info = T::PropertyToken::get_property_asset_info(asset_id)
+                .ok_or(Error::<T>::NoObjectFound)?;
             let letting_info = LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
-            ensure!(letting_info.locations.contains_key(&property_info.location),
-            Error::<T>::NoPermission);
+            ensure!(
+                letting_info.locations.contains_key(&property_info.location),
+                Error::<T>::NoPermission
+            );
             T::PropertyToken::ensure_property_finalized(asset_id)?;
             ensure!(
                 LettingStorage::<T>::get(asset_id).is_none(),
@@ -620,8 +643,13 @@ pub mod pallet {
                             LettingStorage::<T>::get(asset_id).is_none(),
                             Error::<T>::LettingAgentAlreadySet
                         );
-                        if let Some(location_info) = letting_info.locations.get_mut(&proposal.location) {
-                            location_info.assigned_properties = location_info.assigned_properties.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+                        if let Some(location_info) =
+                            letting_info.locations.get_mut(&proposal.location)
+                        {
+                            location_info.assigned_properties = location_info
+                                .assigned_properties
+                                .checked_add(1)
+                                .ok_or(Error::<T>::ArithmeticOverflow)?;
                         } else {
                             return Err(Error::<T>::LocationNotFound.into());
                         }
@@ -771,8 +799,13 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
                 let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
-                if let Some(location_info) = letting_info.locations.get_mut(&proposal_details.location) {
-                    location_info.assigned_properties = location_info.assigned_properties.checked_sub(1).ok_or(Error::<T>::ArithmeticUnderflow)?;
+                if let Some(location_info) =
+                    letting_info.locations.get_mut(&proposal_details.location)
+                {
+                    location_info.assigned_properties = location_info
+                        .assigned_properties
+                        .checked_sub(1)
+                        .ok_or(Error::<T>::ArithmeticUnderflow)?;
                 } else {
                     return Err(Error::<T>::LocationNotFound.into());
                 }

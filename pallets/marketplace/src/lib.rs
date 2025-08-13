@@ -2473,8 +2473,8 @@ pub mod pallet {
             listing_id: u32,
             property_lawyer_details: &PropertyLawyerDetails<T>,
         ) -> DispatchResult {
-            let property_details = OngoingObjectListing::<T>::get(listing_id)
-                .ok_or(Error::<T>::InvalidIndex)?;
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let real_estate_developer_lawyer_id = property_lawyer_details
                 .real_estate_developer_lawyer
                 .clone()

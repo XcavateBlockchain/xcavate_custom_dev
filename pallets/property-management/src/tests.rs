@@ -67,7 +67,11 @@ fn new_region_helper() {
     ));
 }
 
-fn lawyer_process_helper(real_estate_developer: AccountId, token_holder: AccountId, listing_id: u32) {
+fn lawyer_process_helper(
+    real_estate_developer: AccountId,
+    token_holder: AccountId,
+    listing_id: u32,
+) {
     assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::signed([20; 32].into()),
         [10; 32].into(),
@@ -89,7 +93,11 @@ fn lawyer_process_helper(real_estate_developer: AccountId, token_holder: Account
     finalize_property_helper(real_estate_developer, token_holder, listing_id);
 }
 
-fn finalize_property_helper(real_estate_developer: AccountId, token_holder: AccountId, listing_id: u32) {
+fn finalize_property_helper(
+    real_estate_developer: AccountId,
+    token_holder: AccountId,
+    listing_id: u32,
+) {
     assert_ok!(Marketplace::lawyer_claim_property(
         RuntimeOrigin::signed([10; 32].into()),
         listing_id,
@@ -169,21 +177,10 @@ fn add_letting_agent_works() {
             true
         );
         let location: BoundedVec<u8, Postcode> = bvec![10, 10];
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .locations
-                .get(&location)
-                .copied()
-                .unwrap(),
-            0
-        );
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .deposit,
-            1_000
-        );
+        let letting_info = LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        let location_info = letting_info.locations.get(&location).unwrap();
+        assert_eq!(location_info.assigned_properties, 0);
+        assert_eq!(location_info.deposit, 1_000);
         assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
     });
 }
@@ -238,21 +235,13 @@ fn add_letting_agent_works2() {
             true
         );
         let location: BoundedVec<u8, Postcode> = bvec![10, 10];
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .locations
-                .get(&location)
-                .copied()
-                .unwrap(),
-            0
-        );
-        assert_eq!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .deposit,
-            2_000
-        );
+        let letting_info = LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        let location_info = letting_info.locations.get(&location).unwrap();
+        assert_eq!(location_info.assigned_properties, 0);
+        assert_eq!(location_info.deposit, 1_000);
+        let location_info_2 = letting_info.locations.get(&bvec![11, 10]).unwrap();
+        assert_eq!(location_info_2.assigned_properties, 0);
+        assert_eq!(location_info_2.deposit, 1_000);
         assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::LettingAgent.into(), &([0; 32].into())),
@@ -345,6 +334,195 @@ fn add_letting_agent_fails() {
                 bvec![10, 10],
             ),
             TokenError::FundsUnavailable,
+        );
+    });
+}
+
+#[test]
+fn remove_letting_agent_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [6; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+        ));
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
+            true
+        );
+        let location = bvec![10, 10];
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .locations
+                .get(&location)
+                .clone()
+                .unwrap()
+                .assigned_properties,
+            0
+        );
+        let mut letting_info = LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        if let Some(location_info) = letting_info.locations.get_mut(&location) {
+            location_info.assigned_properties = 5;
+        }
+        let account: AccountId = [0; 32].into();
+        LettingInfo::<Test>::insert(account.clone(), letting_info);
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>(account)
+                .unwrap()
+                .locations
+                .get(&location)
+                .clone()
+                .unwrap()
+                .assigned_properties,
+            5
+        );
+        assert_noop!(
+            PropertyManagement::remove_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                bvec![10, 10],
+            ),
+            Error::<Test>::LettingAgentActive
+        );
+        let mut letting_info = LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        if let Some(location_info) = letting_info.locations.get_mut(&location) {
+            location_info.assigned_properties = 0;
+        }
+        let account: AccountId = [0; 32].into();
+        LettingInfo::<Test>::insert(account.clone(), letting_info);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::LettingAgent.into(), &([0; 32].into())),
+            1_000
+        );
+        assert_ok!(PropertyManagement::remove_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            bvec![10, 10],
+        ));
+        assert!(LettingInfo::<Test>::get::<AccountId>(account)
+            .unwrap()
+            .locations
+            .get(&location)
+            .is_none());
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::LettingAgent.into(), &([0; 32].into())),
+            0
+        );
+    });
+}
+
+#[test]
+fn remove_letting_agent_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [6; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![11, 10]
+        ));
+        assert_noop!(
+            PropertyManagement::remove_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                bvec![10, 10],
+            ),
+            Error::<Test>::AgentNotFound
+        );
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+        ));
+        assert_noop!(
+            PropertyManagement::remove_letting_agent(
+                RuntimeOrigin::signed([1; 32].into()),
+                bvec![10, 10],
+            ),
+            BadOrigin
+        );
+        assert_noop!(
+            PropertyManagement::remove_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                bvec![11, 10],
+            ),
+            Error::<Test>::LettingAgentNotActiveInLocation
+        );
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into()).is_some(),
+            true
+        );
+        let location = bvec![10, 10];
+        assert_eq!(
+            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+                .unwrap()
+                .locations
+                .get(&location)
+                .clone()
+                .unwrap()
+                .assigned_properties,
+            0
+        );
+        let mut letting_info = LettingInfo::<Test>::get::<AccountId>([0; 32].into()).unwrap();
+        if let Some(location_info) = letting_info.locations.get_mut(&location) {
+            location_info.assigned_properties = 5;
+        }
+        let account: AccountId = [0; 32].into();
+        LettingInfo::<Test>::insert(account.clone(), letting_info);
+        assert_noop!(
+            PropertyManagement::remove_letting_agent(
+                RuntimeOrigin::signed([0; 32].into()),
+                bvec![10, 10],
+            ),
+            Error::<Test>::LettingAgentActive
         );
     });
 }
@@ -534,7 +712,8 @@ fn letting_agent_propose_fails() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -806,7 +985,8 @@ fn vote_on_letting_agent_fails() {
             ),
             Error::<Test>::NoPermission
         );
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_noop!(
             PropertyManagement::vote_on_letting_agent(
@@ -964,7 +1144,8 @@ fn finalize_letting_agent_works() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
@@ -976,8 +1157,9 @@ fn finalize_letting_agent_works() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             1
         );
         assert_ok!(Marketplace::create_spv(
@@ -994,7 +1176,8 @@ fn finalize_letting_agent_works() {
             1,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
@@ -1014,7 +1197,8 @@ fn finalize_letting_agent_works() {
             2,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
@@ -1028,8 +1212,9 @@ fn finalize_letting_agent_works() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             2
         );
         assert_eq!(
@@ -1037,8 +1222,9 @@ fn finalize_letting_agent_works() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             1
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
@@ -1161,7 +1347,8 @@ fn finalize_letting_agent_fails() {
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
             Error::<Test>::VotingStillOngoing
         );
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_noop!(
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([3; 32].into()), 0,),
@@ -1214,8 +1401,9 @@ fn finalize_letting_agent_fails() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             MaxProperty::get()
         );
         assert_ok!(PropertyManagement::finalize_letting_agent(
@@ -1228,8 +1416,9 @@ fn finalize_letting_agent_fails() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             MaxProperty::get() + 1
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
@@ -1370,7 +1559,8 @@ fn distribute_income_works() {
             0,
             pallet_marketplace::types::Vote::Yes
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(Marketplace::finalize_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1405,7 +1595,8 @@ fn distribute_income_works() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([3; 32].into()),
@@ -1533,7 +1724,8 @@ fn distribute_income_fails() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1706,7 +1898,8 @@ fn claim_income_works() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1910,7 +2103,8 @@ fn claim_income_fails() {
             0,
             crate::Vote::Yes,
         ));
-        let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),

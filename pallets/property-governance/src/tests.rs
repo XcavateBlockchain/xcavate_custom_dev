@@ -1417,8 +1417,9 @@ fn challenge_pass() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             1
         );
         run_to_block(211);
@@ -1435,8 +1436,9 @@ fn challenge_pass() {
                 .unwrap()
                 .locations
                 .get(&bvec![10, 10])
-                .copied()
-                .unwrap(),
+                .clone()
+                .unwrap()
+                .assigned_properties,
             1
         );
         assert_eq!(LettingStorage::<Test>::get(0).is_none(), true);
