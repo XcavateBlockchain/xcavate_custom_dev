@@ -292,6 +292,8 @@ mod runtime {
     #[runtime::pallet_index(14)]
     pub type AssetsHolder = pallet_assets_holder::Pallet<Runtime, Instance2>;
     #[runtime::pallet_index(15)]
+    pub type AssetsFreezer = pallet_assets_freezer::Pallet<Runtime, Instance1>;
+    #[runtime::pallet_index(16)]
     pub type AssetTxPayment = pallet_asset_tx_payment;
 
     // Governance

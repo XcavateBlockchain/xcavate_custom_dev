@@ -197,6 +197,15 @@ pub struct VoteStats {
     pub no_voting_power: u32,
 }
 
+/// Vote record of a user.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct VoteRecord {
+    pub vote: Vote,
+    pub asset_id: u32,
+    pub power: u32,
+}
+
 /// Takeover enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(

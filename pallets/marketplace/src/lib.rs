@@ -22,6 +22,7 @@ use frame_support::{
         fungible::{Inspect, Mutate, MutateHold},
         fungibles::Mutate as FungiblesMutate,
         fungibles::MutateHold as FungiblesHold,
+        fungibles::MutateFreeze,
         tokens::Preservation,
         tokens::{fungible, fungibles, Balance, Precision, WithdrawConsequence},
         EnsureOriginWithArg,
@@ -36,7 +37,7 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
-use primitives::MarketplaceHoldReason;
+use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
 
 use types::*;
 
@@ -131,6 +132,13 @@ pub mod pallet {
                 Balance = <Self as pallet::Config>::Balance,
                 Reason = MarketplaceHoldReason,
             > + fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
+        
+        type AssetsFreezer: fungibles::MutateFreeze<
+                AccountIdOf<Self>,
+                AssetId = u32,
+                Balance = <Self as pallet::Config>::Balance,
+                Id = MarketplaceFreezeReason,
+            >;
 
         /// The marketplace's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
@@ -194,6 +202,7 @@ pub mod pallet {
 
     pub type RegionId = u16;
     pub type ListingId = u32;
+    pub type ProposalId = u64;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
     pub(super) type PropertyListingDetailsType<T> = PropertyListingDetails<
@@ -279,22 +288,37 @@ pub mod pallet {
     /// Mapping of listing to the ongoing spv lawyer proposal.
     #[pallet::storage]
     pub type SpvLawyerProposal<T: Config> =
-        StorageMap<_, Blake2_128Concat, ListingId, ProposedSpvLawyer<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, ProposedSpvLawyer<T>, OptionQuery>;
 
     /// Mapping of ongoing lawyer voted.
     #[pallet::storage]
     pub type OngoingLawyerVoting<T: Config> =
-        StorageMap<_, Blake2_128Concat, ListingId, VoteStats, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats, OptionQuery>;
 
     /// Mapping of a listing id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserLawyerVote<T: Config> = StorageMap<
+    pub(super) type UserLawyerVote<T: Config> = StorageDoubleMap<
+        _,
+        Blake2_128Concat,
+        ProposalId,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        VoteRecord,
+        OptionQuery,
+    >;
+
+    #[pallet::storage]
+    pub type ListingSpvProposal<T: Config> = StorageMap<
         _,
         Blake2_128Concat,
         ListingId,
-        BoundedBTreeMap<AccountIdOf<T>, Vote, <T as pallet::Config>::MaxPropertyToken>,
+        ProposalId,
         OptionQuery,
     >;
+
+    /// Counter of proposal ids.
+    #[pallet::storage]
+    pub type ProposalCounter<T: Config> = StorageValue<_, ProposalId, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -437,7 +461,8 @@ pub mod pallet {
             voter: AccountIdOf<T>,
             vote: Vote,
             voting_power: u32,
-            lawyer: AccountIdOf<T>
+            lawyer: AccountIdOf<T>,
+            proposal_id: ProposalId,
         },
         /// The real estate developer lawyer has been approved.
         RealEstateLawyerApproved {
@@ -476,6 +501,13 @@ pub mod pallet {
             listing_id: ListingId,
             asset_id: u32,
             legal_process_expiry: BlockNumberFor<T>,
+        },
+        /// A user has unfrozen his token.
+        TokenUnfrozen {
+            proposal_id: ProposalId,
+            asset_id: u32,
+            voter: AccountIdOf<T>,
+            amount: u32,
         },
     }
 
@@ -565,6 +597,8 @@ pub mod pallet {
         LegalProcessFailed,
         /// The legal process is currently ongoing.
         LegalProcessOngoing,
+        /// The user has no token amount frozen.
+        NoFrozenAmount,
     }
 
     #[pallet::call]
@@ -1838,8 +1872,10 @@ pub mod pallet {
                         property_lawyer_details.spv_lawyer.as_ref() != Some(&signer),
                         Error::<T>::NoPermission
                     );
-                    if let Some(lawyer_proposal) = SpvLawyerProposal::<T>::get(listing_id) {
-                        ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
+                    if let Some(proposal_id) = ListingSpvProposal::<T>::get(listing_id) {
+                        if let Some(lawyer_proposal) = SpvLawyerProposal::<T>::get(proposal_id) {
+                            ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
+                        }
                     }
                     ProposedLawyers::<T>::insert(
                         listing_id,
@@ -1857,7 +1893,7 @@ pub mod pallet {
                 LegalProperty::SpvSide => {
                     T::PropertyToken::ensure_spv_created(property_details.asset_id)?;
                     ensure!(
-                        !SpvLawyerProposal::<T>::contains_key(listing_id),
+                        !ListingSpvProposal::<T>::contains_key(listing_id),
                         Error::<T>::LawyerProposalOngoing
                     );
                     ensure!(
@@ -1874,11 +1910,13 @@ pub mod pallet {
                     if let Some(lawyer_proposal) = ProposedLawyers::<T>::get(listing_id) {
                         ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
                     }
+                    let proposal_id = ProposalCounter::<T>::get();
                     let current_block_number = <frame_system::Pallet<T>>::block_number();
                     let expiry_block =
                         current_block_number.saturating_add(T::LawyerVotingTime::get());
+                    ListingSpvProposal::<T>::insert(listing_id, proposal_id);
                     SpvLawyerProposal::<T>::insert(
-                        listing_id,
+                        proposal_id,
                         ProposedSpvLawyer {
                             lawyer: signer.clone(),
                             asset_id: property_details.asset_id,
@@ -1887,12 +1925,14 @@ pub mod pallet {
                         },
                     );
                     OngoingLawyerVoting::<T>::insert(
-                        listing_id,
+                        proposal_id,
                         VoteStats {
                             yes_voting_power: 0,
                             no_voting_power: 0,
                         },
                     );
+                    let next_proposal_id = proposal_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+                    ProposalCounter::<T>::put(next_proposal_id);
                     Self::deposit_event(Event::<T>::SpvLawyerProposed {
                         listing_id,
                         lawyer: signer,
@@ -1919,13 +1959,15 @@ pub mod pallet {
             origin: OriginFor<T>,
             listing_id: ListingId,
             vote: Vote,
+            amount: u32,
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let proposal_id = ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let proposal_details =
-                SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+                SpvLawyerProposal::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal_details.expiry_block > current_block_number,
@@ -1933,26 +1975,30 @@ pub mod pallet {
             );
             let voting_power =
                 T::PropertyToken::get_token_balance(proposal_details.asset_id, &signer);
-            ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
-            OngoingLawyerVoting::<T>::try_mutate(listing_id, |maybe_current_vote| {
+            ensure!(voting_power >= amount, Error::<T>::NotEnoughToken);
+            OngoingLawyerVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLawyerProposed)?;
 
-                UserLawyerVote::<T>::try_mutate(listing_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
-                        match previous_vote {
+                UserLawyerVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+
+                        T::AssetsFreezer::decrease_frozen(proposal_details.asset_id, &MarketplaceFreezeReason::SpvLawyerVoting, &signer, previous_vote.power.into())?;
+
+                        match previous_vote.vote {
                             Vote::Yes => {
                                 current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                                    current_vote.yes_voting_power.saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
                                 current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                                    current_vote.no_voting_power.saturating_sub(previous_vote.power)
                             }
                         }
                     }
+
+                    T::AssetsFreezer::increase_frozen(proposal_details.asset_id, &MarketplaceFreezeReason::SpvLawyerVoting, &signer, amount.into())?;
 
                     match vote {
                         Vote::Yes => {
@@ -1965,8 +2011,11 @@ pub mod pallet {
                         }
                     }
 
-                    map.try_insert(signer.clone(), vote.clone())
-                        .map_err(|_| Error::<T>::TooManyToken)?;
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        asset_id: proposal_details.asset_id,
+                        power: voting_power,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
 
@@ -1978,6 +2027,7 @@ pub mod pallet {
                 vote,
                 voting_power,
                 lawyer: proposal_details.lawyer,
+                proposal_id,
             });
             Ok(())
         }
@@ -2076,8 +2126,9 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
 
+            let proposal_id = ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let proposal =
-                SpvLawyerProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+                SpvLawyerProposal::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 proposal.expiry_block <= current_block_number,
@@ -2085,7 +2136,7 @@ pub mod pallet {
             );
 
             let voting_result =
-                OngoingLawyerVoting::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+                OngoingLawyerVoting::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
@@ -2131,10 +2182,45 @@ pub mod pallet {
                     lawyer: proposal.lawyer,
                 });
             }
-            UserLawyerVote::<T>::remove(listing_id);
-            SpvLawyerProposal::<T>::remove(listing_id);
-            OngoingLawyerVoting::<T>::remove(listing_id);
+            SpvLawyerProposal::<T>::remove(proposal_id);
+            OngoingLawyerVoting::<T>::remove(proposal_id);
+            ListingSpvProposal::<T>::remove(listing_id);
 
+            Ok(())
+        }
+
+        #[pallet::call_index(27)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_spv_lawyer_token(
+            origin: OriginFor<T>,
+            proposal_id: ProposalId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record = UserLawyerVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            if let Some(proposal) = SpvLawyerProposal::<T>::get(proposal_id) {
+                let current_block_number = frame_system::Pallet::<T>::block_number();
+                ensure!(
+                    proposal.expiry_block <= current_block_number,
+                    Error::<T>::VotingStillOngoing
+                );
+            }
+
+            T::AssetsFreezer::decrease_frozen(
+                vote_record.asset_id,
+                &MarketplaceFreezeReason::SpvLawyerVoting,
+                &signer,
+                vote_record.power.into(),
+            )?;
+
+            UserLawyerVote::<T>::remove(proposal_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                proposal_id,
+                asset_id: vote_record.asset_id,
+                voter: signer,
+                amount: vote_record.power,
+            });
             Ok(())
         }
 

@@ -6838,6 +6838,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-assets-freezer"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0703b1fd91f89c717527ed4c87388645742939cb9c31f24da5499ca02c7194ab"
+dependencies = [
+ "log",
+ "pallet-assets",
+ "parity-scale-codec",
+ "polkadot-sdk-frame",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-assets-holder"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7295,6 +7308,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-assets",
+ "pallet-assets-freezer",
  "pallet-assets-holder",
  "pallet-balances",
  "pallet-nft-fractionalization",
@@ -8216,6 +8230,7 @@ dependencies = [
  "log",
  "pallet-asset-tx-payment",
  "pallet-assets",
+ "pallet-assets-freezer",
  "pallet-assets-holder",
  "pallet-aura",
  "pallet-authorship",

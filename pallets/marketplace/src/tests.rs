@@ -5,7 +5,7 @@ use crate::{
 use frame_support::{
     assert_noop, assert_ok,
     traits::{
-        fungible::Inspect as FungibleInspect, fungible::InspectHold, fungibles::Inspect,
+        fungible::Inspect as FungibleInspect, fungible::InspectHold, fungibles::{Inspect, InspectFreeze},
         fungibles::InspectHold as FungiblesInspectHold, OnFinalize, OnInitialize,
     },
 };
@@ -720,7 +720,8 @@ fn listing_and_selling_multiple_objects() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100,
         ));
         assert_ok!(Marketplace::buy_property_token(
             RuntimeOrigin::signed([1; 32].into()),
@@ -1295,6 +1296,7 @@ fn claim_property_works1() {
         assert_eq!(SpvLawyerProposal::<Test>::get(0).unwrap().expiry_block, 91);
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_some(), true);
         assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
+        assert_eq!(ListingSpvProposal::<Test>::get(0).unwrap(), 0);
     })
 }
 
@@ -1410,7 +1412,8 @@ fn claim_property_works2() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            1
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -1493,6 +1496,11 @@ fn claim_property_fails() {
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [11; 32].into(),
+            pallet_xcavate_whitelist::Role::Lawyer
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [12; 32].into(),
             pallet_xcavate_whitelist::Role::Lawyer
         ));
         assert_ok!(Regions::register_lawyer(
@@ -1669,6 +1677,10 @@ fn claim_property_fails() {
             100,
             1984
         ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            1,
+        ));
         assert_noop!(
             Marketplace::lawyer_claim_property(
                 RuntimeOrigin::signed([10; 32].into()),
@@ -1677,6 +1689,25 @@ fn claim_property_fails() {
                 400,
             ),
             Error::<Test>::WrongRegion
+        );
+        assert_ok!(Regions::register_lawyer(
+            RuntimeOrigin::signed([12; 32].into()),
+            2,
+        ));
+        assert_ok!(Marketplace::lawyer_claim_property(
+            RuntimeOrigin::signed([12; 32].into()),
+            1,
+            crate::LegalProperty::SpvSide,
+            400,
+        ));
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([12; 32].into()),
+                1,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                400,
+            ),
+            Error::<Test>::NoPermission
         );
     })
 }
@@ -2015,13 +2046,17 @@ fn vote_on_spv_lawyer_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            60
         ));
+        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[1; 32].into()), 60);
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
+        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[2; 32].into()), 40);
         assert_eq!(
             OngoingLawyerVoting::<Test>::get(0).unwrap(),
             VoteStats {
@@ -2030,17 +2065,16 @@ fn vote_on_spv_lawyer_works() {
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get(0)
-                .unwrap()
-                .get(&[1; 32].into())
-                .clone(),
-            Some(&crate::Vote::No)
+            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap().vote,
+            crate::Vote::No
         );
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            20
         ));
+        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[1; 32].into()), 20);
         assert_eq!(
             OngoingLawyerVoting::<Test>::get(0).unwrap(),
             VoteStats {
@@ -2049,11 +2083,8 @@ fn vote_on_spv_lawyer_works() {
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get(0)
-                .unwrap()
-                .get(&[1; 32].into())
-                .clone(),
-            Some(&crate::Vote::Yes)
+            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap().vote,
+            crate::Vote::Yes
         );
     })
 }
@@ -2115,7 +2146,8 @@ fn vote_on_spv_lawyer_fails() {
             Marketplace::vote_on_spv_lawyer(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::No
+                crate::Vote::No,
+                20,
             ),
             Error::<Test>::NoLawyerProposed
         );
@@ -2144,7 +2176,8 @@ fn vote_on_spv_lawyer_fails() {
             Marketplace::vote_on_spv_lawyer(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::No
+                crate::Vote::No,
+                60
             ),
             Error::<Test>::NoLawyerProposed
         );
@@ -2167,16 +2200,19 @@ fn vote_on_spv_lawyer_fails() {
             Marketplace::vote_on_spv_lawyer(
                 RuntimeOrigin::signed([0; 32].into()),
                 0,
-                crate::Vote::No
+                crate::Vote::No,
+                100
             ),
-            Error::<Test>::NoPermission
+            Error::<Test>::NotEnoughToken
         );
+        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[0; 32].into()), 0);
         run_to_block(100);
         assert_noop!(
             Marketplace::vote_on_spv_lawyer(
                 RuntimeOrigin::signed([0; 32].into()),
                 0,
-                crate::Vote::No
+                crate::Vote::No,
+                12
             ),
             Error::<Test>::VotingExpired
         );
@@ -2281,15 +2317,18 @@ fn finalize_spv_lawyer_works() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_eq!(ListingSpvProposal::<Test>::get(0).unwrap(), 0);
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            60
         ));
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -2302,13 +2341,22 @@ fn finalize_spv_lawyer_works() {
             crate::LegalProperty::SpvSide,
             4_000,
         ));
+        assert_eq!(ListingSpvProposal::<Test>::get(0).unwrap(), 1);
         run_to_block(121);
         assert_ok!(Marketplace::finalize_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
-        assert_eq!(UserLawyerVote::<Test>::get(0).is_none(), true);
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_eq!(UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_none(), true);
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
         assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
         assert_ok!(Marketplace::lawyer_claim_property(
@@ -2317,15 +2365,18 @@ fn finalize_spv_lawyer_works() {
             crate::LegalProperty::SpvSide,
             3_000,
         ));
+        assert_eq!(ListingSpvProposal::<Test>::get(0).unwrap(), 2);
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            40
         ));
         run_to_block(151);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -2333,8 +2384,9 @@ fn finalize_spv_lawyer_works() {
             0,
         ));
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
-        assert_eq!(UserLawyerVote::<Test>::get(0).is_none(), true);
+        assert_eq!(UserLawyerVote::<Test>::get::<u64, AccountId>(2, [1; 32].into()).is_none(), false);
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
+        assert_eq!(ListingSpvProposal::<Test>::get(0).is_none(), true);
         assert_eq!(
             PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer,
             Some([10; 32].into())
@@ -2458,12 +2510,14 @@ fn finalize_spv_lawyer_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            60
         ));
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
         assert_noop!(
             Marketplace::finalize_spv_lawyer(RuntimeOrigin::signed([0; 32].into()), 0,),
@@ -2588,7 +2642,8 @@ fn remove_lawyer_claim_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -2834,7 +2889,8 @@ fn finalize_property_deal() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -3006,7 +3062,8 @@ fn finalize_property_deal_2() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -3194,7 +3251,8 @@ fn finalize_property_deal_3() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -3417,7 +3475,8 @@ fn finalize_property_deal_4() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -3611,10 +3670,15 @@ fn reject_contract_and_refund() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -3868,10 +3932,15 @@ fn reject_contract_and_refund_2() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -4072,10 +4141,15 @@ fn withdraw_legal_process_expired_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            90
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -4228,7 +4302,8 @@ fn withdraw_legal_process_expired_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -4352,10 +4427,15 @@ fn second_attempt_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -4503,7 +4583,8 @@ fn lawyer_confirm_documents_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
 			RuntimeOrigin::signed([1; 32].into()),
 			0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
 		));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -4636,10 +4717,15 @@ fn relist_a_nft() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -4817,7 +4903,8 @@ fn relist_a_nft_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -4966,10 +5053,15 @@ fn buy_relisted_token_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            3
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5143,10 +5235,15 @@ fn buy_relisted_token_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5285,10 +5382,15 @@ fn make_offer_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5440,10 +5542,15 @@ fn make_offer_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5621,10 +5728,15 @@ fn handle_offer_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5827,10 +5939,15 @@ fn handle_offer_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -5987,10 +6104,15 @@ fn cancel_offer_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -6147,10 +6269,15 @@ fn cancel_offer_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -6363,7 +6490,8 @@ fn upgrade_object_and_distribute_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            50
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -6489,13 +6617,18 @@ fn upgrade_object_for_relisted_nft_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([0; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
             RuntimeOrigin::signed([0; 32].into()),
             0,
         ),);
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+        ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([10; 32].into()),
             0,
@@ -6694,10 +6827,15 @@ fn delist_single_token_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -6857,10 +6995,15 @@ fn delist_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -7109,12 +7252,17 @@ fn listing_objects_in_different_regions() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(221);
         assert_ok!(Marketplace::finalize_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             1,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
         ));
         assert_ok!(Marketplace::lawyer_confirm_documents(
             RuntimeOrigin::signed([12; 32].into()),
@@ -7150,7 +7298,8 @@ fn listing_objects_in_different_regions() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             2,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(251);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -7937,10 +8086,15 @@ fn send_property_token_works() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -8131,7 +8285,8 @@ fn send_property_token_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -8276,7 +8431,8 @@ fn send_property_token_fails_if_relist() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            80
         ));
         run_to_block(91);
         assert_ok!(Marketplace::finalize_spv_lawyer(

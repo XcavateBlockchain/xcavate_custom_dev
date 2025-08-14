@@ -70,11 +70,11 @@ use super::{
     RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
     System, WeightToFee, XcavateWhitelist, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS,
     EXISTENTIAL_DEPOSIT, HOURS, MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO,
-    SLOT_DURATION, UNIT, VERSION,
+    SLOT_DURATION, UNIT, VERSION, AssetsFreezer,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use pallet_nfts::PalletFeatures;
-use primitives::MarketplaceHoldReason;
+use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
 use scale_info::TypeInfo;
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 
@@ -454,7 +454,7 @@ impl pallet_assets::Config<pallet_assets::Instance1> for Runtime {
     type Currency = Balances;
     type Extra = ();
     type ForceOrigin = EnsureRoot<AccountId>;
-    type Freezer = ();
+    type Freezer = AssetsFreezer;
     type Holder = ();
     type MetadataDepositBase = ZeroDeposit;
     type MetadataDepositPerByte = ZeroDeposit;
@@ -494,6 +494,11 @@ impl pallet_assets_holder::Config<pallet_assets::Instance2> for Runtime {
     type RuntimeHoldReason = MarketplaceHoldReason;
     type RuntimeEvent = RuntimeEvent;
 }
+
+impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Runtime {
+	type RuntimeFreezeReason = MarketplaceFreezeReason;
+	type RuntimeEvent = RuntimeEvent;
+} 
 
 parameter_types! {
     pub Features: PalletFeatures = PalletFeatures::all_enabled();
@@ -623,6 +628,7 @@ impl pallet_marketplace::Config for Runtime {
     type LocalCurrency = RealEstateAssets;
     type ForeignCurrency = Assets;
     type ForeignAssetsHolder = AssetsHolder;
+    type AssetsFreezer = AssetsFreezer;
     type PalletId = MarketplacePalletId;
     type MinPropertyToken = MinPropertyTokens;
     type MaxPropertyToken = MaxPropertyTokens;

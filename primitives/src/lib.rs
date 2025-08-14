@@ -29,3 +29,30 @@ impl VariantCount for MarketplaceHoldReason {
     // Intentionally set below the actual count of variants, to allow testing for `can_freeze`
     const VARIANT_COUNT: u32 = 2;
 }
+
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    MaxEncodedLen,
+    TypeInfo,
+    RuntimeDebug,
+)]
+pub enum MarketplaceFreezeReason {
+    SpvLawyerVoting,
+    LettingAgentVoting,
+    ProposalVoting,
+    ChallengeVoting,
+    SaleVoting,
+}
+
+impl VariantCount for MarketplaceFreezeReason {
+    // Intentionally set below the actual count of variants, to allow testing for `can_freeze`
+    const VARIANT_COUNT: u32 = 4;
+}
