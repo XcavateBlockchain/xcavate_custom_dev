@@ -331,28 +331,35 @@ pub mod pallet {
             asset_id: u32,
             token_price: <T as pallet::Config>::Balance,
             token_amount: u32,
+            total_valuation: <T as pallet::Config>::Balance,
             seller: AccountIdOf<T>,
             tax_paid_by_developer: bool,
             listing_expiry: BlockNumberFor<T>,
+            metadata_blob: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
         },
         /// A token has been bought.
         RelistedTokenBought {
             listing_index: ListingId,
             asset_id: u32,
             buyer: AccountIdOf<T>,
+            seller: AccountIdOf<T>,
             price: <T as pallet::Config>::Balance,
             amount: u32,
             payment_asset: u32,
+            new_amount_remaining: u32,
         },
         /// Token from listed object have been bought.
         PropertyTokenBought {
             listing_index: ListingId,
             asset_id: u32,
             buyer: AccountIdOf<T>,
-            amount: u32,
-            price: <T as pallet::Config>::Balance,
-            tax: <T as pallet::Config>::Balance,
+            amount_purchased: u32,
+            price_paid: <T as pallet::Config>::Balance,
+            tax_paid: <T as pallet::Config>::Balance,
             payment_asset: u32,
+            new_tokens_remaining: u32,
+            new_total_funds_for_asset: <T as pallet::Config>::Balance,
+            new_total_tax_for_asset: <T as pallet::Config>::Balance,
         },
         /// Token have been listed.
         TokenRelisted {
@@ -386,13 +393,13 @@ pub mod pallet {
         DeveloperLawyerProposed {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
-            costs: <T as pallet::Config>::Balance,
+            proposed_cost: <T as pallet::Config>::Balance,
         },
         /// A spv lawyer claimed a property.
         SpvLawyerProposed {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
-            costs: <T as pallet::Config>::Balance,
+            proposed_cost: <T as pallet::Config>::Balance,
             expiry_block: BlockNumberFor<T>,
         },
         /// A lawyer stepped back from a legal case.
@@ -408,10 +415,10 @@ pub mod pallet {
             approve: bool,
         },
         /// The property deal has been successfully sold.
-        PropertySuccessfullySold {
+        PrimarySaleCompleted {
             listing_id: ListingId,
-            item_index: <T as pallet_real_estate_asset::Config>::NftId,
             asset_id: u32,
+            payouts: FinalSettlementPayouts<T>,
         },
         /// Funds has been withdrawn.
         RejectedFundsWithdrawn {
@@ -438,10 +445,11 @@ pub mod pallet {
             price: <T as pallet::Config>::Balance,
         },
         /// A buy has been cancelled.
-        BuyCancelled {
+        InvestmentCancelled {
             listing_id: ListingId,
-            buyer: AccountIdOf<T>,
-            amount: u32,
+            investor: AccountIdOf<T>,
+            amount_returned: u32,
+            new_tokens_remaining: u32,
         },
         /// Property token have been sent to another account.
         PropertyTokenSend {
@@ -451,9 +459,10 @@ pub mod pallet {
             amount: u32,
         },
         /// The deposit of the real estate developer has been released.
-        DepositWithdrawnUnsold {
-            signer: AccountIdOf<T>,
+        DeveloperDepositReturned {
             listing_id: ListingId,
+            developer: AccountIdOf<T>,
+            amount: <T as pallet::Config>::Balance,
         },
         /// Someone has voted on a lawyer.
         VotedOnLawyer {
@@ -461,30 +470,23 @@ pub mod pallet {
             voter: AccountIdOf<T>,
             vote: Vote,
             voting_power: u32,
-            lawyer: AccountIdOf<T>,
+            new_yes_power: u32,
+            new_no_power: u32,
             proposal_id: ProposalId,
         },
-        /// The real estate developer lawyer has been approved.
-        RealEstateLawyerApproved {
+        /// The real estate developer lawyer has been finalized.
+        RealEstateLawyerProposalFinalized {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
-            details: PropertyLawyerDetails<T>,
+            is_approved: bool,
         },
-        /// The real estate developer lawyer has been rejected.
-        RealEstateLawyerRejected {
+        /// The spv lawyer has been finalized.
+        SpvLawyerVoteFinalized {
             listing_id: ListingId,
             lawyer: AccountIdOf<T>,
-        },
-        /// The spv lawyer has been approved.
-        SpvLawyerApproved {
-            listing_id: ListingId,
-            lawyer: AccountIdOf<T>,
-            details: PropertyLawyerDetails<T>,
-        },
-        /// The spv lawyer has been rejected.
-        SpvLawyerRejected {
-            listing_id: ListingId,
-            lawyer: AccountIdOf<T>,
+            is_approved: bool,
+            final_yes_power: u32,
+            final_no_power: u32,
         },
         PropertyTokenClaimed {
             listing_id: ListingId,
@@ -500,7 +502,7 @@ pub mod pallet {
         PropertySoldOut {
             listing_id: ListingId,
             asset_id: u32,
-            legal_process_expiry: BlockNumberFor<T>,
+            legal_process_expiry_block: BlockNumberFor<T>,
         },
         /// A user has unfrozen his token.
         TokenUnfrozen {
@@ -508,6 +510,13 @@ pub mod pallet {
             asset_id: u32,
             voter: AccountIdOf<T>,
             amount: u32,
+        },
+        LawyerCostsAllocated {
+            listing_id: ListingId,
+            lawyer_account: AccountIdOf<T>,
+            lawyer_type: LegalProperty,
+            cost_in_usdc: <T as pallet::Config>::Balance,
+            cost_in_usdt: <T as pallet::Config>::Balance,
         },
     }
 
@@ -685,7 +694,7 @@ pub mod pallet {
                 location,
                 token_amount,
                 property_price.into(),
-                data,
+                data.clone(),
             )?;
 
             let property_details = PropertyListingDetails {
@@ -725,9 +734,11 @@ pub mod pallet {
                 asset_id: asset_number,
                 token_price,
                 token_amount,
+                total_valuation: property_price,
                 seller: signer,
                 tax_paid_by_developer,
                 listing_expiry,
+                metadata_blob: data,
             });
             Ok(())
         }
@@ -887,21 +898,33 @@ pub mod pallet {
                 Self::deposit_event(Event::<T>::PropertySoldOut {
                     listing_id,
                     asset_id,
-                    legal_process_expiry: expiry_block,
+                    legal_process_expiry_block: expiry_block,
                 });
             }
+            let new_total_funds_for_asset = *property_details
+                .collected_funds
+                .get(&payment_asset)
+                .unwrap_or(&0u128.into());
+
+            let new_total_tax_for_asset = *property_details
+                .collected_tax
+                .get(&payment_asset)
+                .unwrap_or(&0u128.into());
             Self::deposit_event(Event::<T>::PropertyTokenBought {
                 listing_index: listing_id,
                 asset_id,
                 buyer: signer,
-                amount,
-                price: transfer_price,
-                tax: if !tax_paid_by_developer {
+                amount_purchased: amount,
+                price_paid: transfer_price,
+                tax_paid: if !tax_paid_by_developer {
                     tax
                 } else {
                     0u128.into()
                 },
                 payment_asset,
+                new_tokens_remaining: listed_token,
+                new_total_funds_for_asset,
+                new_total_tax_for_asset,
             });
             Ok(())
         }
@@ -1184,7 +1207,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
-        /// Emits `BuyCancelled` event when succesfful.
+        /// Emits `InvestmentCancelled` event when succesfful.
         #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_property_purchase())]
         pub fn cancel_property_purchase(
@@ -1222,10 +1245,11 @@ pub mod pallet {
 
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
 
-            Self::deposit_event(Event::<T>::BuyCancelled {
+            Self::deposit_event(Event::<T>::InvestmentCancelled {
                 listing_id,
-                buyer: signer,
-                amount: token_details.token_amount,
+                investor: signer,
+                amount_returned: token_details.token_amount,
+                new_tokens_remaining: property_details.listed_token_amount,
             });
             Ok(())
         }
@@ -1667,7 +1691,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
         ///
-        /// Emits `DepositWithdrawnUnsold` event when succesfful.
+        /// Emits `DeveloperDepositReturned` event when succesfful.
         #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_deposit_unsold())]
         pub fn withdraw_deposit_unsold(
@@ -1719,7 +1743,7 @@ pub mod pallet {
                 )?;
             }
             OngoingObjectListing::<T>::remove(listing_id);
-            Self::deposit_event(Event::<T>::DepositWithdrawnUnsold { signer, listing_id });
+            Self::deposit_event(Event::<T>::DeveloperDepositReturned { listing_id, developer: signer, amount: deposit_amount });
             Ok(())
         }
 
@@ -1816,7 +1840,7 @@ pub mod pallet {
         /// - `legal_side`: The side that the lawyer wants to represent.
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
-        /// Emits `LawyerClaimedProperty` event when succesfful.
+        /// Emits `DeveloperLawyerProposed` event or `SpvLawyerProposed` event when succesfful.
         #[pallet::call_index(16)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_property())]
         pub fn lawyer_claim_property(
@@ -1887,7 +1911,7 @@ pub mod pallet {
                     Self::deposit_event(Event::<T>::DeveloperLawyerProposed {
                         listing_id,
                         lawyer: signer,
-                        costs,
+                        proposed_cost: costs,
                     });
                 }
                 LegalProperty::SpvSide => {
@@ -1936,7 +1960,7 @@ pub mod pallet {
                     Self::deposit_event(Event::<T>::SpvLawyerProposed {
                         listing_id,
                         lawyer: signer,
-                        costs,
+                        proposed_cost: costs,
                         expiry_block,
                     });
                 }
@@ -1976,6 +2000,10 @@ pub mod pallet {
             let voting_power =
                 T::PropertyToken::get_token_balance(proposal_details.asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NotEnoughToken);
+            
+            let mut new_yes_power = 0u32;
+            let mut new_no_power = 0u32;
+            
             OngoingLawyerVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
@@ -2016,6 +2044,10 @@ pub mod pallet {
                         asset_id: proposal_details.asset_id,
                         power: voting_power,
                     });
+
+                    new_yes_power = current_vote.yes_voting_power;
+                    new_no_power = current_vote.no_voting_power;
+
                     Ok::<(), DispatchError>(())
                 })?;
 
@@ -2026,7 +2058,8 @@ pub mod pallet {
                 voter: signer,
                 vote,
                 voting_power,
-                lawyer: proposal_details.lawyer,
+                new_yes_power,
+                new_no_power,
                 proposal_id,
             });
             Ok(())
@@ -2040,8 +2073,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         /// - `approve`: Approves or rejects the lawyer.
         ///
-        /// Emits `RealEstateLawyerApproved` event when approved
-        /// or RealEstateLawyerRejected when rejected.
+        /// Emits `RealEstateLawyerProposalFinalized` event when succesfful.
         #[pallet::call_index(18)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_developer_lawyer())]
         pub fn approve_developer_lawyer(
@@ -2084,7 +2116,7 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 ensure!(collected_fees >= proposal.costs, Error::<T>::CostsTooHigh);
 
-                Self::allocate_fees(
+                let (usdc_cost, usdt_cost) = Self::allocate_fees(
                     &mut property_lawyer_details.real_estate_developer_lawyer_costs,
                     asset_id_usdt,
                     collected_fee_usdt,
@@ -2092,20 +2124,22 @@ pub mod pallet {
                     collected_fee_usdc,
                     proposal.costs,
                 )?;
+                Self::deposit_event(Event::<T>::LawyerCostsAllocated {
+                    listing_id,
+                    lawyer_account: proposal.lawyer.clone(),
+                    lawyer_type: LegalProperty::RealEstateDeveloperSide,
+                    cost_in_usdc: usdc_cost,
+                    cost_in_usdt: usdt_cost,
+                });
                 PalletRegions::<T>::increment_active_cases(&proposal.lawyer)?;
-                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
-                Self::deposit_event(Event::RealEstateLawyerApproved {
-                    listing_id,
-                    lawyer: proposal.lawyer,
-                    details: property_lawyer_details,
-                });
-            } else {
-                Self::deposit_event(Event::RealEstateLawyerRejected {
-                    listing_id,
-                    lawyer: proposal.lawyer,
-                });
+                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
             }
             ProposedLawyers::<T>::remove(listing_id);
+            Self::deposit_event(Event::RealEstateLawyerProposalFinalized {
+                listing_id,
+                lawyer: proposal.lawyer,
+                is_approved: approve,
+            });
             Ok(())
         }
 
@@ -2116,8 +2150,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing from the property.
         ///
-        /// Emits `SpvLawyerApproved` event when lawyer is approved
-        /// or SpvLawyerRejected when rejected.
+        /// Emits `SpvLawyerVoteFinalized` event when succesfful.
         #[pallet::call_index(19)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_spv_lawyer())]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -2141,8 +2174,8 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-
-            if voting_result.yes_voting_power > voting_result.no_voting_power {
+            let is_approved = voting_result.yes_voting_power > voting_result.no_voting_power;
+            if is_approved {
                 property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
@@ -2161,7 +2194,7 @@ pub mod pallet {
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 ensure!(collected_fees >= proposal.costs, Error::<T>::CostsTooHigh);
 
-                Self::allocate_fees(
+                let (usdc_cost, usdt_cost) = Self::allocate_fees(
                     &mut property_lawyer_details.spv_lawyer_costs,
                     asset_id_usdt,
                     collected_fee_usdt,
@@ -2169,23 +2202,27 @@ pub mod pallet {
                     collected_fee_usdc,
                     proposal.costs,
                 )?;
+                Self::deposit_event(Event::<T>::LawyerCostsAllocated {
+                    listing_id,
+                    lawyer_account: proposal.lawyer.clone(),
+                    lawyer_type: LegalProperty::SpvSide,
+                    cost_in_usdc: usdc_cost,
+                    cost_in_usdt: usdt_cost,
+                });
                 PalletRegions::<T>::increment_active_cases(&proposal.lawyer)?;
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details.clone());
-                Self::deposit_event(Event::SpvLawyerApproved {
-                    listing_id,
-                    lawyer: proposal.lawyer,
-                    details: property_lawyer_details,
-                });
-            } else {
-                Self::deposit_event(Event::SpvLawyerRejected {
-                    listing_id,
-                    lawyer: proposal.lawyer,
-                });
             }
             SpvLawyerProposal::<T>::remove(proposal_id);
             OngoingLawyerVoting::<T>::remove(proposal_id);
             ListingSpvProposal::<T>::remove(listing_id);
 
+            Self::deposit_event(Event::SpvLawyerVoteFinalized {
+                listing_id,
+                lawyer: proposal.lawyer,
+                is_approved,
+                final_yes_power: voting_result.yes_voting_power,
+                final_no_power: voting_result.no_voting_power,
+            });
             Ok(())
         }
 
@@ -2475,6 +2512,11 @@ pub mod pallet {
             PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
             PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
 
+            let mut developer_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
+            let mut spv_lawyer_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
+            let mut treasury_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
+            let mut region_owner_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
+
             // Distribute funds from property account for each asset
             for &asset in T::AcceptedAssets::get().iter() {
                 // Get total collected amounts and lawyer costs
@@ -2558,6 +2600,22 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &spv_lawyer_id, spv_lawyer_costs, asset)?;
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
+            
+                match asset {
+                    1337 => { // USDC ID
+                        developer_payout.amount_in_usdc = developer_amount;
+                        spv_lawyer_payout.amount_in_usdc = spv_lawyer_costs;
+                        treasury_payout.amount_in_usdc = treasury_amount;
+                        region_owner_payout.amount_in_usdc = region_owner_amount;
+                    },
+                    1984 => { // USDT ID
+                        developer_payout.amount_in_usdt = developer_amount;
+                        spv_lawyer_payout.amount_in_usdt = spv_lawyer_costs;
+                        treasury_payout.amount_in_usdt = treasury_amount;
+                        region_owner_payout.amount_in_usdt = region_owner_amount;
+                    },
+                    _ => {}
+                }
             }
             T::PropertyToken::finalize_property(property_details.asset_id)?;
             // Release deposit
@@ -2569,10 +2627,22 @@ pub mod pallet {
                     Precision::Exact,
                 )?;
             }
-            Self::deposit_event(Event::<T>::PropertySuccessfullySold {
+
+            let payouts = FinalSettlementPayouts {
+                developer_payout,
+                developer_account: property_details.real_estate_developer.clone(),
+                spv_lawyer_payout,
+                spv_lawyer_account: spv_lawyer_id.clone(),
+                treasury_payout,
+                treasury_account: treasury_id.clone(),
+                region_owner_payout,
+                region_owner_account: region.owner.clone(),
+            };
+
+            Self::deposit_event(Event::<T>::PrimarySaleCompleted {
                 listing_id,
-                item_index: property_details.item_id,
                 asset_id: property_details.asset_id,
+                payouts,
             });
             Ok(())
         }
@@ -2671,9 +2741,11 @@ pub mod pallet {
                 listing_index: listing_id,
                 asset_id: listing_details.asset_id,
                 buyer: account.clone(),
+                seller: listing_details.seller,
                 price: listing_details.token_price,
                 amount,
                 payment_asset,
+                new_amount_remaining: listing_details.amount,
             });
             Ok(())
         }
@@ -2822,15 +2894,20 @@ pub mod pallet {
             asset_id_usdc: u32,
             collected_fee_usdc: <T as pallet::Config>::Balance,
             costs: <T as pallet::Config>::Balance,
-        ) -> DispatchResult {
+        ) -> Result<(<T as pallet::Config>::Balance, <T as pallet::Config>::Balance), DispatchError> {
+            let mut usdt_cost = 0u32.into();
+            let mut usdc_cost = 0u32.into();
+            
             if collected_fee_usdt >= costs {
                 costs_map
                     .try_insert(asset_id_usdt, costs)
                     .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                usdt_cost = costs;
             } else if collected_fee_usdc >= costs {
                 costs_map
                     .try_insert(asset_id_usdc, costs)
                     .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                usdc_cost = costs;
             } else {
                 let remaining_costs = costs
                     .checked_sub(&collected_fee_usdt)
@@ -2845,8 +2922,10 @@ pub mod pallet {
                 costs_map
                     .try_insert(asset_id_usdc, remaining_costs)
                     .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+                usdt_cost = collected_fee_usdt;
+                usdc_cost = remaining_costs;
             }
-            Ok(())
+            Ok((usdc_cost, usdt_cost))
         }
     }
 }

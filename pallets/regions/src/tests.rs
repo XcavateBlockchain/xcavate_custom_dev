@@ -715,9 +715,10 @@ fn bid_on_region_fails() {
             10_000
         ));
         System::assert_last_event(
-            Event::RegionRejected {
+            Event::RegionProposalRejected {
                 region_id: 2,
-                slashed: 5_000,
+                slashed_account: [0; 32].into(),
+                amount: 5_000,
             }
             .into(),
         );
@@ -1454,8 +1455,10 @@ fn remove_owner_proposal_passes() {
         System::assert_last_event(
             Event::RegionalOperatorSlashed {
                 region_id: 3,
-                operator: [8; 32].into(),
+                slashed_account: [8; 32].into(),
                 amount: 10_000,
+                new_collateral_balance: 90_000,
+                new_active_strikes: 1,
             }
             .into(),
         );

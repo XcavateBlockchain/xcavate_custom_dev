@@ -416,6 +416,9 @@ pub mod pallet {
             region_id: RegionId,
             voter: T::AccountId,
             vote: Vote,
+            voting_power: T::Balance,
+            new_yes_power: T::Balance,
+            new_no_power: T::Balance,
         },
         /// New region has been created.
         RegionCreated {
@@ -441,13 +444,16 @@ pub mod pallet {
         LocationCreated {
             region_id: RegionId,
             location_id: LocationId<T>,
+            new_collateral_balance: T::Balance,
+            new_location_count: u32,
         },
         /// An auction for a region has started.
         RegionAuctionStarted { region_id: RegionId },
         /// A region got rejected.
-        RegionRejected {
+        RegionProposalRejected {
             region_id: RegionId,
-            slashed: T::Balance,
+            slashed_account: T::AccountId,
+            amount: T::Balance,
         },
         /// A bid for a region got placed.
         BidSuccessfullyPlaced {
@@ -471,14 +477,19 @@ pub mod pallet {
             region_id: RegionId,
             voter: T::AccountId,
             vote: Vote,
+            voting_power: T::Balance,
+            new_yes_power: T::Balance,
+            new_no_power: T::Balance,
         },
         /// A proposal for removing the region owner got rejected.
         RegionOwnerRemovalRejected { region_id: RegionId },
         /// A regional operator has been slashed.
         RegionalOperatorSlashed {
             region_id: RegionId,
-            operator: T::AccountId,
+            slashed_account: T::AccountId,
             amount: T::Balance,
+            new_collateral_balance: T::Balance,
+            new_active_strikes: u8,
         },
         /// The region is now eligible for an owner change after the specified block.
         RegionOwnerChangeEnabled {
@@ -523,6 +534,10 @@ pub mod pallet {
             lawyer: T::AccountId,
             region_id: RegionId,
         },
+        LawyerActiveCasesUpdated {
+            lawyer_account: T::AccountId,
+            new_active_cases: u32,
+        }
     }
 
     #[pallet::error]
@@ -734,6 +749,10 @@ pub mod pallet {
                 voting_power >= T::MinimumVotingAmount::get(),
                 Error::<T>::NotEnoughTokenToVote
             );
+
+            let mut new_yes_power = Default::default();
+            let mut new_no_power = Default::default();
+
             OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 UserRegionVote::<T>::try_mutate(region_id, |maybe_map| {
@@ -770,6 +789,10 @@ pub mod pallet {
 
                     map.try_insert(signer.clone(), vote_record)
                         .map_err(|_| Error::<T>::TooManyVoters)?;
+                               
+                    new_yes_power = current_vote.yes_voting_power;
+                    new_no_power = current_vote.no_voting_power;
+                    
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -778,6 +801,9 @@ pub mod pallet {
                 region_id,
                 voter: signer,
                 vote,
+                voting_power,
+                new_yes_power,
+                new_no_power,
             });
             Ok(())
         }
@@ -1060,6 +1086,9 @@ pub mod pallet {
             );
             let deposit_amount = T::LocationDeposit::get();
 
+            let mut new_collateral_balance = 0u32.into();
+            let mut new_location_count = 0u32.into();
+
             RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region_info = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;
                 ensure!(region_info.owner == signer, Error::<T>::NoPermission);
@@ -1079,6 +1108,9 @@ pub mod pallet {
                     deposit_amount,
                 )?;
 
+                new_collateral_balance = region_info.collateral;
+                new_location_count = region_info.location_count;
+
                 Ok::<(), DispatchError>(())
             })?;
 
@@ -1086,6 +1118,8 @@ pub mod pallet {
             Self::deposit_event(Event::<T>::LocationCreated {
                 region_id,
                 location_id: location,
+                new_collateral_balance,
+                new_location_count,
             });
             Ok(())
         }
@@ -1174,6 +1208,10 @@ pub mod pallet {
                 voting_power >= T::MinimumVotingAmount::get(),
                 Error::<T>::NotEnoughTokenToVote
             );
+
+            let mut new_yes_power = Default::default();
+            let mut new_no_power = Default::default();
+
             OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
                 UserRegionOwnerVote::<T>::try_mutate(region_id, |maybe_map| {
@@ -1210,6 +1248,10 @@ pub mod pallet {
 
                     map.try_insert(signer.clone(), vote_record)
                         .map_err(|_| Error::<T>::TooManyVoters)?;
+
+                    new_yes_power = current_vote.yes_voting_power;
+                    new_no_power = current_vote.no_voting_power;
+
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -1218,6 +1260,9 @@ pub mod pallet {
                 region_id,
                 voter: signer,
                 vote,
+                voting_power,
+                new_yes_power,
+                new_no_power,
             });
             Ok(())
         }
@@ -1516,9 +1561,10 @@ pub mod pallet {
 
                 T::Slash::on_unbalanced(imbalance);
                 ProposedRegionIds::<T>::remove(region_id);
-                Self::deposit_event(Event::RegionRejected {
+                Self::deposit_event(Event::RegionProposalRejected {
                     region_id,
-                    slashed: proposal.deposit,
+                    slashed_account: proposal.proposer,
+                    amount: proposal.deposit,
                 });
                 Ok(false)
             }
@@ -1588,11 +1634,16 @@ pub mod pallet {
 
             let updated_strikes = region_info.active_strikes;
 
+            let new_collateral_balance = region_info.collateral;
+            let new_active_strikes = region_info.active_strikes;
+
             RegionDetails::<T>::insert(region_id, region_info);
             Self::deposit_event(Event::RegionalOperatorSlashed {
                 region_id,
-                operator: region_owner,
+                slashed_account: region_owner,
                 amount,
+                new_collateral_balance,
+                new_active_strikes,
             });
             Ok(updated_strikes)
         }
@@ -1677,6 +1728,10 @@ impl<T: Config> LawyerManagement<T> for Pallet<T> {
                 .active_cases
                 .checked_add(1)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
+            Self::deposit_event(Event::LawyerActiveCasesUpdated {
+                lawyer_account: lawyer.clone(),
+                new_active_cases: lawyer_info.active_cases, 
+            });
             Ok(())
         })
     }
@@ -1690,6 +1745,10 @@ impl<T: Config> LawyerManagement<T> for Pallet<T> {
                 .active_cases
                 .checked_sub(1)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
+            Self::deposit_event(Event::LawyerActiveCasesUpdated {
+                lawyer_account: lawyer.clone(),
+                new_active_cases: lawyer_info.active_cases, 
+            });
             Ok(())
         })
     }

@@ -206,6 +206,48 @@ pub struct VoteRecord {
     pub power: u32,
 }
 
+/// Represents a payout to a single entity, broken down by currency.
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    CloneNoBound,
+    PartialEqNoBound,
+    EqNoBound,
+    MaxEncodedLen,
+    RuntimeDebugNoBound,
+    TypeInfo,
+)]
+#[scale_info(skip_type_params(T))]
+pub struct Payout<T: Config> {
+    pub amount_in_usdc: <T as pallet::Config>::Balance,
+    pub amount_in_usdt: <T as pallet::Config>::Balance,
+}
+
+/// A struct containing all payouts for the final settlement of a primary sale.
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    CloneNoBound,
+    PartialEqNoBound,
+    EqNoBound,
+    MaxEncodedLen,
+    RuntimeDebugNoBound,
+    TypeInfo,
+)]
+#[scale_info(skip_type_params(T))]
+pub struct FinalSettlementPayouts<T: Config> {
+    pub developer_payout: Payout<T>,
+    pub developer_account: AccountIdOf<T>,
+    pub spv_lawyer_payout: Payout<T>,
+    pub spv_lawyer_account: AccountIdOf<T>,
+    pub treasury_payout: Payout<T>,
+    pub treasury_account: AccountIdOf<T>,
+    pub region_owner_payout: Payout<T>,
+    pub region_owner_account: AccountIdOf<T>,
+}
+
 /// Takeover enum.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
