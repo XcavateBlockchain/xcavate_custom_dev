@@ -1087,7 +1087,7 @@ pub mod pallet {
             let deposit_amount = T::LocationDeposit::get();
 
             let mut new_collateral_balance = 0u32.into();
-            let mut new_location_count = 0u32.into();
+            let mut new_location_count = 0u32;
 
             RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
                 let region_info = maybe_region.as_mut().ok_or(Error::<T>::RegionUnknown)?;

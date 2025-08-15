@@ -20,7 +20,7 @@ use pallet_nfts::PalletFeatures;
 
 use pallet_assets::{Instance1, Instance2};
 
-use primitives::MarketplaceHoldReason;
+use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
 
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -56,6 +56,7 @@ frame_support::construct_runtime!(
         ForeignAssets: pallet_assets::<Instance2>,
         XcavateWhitelist: pallet_xcavate_whitelist,
         AssetsHolder: pallet_assets_holder::<Instance2>,
+        AssetsFreezer: pallet_assets_freezer::<Instance1>,
         Regions: pallet_regions,
         RealEstateAsset: pallet_real_estate_asset,
     }
@@ -166,7 +167,7 @@ impl pallet_assets::Config<Instance1> for Test {
     type MetadataDepositPerByte = ConstU128<1>;
     type ApprovalDeposit = ConstU128<1>;
     type StringLimit = ConstU32<50>;
-    type Freezer = ();
+    type Freezer = AssetsFreezer;
     type Holder = ();
     type Extra = ();
     type CallbackHandle = ();
@@ -200,6 +201,11 @@ impl pallet_assets_holder::Config<pallet_assets::Instance2> for Test {
     type RuntimeHoldReason = MarketplaceHoldReason;
     type RuntimeEvent = RuntimeEvent;
 }
+
+impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
+	type RuntimeFreezeReason = MarketplaceFreezeReason;
+	type RuntimeEvent = RuntimeEvent;
+} 
 
 parameter_types! {
     pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
@@ -350,6 +356,7 @@ impl pallet_marketplace::Config for Test {
     type LocalCurrency = LocalAssets;
     type ForeignCurrency = ForeignAssets;
     type ForeignAssetsHolder = AssetsHolder;
+    type AssetsFreezer = AssetsFreezer;
     type PalletId = MarketplacePalletId;
     type MinPropertyToken = MinPropertyTokens;
     type MaxPropertyToken = MaxPropertyTokens;

@@ -38,6 +38,7 @@ sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 primitives = { path = "../../primitives", default-features = false }
 pallet-assets-holder = { workspace = true }
+pallet-assets-freezer = { workspace = true }
 
 [features]
 default = ["std"]
@@ -58,6 +59,7 @@ std = [
 	"sp-api/std",
 	"primitives/std",
 	"pallet-assets-holder/std",
+	"pallet-assets-freezer/std",
 	"pallet-real-estate-asset/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]

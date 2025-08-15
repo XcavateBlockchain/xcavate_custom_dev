@@ -128,7 +128,7 @@ fn setting_letting_agent(agent: AccountId, voter: AccountId) {
     ));
 }
 
-fn lawyer_process() {
+fn lawyer_process(vote_amount: u32) {
     assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::signed([20; 32].into()),
         [10; 32].into(),
@@ -167,7 +167,8 @@ fn lawyer_process() {
     assert_ok!(Marketplace::vote_on_spv_lawyer(
         RuntimeOrigin::signed([1; 32].into()),
         0,
-        pallet_marketplace::types::Vote::Yes
+        pallet_marketplace::types::Vote::Yes,
+        vote_amount,
     ));
     let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
     run_to_block(expiry);
@@ -220,7 +221,7 @@ fn propose_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -272,7 +273,7 @@ fn proposal_with_low_amount_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -352,7 +353,7 @@ fn propose_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -405,7 +406,7 @@ fn challenge_against_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -458,7 +459,7 @@ fn challenge_against_letting_agent_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -563,7 +564,7 @@ fn vote_on_proposal_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(20);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -713,7 +714,8 @@ fn proposal_pass() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            pallet_marketplace::types::Vote::Yes
+            pallet_marketplace::types::Vote::Yes,
+            100
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
         run_to_block(expiry);
@@ -810,7 +812,7 @@ fn proposal_pass_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -885,7 +887,7 @@ fn proposal_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -977,7 +979,7 @@ fn proposal_not_pass_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(60);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -1065,7 +1067,7 @@ fn vote_on_proposal_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -1188,7 +1190,7 @@ fn vote_on_challenge_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(20);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
@@ -1302,7 +1304,7 @@ fn challenge_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(30);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
@@ -1562,7 +1564,7 @@ fn challenge_does_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(75);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
@@ -1696,7 +1698,7 @@ fn challenge_pass_only_one_agent() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(30);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
@@ -1805,7 +1807,7 @@ fn challenge_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -1875,7 +1877,7 @@ fn vote_on_challenge_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -1997,7 +1999,7 @@ fn different_proposals() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(60);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
@@ -2183,7 +2185,7 @@ fn propose_property_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2265,7 +2267,7 @@ fn propose_property_sale_fails() {
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
             RealEstateAssetError::<Test>::PropertyNotFinalized
         );
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2364,7 +2366,7 @@ fn vote_on_property_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(40);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2472,7 +2474,7 @@ fn vote_on_property_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(100);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2566,7 +2568,7 @@ fn auction_starts() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(60);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2677,7 +2679,7 @@ fn proposal_does_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(50);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2797,7 +2799,7 @@ fn bid_on_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(60);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -2993,7 +2995,7 @@ fn bid_on_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(60);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -3112,7 +3114,7 @@ fn lawyer_claim_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -3335,7 +3337,8 @@ fn lawyer_claim_sale_fails() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            pallet_marketplace::types::Vote::Yes
+            pallet_marketplace::types::Vote::Yes,
+            55
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
         run_to_block(expiry);
@@ -3607,7 +3610,8 @@ fn lawyer_claim_sale_fails_2() {
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            pallet_marketplace::types::Vote::Yes
+            pallet_marketplace::types::Vote::Yes,
+            40
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
         run_to_block(expiry);
@@ -3830,7 +3834,7 @@ fn lawyer_confirm_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -3986,7 +3990,7 @@ fn lawyer_confirm_sale_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4154,7 +4158,7 @@ fn lawyer_confirm_sale_works_deny() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4305,7 +4309,7 @@ fn lawyer_confirm_sale_works_deny_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4478,7 +4482,7 @@ fn lawyer_confirm_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4661,7 +4665,7 @@ fn finalize_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4820,7 +4824,7 @@ fn finalize_sale_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -4972,7 +4976,7 @@ fn finalize_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(55);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -5126,7 +5130,11 @@ fn claim_sale_funds_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(90);
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
@@ -5298,7 +5306,11 @@ fn claim_sale_funds_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process();
+        lawyer_process(90);
+        assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
