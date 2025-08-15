@@ -17,6 +17,7 @@ use frame_support::{
     traits::{
         fungible::MutateHold,
         fungibles::Mutate as FungiblesMutate,
+        fungibles::MutateFreeze,
         tokens::Preservation,
         tokens::{fungible, fungibles, Balance, Precision},
         EnsureOriginWithArg,
@@ -32,6 +33,8 @@ use frame_support::sp_runtime::{
 use codec::Codec;
 
 use pallet_real_estate_asset::traits::{PropertyTokenInspect, PropertyTokenSpvControl};
+
+use primitives::MarketplaceFreezeReason;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
@@ -94,6 +97,15 @@ pub mod pallet {
         pub deposit: <T as pallet::Config>::Balance,
     }
 
+    /// Vote record of a user.
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+    #[scale_info(skip_type_params(T))]
+    pub struct VoteRecord {
+        pub vote: Vote,
+        pub asset_id: u32,
+        pub power: u32,
+    }
+
     /// Vote enum.
     #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
     #[derive(
@@ -152,6 +164,13 @@ pub mod pallet {
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
             + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
             + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
+        
+        type AssetsFreezer: fungibles::MutateFreeze<
+            AccountIdOf<Self>,
+            AssetId = u32,
+            Balance = <Self as pallet::Config>::Balance,
+            Id = MarketplaceFreezeReason,
+        >;
 
         /// The property management's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
@@ -192,6 +211,7 @@ pub mod pallet {
         >;
     }
 
+    pub type ProposalId = u64;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
     /// Mapping from the real estate object to the letting agent.
@@ -219,26 +239,32 @@ pub mod pallet {
     /// Mapping of asset id to the ongoing letting agent proposal.
     #[pallet::storage]
     pub type LettingAgentProposal<T: Config> =
-        StorageMap<_, Blake2_128Concat, u32, ProposedLettingAgent<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, ProposedLettingAgent<T>, OptionQuery>;
 
     /// Mapping of ongoing letting agent vote.
     #[pallet::storage]
     pub type OngoingLettingAgentVoting<T: Config> =
-        StorageMap<_, Blake2_128Concat, u32, VoteStats, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats, OptionQuery>;
 
     /// Mapping of a asset id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserLettingAgentVote<T: Config> = StorageMap<
+    pub(super) type UserLettingAgentVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        u32,
-        BoundedBTreeMap<
-            AccountIdOf<T>,
-            Vote,
-            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
-        >,
+        ProposalId,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        VoteRecord,
         OptionQuery,
     >;
+
+    #[pallet::storage]
+    pub type AssetLettingProposal<T: Config> =
+        StorageMap<_, Blake2_128Concat, u32, ProposalId, OptionQuery>;
+
+    /// Counter of proposal ids.
+    #[pallet::storage]
+    pub type ProposalCounter<T: Config> = StorageValue<_, ProposalId, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -263,10 +289,11 @@ pub mod pallet {
             amount: <T as pallet::Config>::Balance,
         },
         /// A letting agent has been proposed for a property.
-        LettingAgentProposed { asset_id: u32, who: T::AccountId },
+        LettingAgentProposed { asset_id: u32, who: T::AccountId, proposal_id: ProposalId },
         /// Someone has voted on a letting agent.
         VotedOnLettingAgent {
             asset_id: u32,
+            proposal_id: ProposalId,
             voter: T::AccountId,
             vote: Vote,
         },
@@ -274,6 +301,13 @@ pub mod pallet {
         LettingAgentRejected {
             asset_id: u32,
             letting_agent: T::AccountId,
+        },
+        /// A user has unfrozen his token.
+        TokenUnfrozen {
+            proposal_id: ProposalId,
+            asset_id: u32,
+            voter: AccountIdOf<T>,
+            amount: u32,
         },
     }
 
@@ -339,6 +373,8 @@ pub mod pallet {
         LettingAgentNotActiveInLocation,
         /// Letting agent still has active properties in location.
         LettingAgentActive,
+        /// The user has no token amount frozen.
+        NoFrozenAmount,
     }
 
     #[pallet::call]
@@ -499,18 +535,20 @@ pub mod pallet {
                 Error::<T>::LettingAgentAlreadySet
             );
             ensure!(
-                !LettingAgentProposal::<T>::contains_key(asset_id),
+                !AssetLettingProposal::<T>::contains_key(asset_id),
                 Error::<T>::LettingAgentProposalOngoing
             );
             ensure!(
                 LettingInfo::<T>::contains_key(&signer),
                 Error::<T>::AgentNotFound
             );
+            let proposal_id = ProposalCounter::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::LettingAgentVotingTime::get());
+            AssetLettingProposal::<T>::insert(asset_id, proposal_id);
             LettingAgentProposal::<T>::insert(
-                asset_id,
+                proposal_id,
                 ProposedLettingAgent {
                     letting_agent: signer.clone(),
                     location: property_info.location,
@@ -518,15 +556,20 @@ pub mod pallet {
                 },
             );
             OngoingLettingAgentVoting::<T>::insert(
-                asset_id,
+                proposal_id,
                 VoteStats {
                     yes_voting_power: 0,
                     no_voting_power: 0,
                 },
             );
+            let next_proposal_id = proposal_id
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ProposalCounter::<T>::put(next_proposal_id);
             Self::deposit_event(Event::<T>::LettingAgentProposed {
                 asset_id,
                 who: signer,
+                proposal_id,
             });
             Ok(())
         }
@@ -546,12 +589,15 @@ pub mod pallet {
             origin: OriginFor<T>,
             asset_id: u32,
             vote: Vote,
+            amount: u32,
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-            let proposal_details = LettingAgentProposal::<T>::get(asset_id)
+            let proposal_id = AssetLettingProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let proposal_details = LettingAgentProposal::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
@@ -560,44 +606,63 @@ pub mod pallet {
             );
             let voting_power = T::PropertyToken::get_token_balance(asset_id, &signer);
             ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
-            OngoingLettingAgentVoting::<T>::try_mutate(asset_id, |maybe_current_vote| {
+            OngoingLettingAgentVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
                     .ok_or(Error::<T>::NoLettingAgentProposed)?;
-                UserLettingAgentVote::<T>::try_mutate(asset_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
-                        match previous_vote {
+                UserLettingAgentVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        T::AssetsFreezer::decrease_frozen(
+                            asset_id,
+                            &MarketplaceFreezeReason::LettingAgentVoting,
+                            &signer,
+                            previous_vote.power.into(),
+                        )?;
+
+                        match previous_vote.vote {
                             Vote::Yes => {
-                                current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power = current_vote
+                                    .yes_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
-                                current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power = current_vote
+                                    .no_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                         }
                     }
+
+                    T::AssetsFreezer::increase_frozen(
+                        asset_id,
+                        &MarketplaceFreezeReason::LettingAgentVoting,
+                        &signer,
+                        amount.into(),
+                    )?;
 
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
 
-                    map.try_insert(signer.clone(), vote.clone())
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        asset_id,
+                        power: amount,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
             })?;
             Self::deposit_event(Event::VotedOnLettingAgent {
                 asset_id,
+                proposal_id,
                 voter: signer,
                 vote,
             });
@@ -621,7 +686,9 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
 
-            let proposal = LettingAgentProposal::<T>::get(asset_id)
+            let proposal_id = AssetLettingProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let proposal = LettingAgentProposal::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
@@ -629,7 +696,7 @@ pub mod pallet {
                 Error::<T>::VotingStillOngoing
             );
 
-            let voting_result = OngoingLettingAgentVoting::<T>::get(asset_id)
+            let voting_result = OngoingLettingAgentVoting::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
 
             if voting_result.yes_voting_power > voting_result.no_voting_power {
@@ -667,10 +734,46 @@ pub mod pallet {
                     letting_agent: proposal.letting_agent,
                 });
             }
-            UserLettingAgentVote::<T>::remove(asset_id);
-            LettingAgentProposal::<T>::remove(asset_id);
-            OngoingLettingAgentVoting::<T>::remove(asset_id);
+            AssetLettingProposal::<T>::remove(asset_id);
+            LettingAgentProposal::<T>::remove(proposal_id);
+            OngoingLettingAgentVoting::<T>::remove(proposal_id);
 
+            Ok(())
+        }
+
+        #[pallet::call_index(27)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_letting_voting_token(
+            origin: OriginFor<T>,
+            proposal_id: ProposalId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserLettingAgentVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            if let Some(proposal) = LettingAgentProposal::<T>::get(proposal_id) {
+                let current_block_number = frame_system::Pallet::<T>::block_number();
+                ensure!(
+                    proposal.expiry_block <= current_block_number,
+                    Error::<T>::VotingStillOngoing
+                );
+            }
+
+            T::AssetsFreezer::decrease_frozen(
+                vote_record.asset_id,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &signer,
+                vote_record.power.into(),
+            )?;
+
+            UserLettingAgentVote::<T>::remove(proposal_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                proposal_id,
+                asset_id: vote_record.asset_id,
+                voter: signer,
+                amount: vote_record.power,
+            });
             Ok(())
         }
 
@@ -795,12 +898,12 @@ pub mod pallet {
         pub fn remove_bad_letting_agent(asset_id: u32) -> DispatchResult {
             let letting_agent =
                 LettingStorage::<T>::take(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
-            let proposal_details = LettingAgentProposal::<T>::get(asset_id)
-                .ok_or(Error::<T>::NoLettingAgentProposed)?;
+            let property_info = T::PropertyToken::get_property_asset_info(asset_id)
+                .ok_or(Error::<T>::NoObjectFound)?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
                 let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
                 if let Some(location_info) =
-                    letting_info.locations.get_mut(&proposal_details.location)
+                    letting_info.locations.get_mut(&property_info.location)
                 {
                     location_info.assigned_properties = location_info
                         .assigned_properties

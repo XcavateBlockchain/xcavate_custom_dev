@@ -5,8 +5,11 @@ use crate::{
 use frame_support::{
     assert_noop, assert_ok,
     traits::{
-        fungible::Inspect as FungibleInspect, fungible::InspectHold, fungibles::{Inspect, InspectFreeze},
-        fungibles::InspectHold as FungiblesInspectHold, OnFinalize, OnInitialize,
+        fungible::Inspect as FungibleInspect,
+        fungible::InspectHold,
+        fungibles::InspectHold as FungiblesInspectHold,
+        fungibles::{Inspect, InspectFreeze},
+        OnFinalize, OnInitialize,
     },
 };
 use pallet_real_estate_asset::{
@@ -2055,14 +2058,28 @@ fn vote_on_spv_lawyer_works() {
             crate::Vote::No,
             60
         ));
-        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[1; 32].into()), 60);
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::SpvLawyerVoting,
+                &[1; 32].into()
+            ),
+            60
+        );
         assert_ok!(Marketplace::vote_on_spv_lawyer(
             RuntimeOrigin::signed([2; 32].into()),
             0,
             crate::Vote::Yes,
             40
         ));
-        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[2; 32].into()), 40);
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::SpvLawyerVoting,
+                &[2; 32].into()
+            ),
+            40
+        );
         assert_eq!(
             OngoingLawyerVoting::<Test>::get(0).unwrap(),
             VoteStats {
@@ -2071,7 +2088,9 @@ fn vote_on_spv_lawyer_works() {
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap().vote,
+            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
+                .unwrap()
+                .vote,
             crate::Vote::No
         );
         assert_ok!(Marketplace::vote_on_spv_lawyer(
@@ -2080,16 +2099,25 @@ fn vote_on_spv_lawyer_works() {
             crate::Vote::Yes,
             20
         ));
-        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[1; 32].into()), 20);
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::SpvLawyerVoting,
+                &[1; 32].into()
+            ),
+            20
+        );
         assert_eq!(
             OngoingLawyerVoting::<Test>::get(0).unwrap(),
             VoteStats {
-                yes_voting_power: 100,
+                yes_voting_power: 60,
                 no_voting_power: 0,
             }
         );
         assert_eq!(
-            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap().vote,
+            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
+                .unwrap()
+                .vote,
             crate::Vote::Yes
         );
     })
@@ -2211,7 +2239,14 @@ fn vote_on_spv_lawyer_fails() {
             ),
             Error::<Test>::NotEnoughToken
         );
-        assert_eq!(AssetsFreezer::balance_frozen(0, &MarketplaceFreezeReason::SpvLawyerVoting, &[0; 32].into()), 0);
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::SpvLawyerVoting,
+                &[0; 32].into()
+            ),
+            0
+        );
         run_to_block(100);
         assert_noop!(
             Marketplace::vote_on_spv_lawyer(
@@ -2362,7 +2397,10 @@ fn finalize_spv_lawyer_works() {
             RuntimeOrigin::signed([2; 32].into()),
             0,
         ));
-        assert_eq!(UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_none(), true);
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_none(),
+            true
+        );
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
         assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().spv_lawyer, None);
         assert_ok!(Marketplace::lawyer_claim_property(
@@ -2390,7 +2428,10 @@ fn finalize_spv_lawyer_works() {
             0,
         ));
         assert_eq!(OngoingLawyerVoting::<Test>::get(0).is_none(), true);
-        assert_eq!(UserLawyerVote::<Test>::get::<u64, AccountId>(2, [1; 32].into()).is_none(), false);
+        assert_eq!(
+            UserLawyerVote::<Test>::get::<u64, AccountId>(2, [1; 32].into()).is_none(),
+            false
+        );
         assert_eq!(SpvLawyerProposal::<Test>::get(0).is_none(), true);
         assert_eq!(ListingSpvProposal::<Test>::get(0).is_none(), true);
         assert_eq!(
@@ -3734,7 +3775,7 @@ fn reject_contract_and_refund() {
             0,
             false,
         ));
-/*         System::assert_last_event(
+        /*         System::assert_last_event(
             Event::DocumentsConfirmed {
                 signer: [11; 32].into(),
                 listing_id: 0,

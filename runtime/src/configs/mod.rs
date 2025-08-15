@@ -64,17 +64,17 @@ use xcm::latest::prelude::BodyId;
 use super::{
     deposit,
     weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
-    AccountId, Assets, AssetsHolder, Aura, Balance, Balances, Block, BlockNumber,
+    AccountId, Assets, AssetsFreezer, AssetsHolder, Aura, Balance, Balances, Block, BlockNumber,
     CollatorSelection, ConsensusHook, Hash, MessageQueue, Nfts, Nonce, OriginCaller, PalletInfo,
     ParachainSystem, RealEstateAsset, RealEstateAssets, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
     System, WeightToFee, XcavateWhitelist, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, DAYS,
     EXISTENTIAL_DEPOSIT, HOURS, MAXIMUM_BLOCK_WEIGHT, MICROUNIT, NORMAL_DISPATCH_RATIO,
-    SLOT_DURATION, UNIT, VERSION, AssetsFreezer,
+    SLOT_DURATION, UNIT, VERSION,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use pallet_nfts::PalletFeatures;
-use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
+use primitives::{MarketplaceFreezeReason, MarketplaceHoldReason};
 use scale_info::TypeInfo;
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 
@@ -496,9 +496,9 @@ impl pallet_assets_holder::Config<pallet_assets::Instance2> for Runtime {
 }
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Runtime {
-	type RuntimeFreezeReason = MarketplaceFreezeReason;
-	type RuntimeEvent = RuntimeEvent;
-} 
+    type RuntimeFreezeReason = MarketplaceFreezeReason;
+    type RuntimeEvent = RuntimeEvent;
+}
 
 parameter_types! {
     pub Features: PalletFeatures = PalletFeatures::all_enabled();
@@ -703,6 +703,7 @@ impl pallet_property_management::Config for Runtime {
     type RuntimeHoldReason = RuntimeHoldReason;
     type NativeCurrency = Balances;
     type ForeignCurrency = Assets;
+    type AssetsFreezer = AssetsFreezer;
     type MarketplacePalletId = MarketplacePalletId;
     type AgentOrigin = EnsureRoot<Self::AccountId>;
     type LettingAgentDeposit = MinimumStakingAmount;

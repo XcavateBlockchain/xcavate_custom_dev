@@ -31,12 +31,12 @@ pallet-xcavate-whitelist = { workspace = true }
 pallet-regions = { workspace = true }
 pallet-real-estate-asset = { workspace = true }
 pallet-marketplace = { workspace = true }
+primitives = { path = "../../primitives", default-features = false }
 
 [dev-dependencies]
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
-primitives = { path = "../../primitives", default-features = false }
 pallet-assets-holder = { workspace = true }
 pallet-assets-freezer = { workspace = true }
 

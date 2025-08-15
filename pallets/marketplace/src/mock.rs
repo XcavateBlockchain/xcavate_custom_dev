@@ -239,9 +239,9 @@ impl pallet_assets_holder::Config<pallet_assets::Instance2> for Test {
 }
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
-	type RuntimeFreezeReason = MarketplaceFreezeReason;
-	type RuntimeEvent = RuntimeEvent;
-} 
+    type RuntimeFreezeReason = MarketplaceFreezeReason;
+    type RuntimeEvent = RuntimeEvent;
+}
 
 parameter_types! {
     pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");

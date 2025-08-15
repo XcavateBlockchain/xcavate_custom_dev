@@ -537,7 +537,7 @@ pub mod pallet {
         LawyerActiveCasesUpdated {
             lawyer_account: T::AccountId,
             new_active_cases: u32,
-        }
+        },
     }
 
     #[pallet::error]
@@ -789,10 +789,10 @@ pub mod pallet {
 
                     map.try_insert(signer.clone(), vote_record)
                         .map_err(|_| Error::<T>::TooManyVoters)?;
-                               
+
                     new_yes_power = current_vote.yes_voting_power;
                     new_no_power = current_vote.no_voting_power;
-                    
+
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -1730,7 +1730,7 @@ impl<T: Config> LawyerManagement<T> for Pallet<T> {
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
             Self::deposit_event(Event::LawyerActiveCasesUpdated {
                 lawyer_account: lawyer.clone(),
-                new_active_cases: lawyer_info.active_cases, 
+                new_active_cases: lawyer_info.active_cases,
             });
             Ok(())
         })
@@ -1747,7 +1747,7 @@ impl<T: Config> LawyerManagement<T> for Pallet<T> {
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
             Self::deposit_event(Event::LawyerActiveCasesUpdated {
                 lawyer_account: lawyer.clone(),
-                new_active_cases: lawyer_info.active_cases, 
+                new_active_cases: lawyer_info.active_cases,
             });
             Ok(())
         })

@@ -712,7 +712,7 @@ fn letting_agent_propose_fails() {
         );
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
-            0,
+            60,
             crate::Vote::Yes,
         ));
         let expiry =
@@ -832,11 +832,12 @@ fn vote_on_letting_agent_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            60,
         ));
         assert_eq!(
             OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
             crate::VoteStats {
-                yes_voting_power: 70,
+                yes_voting_power: 60,
                 no_voting_power: 0,
             },
         );
@@ -844,24 +845,26 @@ fn vote_on_letting_agent_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::No,
+            35,
         ));
         assert_eq!(
             OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
             crate::VoteStats {
                 yes_voting_power: 0,
-                no_voting_power: 70,
+                no_voting_power: 35,
             },
         );
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
             0,
             crate::Vote::Yes,
+            20,
         ));
         assert_eq!(
             OngoingLettingAgentVoting::<Test>::get(0).unwrap(),
             crate::VoteStats {
-                yes_voting_power: 30,
-                no_voting_power: 70,
+                yes_voting_power: 20,
+                no_voting_power: 35,
             },
         );
         assert_eq!(

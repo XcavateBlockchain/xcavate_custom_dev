@@ -21,8 +21,8 @@ use frame_support::{
     traits::{
         fungible::{Inspect, Mutate, MutateHold},
         fungibles::Mutate as FungiblesMutate,
-        fungibles::MutateHold as FungiblesHold,
         fungibles::MutateFreeze,
+        fungibles::MutateHold as FungiblesHold,
         tokens::Preservation,
         tokens::{fungible, fungibles, Balance, Precision, WithdrawConsequence},
         EnsureOriginWithArg,
@@ -37,7 +37,7 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
-use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
+use primitives::{MarketplaceFreezeReason, MarketplaceHoldReason};
 
 use types::*;
 
@@ -132,13 +132,13 @@ pub mod pallet {
                 Balance = <Self as pallet::Config>::Balance,
                 Reason = MarketplaceHoldReason,
             > + fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
-        
+
         type AssetsFreezer: fungibles::MutateFreeze<
-                AccountIdOf<Self>,
-                AssetId = u32,
-                Balance = <Self as pallet::Config>::Balance,
-                Id = MarketplaceFreezeReason,
-            >;
+            AccountIdOf<Self>,
+            AssetId = u32,
+            Balance = <Self as pallet::Config>::Balance,
+            Id = MarketplaceFreezeReason,
+        >;
 
         /// The marketplace's pallet id, used for deriving its sovereign account ID.
         #[pallet::constant]
@@ -308,13 +308,8 @@ pub mod pallet {
     >;
 
     #[pallet::storage]
-    pub type ListingSpvProposal<T: Config> = StorageMap<
-        _,
-        Blake2_128Concat,
-        ListingId,
-        ProposalId,
-        OptionQuery,
-    >;
+    pub type ListingSpvProposal<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, ProposalId, OptionQuery>;
 
     /// Counter of proposal ids.
     #[pallet::storage]
@@ -450,6 +445,10 @@ pub mod pallet {
             investor: AccountIdOf<T>,
             amount_returned: u32,
             new_tokens_remaining: u32,
+            principal_refunded_usdc: <T as pallet::Config>::Balance,
+            tax_refunded_usdc: <T as pallet::Config>::Balance,
+            principal_refunded_usdt: <T as pallet::Config>::Balance,
+            tax_refunded_usdt: <T as pallet::Config>::Balance,
         },
         /// Property token have been sent to another account.
         PropertyTokenSend {
@@ -499,7 +498,7 @@ pub mod pallet {
             asset_id: u32,
         },
         /// All token of a property have been sold.
-        PropertySoldOut {
+        PrimarySaleSoldOut {
             listing_id: ListingId,
             asset_id: u32,
             legal_process_expiry_block: BlockNumberFor<T>,
@@ -895,7 +894,7 @@ pub mod pallet {
                     second_attempt: false,
                 };
                 PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
-                Self::deposit_event(Event::<T>::PropertySoldOut {
+                Self::deposit_event(Event::<T>::PrimarySaleSoldOut {
                     listing_id,
                     asset_id,
                     legal_process_expiry_block: expiry_block,
@@ -1237,7 +1236,12 @@ pub mod pallet {
             );
 
             // Process refunds
-            Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
+            let (
+                principal_refunded_usdc,
+                tax_refunded_usdc,
+                principal_refunded_usdt,
+                tax_refunded_usdt,
+            ) = Self::unfreeze_token_with_refunds(&mut property_details, &token_details, &signer)?;
             property_details.listed_token_amount = property_details
                 .listed_token_amount
                 .checked_add(token_details.token_amount)
@@ -1250,6 +1254,10 @@ pub mod pallet {
                 investor: signer,
                 amount_returned: token_details.token_amount,
                 new_tokens_remaining: property_details.listed_token_amount,
+                principal_refunded_usdc,
+                tax_refunded_usdc,
+                principal_refunded_usdt,
+                tax_refunded_usdt,
             });
             Ok(())
         }
@@ -1743,7 +1751,11 @@ pub mod pallet {
                 )?;
             }
             OngoingObjectListing::<T>::remove(listing_id);
-            Self::deposit_event(Event::<T>::DeveloperDepositReturned { listing_id, developer: signer, amount: deposit_amount });
+            Self::deposit_event(Event::<T>::DeveloperDepositReturned {
+                listing_id,
+                developer: signer,
+                amount: deposit_amount,
+            });
             Ok(())
         }
 
@@ -1955,7 +1967,9 @@ pub mod pallet {
                             no_voting_power: 0,
                         },
                     );
-                    let next_proposal_id = proposal_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+                    let next_proposal_id = proposal_id
+                        .checked_add(1)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
                     ProposalCounter::<T>::put(next_proposal_id);
                     Self::deposit_event(Event::<T>::SpvLawyerProposed {
                         listing_id,
@@ -1989,7 +2003,8 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-            let proposal_id = ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let proposal_id =
+                ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let proposal_details =
                 SpvLawyerProposal::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -2000,10 +2015,10 @@ pub mod pallet {
             let voting_power =
                 T::PropertyToken::get_token_balance(proposal_details.asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NotEnoughToken);
-            
+
             let mut new_yes_power = 0u32;
             let mut new_no_power = 0u32;
-            
+
             OngoingLawyerVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
@@ -2011,38 +2026,49 @@ pub mod pallet {
 
                 UserLawyerVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
                     if let Some(previous_vote) = maybe_vote_record.take() {
-
-                        T::AssetsFreezer::decrease_frozen(proposal_details.asset_id, &MarketplaceFreezeReason::SpvLawyerVoting, &signer, previous_vote.power.into())?;
+                        T::AssetsFreezer::decrease_frozen(
+                            proposal_details.asset_id,
+                            &MarketplaceFreezeReason::SpvLawyerVoting,
+                            &signer,
+                            previous_vote.power.into(),
+                        )?;
 
                         match previous_vote.vote {
                             Vote::Yes => {
-                                current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(previous_vote.power)
+                                current_vote.yes_voting_power = current_vote
+                                    .yes_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
-                                current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(previous_vote.power)
+                                current_vote.no_voting_power = current_vote
+                                    .no_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                         }
                     }
 
-                    T::AssetsFreezer::increase_frozen(proposal_details.asset_id, &MarketplaceFreezeReason::SpvLawyerVoting, &signer, amount.into())?;
+                    T::AssetsFreezer::increase_frozen(
+                        proposal_details.asset_id,
+                        &MarketplaceFreezeReason::SpvLawyerVoting,
+                        &signer,
+                        amount.into(),
+                    )?;
 
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
 
                     *maybe_vote_record = Some(VoteRecord {
                         vote: vote.clone(),
                         asset_id: proposal_details.asset_id,
-                        power: voting_power,
+                        power: amount,
                     });
 
                     new_yes_power = current_vote.yes_voting_power;
@@ -2159,7 +2185,8 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
 
-            let proposal_id = ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let proposal_id =
+                ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let proposal =
                 SpvLawyerProposal::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -2233,7 +2260,8 @@ pub mod pallet {
             proposal_id: ProposalId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let vote_record = UserLawyerVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+            let vote_record =
+                UserLawyerVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
 
             if let Some(proposal) = SpvLawyerProposal::<T>::get(proposal_id) {
                 let current_block_number = frame_system::Pallet::<T>::block_number();
@@ -2512,10 +2540,22 @@ pub mod pallet {
             PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
             PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
 
-            let mut developer_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
-            let mut spv_lawyer_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
-            let mut treasury_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
-            let mut region_owner_payout = Payout { amount_in_usdc: 0u128.into(), amount_in_usdt: 0u128.into() };
+            let mut developer_payout = Payout {
+                amount_in_usdc: 0u128.into(),
+                amount_in_usdt: 0u128.into(),
+            };
+            let mut spv_lawyer_payout = Payout {
+                amount_in_usdc: 0u128.into(),
+                amount_in_usdt: 0u128.into(),
+            };
+            let mut treasury_payout = Payout {
+                amount_in_usdc: 0u128.into(),
+                amount_in_usdt: 0u128.into(),
+            };
+            let mut region_owner_payout = Payout {
+                amount_in_usdc: 0u128.into(),
+                amount_in_usdt: 0u128.into(),
+            };
 
             // Distribute funds from property account for each asset
             for &asset in T::AcceptedAssets::get().iter() {
@@ -2600,20 +2640,22 @@ pub mod pallet {
                 Self::transfer_funds(&property_account, &spv_lawyer_id, spv_lawyer_costs, asset)?;
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
-            
+
                 match asset {
-                    1337 => { // USDC ID
+                    1337 => {
+                        // USDC ID
                         developer_payout.amount_in_usdc = developer_amount;
                         spv_lawyer_payout.amount_in_usdc = spv_lawyer_costs;
                         treasury_payout.amount_in_usdc = treasury_amount;
                         region_owner_payout.amount_in_usdc = region_owner_amount;
-                    },
-                    1984 => { // USDT ID
+                    }
+                    1984 => {
+                        // USDT ID
                         developer_payout.amount_in_usdt = developer_amount;
                         spv_lawyer_payout.amount_in_usdt = spv_lawyer_costs;
                         treasury_payout.amount_in_usdt = treasury_amount;
                         region_owner_payout.amount_in_usdt = region_owner_amount;
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -2807,6 +2849,84 @@ pub mod pallet {
             Ok(())
         }
 
+        fn unfreeze_token_with_refunds(
+            property_details: &mut PropertyListingDetailsType<T>,
+            token_details: &TokenOwnerDetails<T>,
+            signer: &AccountIdOf<T>,
+        ) -> Result<
+            (
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::Balance,
+            ),
+            DispatchError,
+        > {
+            let mut principal_usdc = Default::default();
+            let mut tax_usdc = Default::default();
+            let mut principal_usdt = Default::default();
+            let mut tax_usdt = Default::default();
+
+            for asset in T::AcceptedAssets::get().iter() {
+                if let Some(paid_funds) = token_details.paid_funds.get(asset).copied() {
+                    if paid_funds.is_zero() {
+                        continue;
+                    }
+
+                    let default = Default::default();
+                    let paid_tax = token_details
+                        .paid_tax
+                        .get(asset)
+                        .copied()
+                        .unwrap_or(default);
+
+                    // Calculate refund and investor fee (1% of paid funds)
+                    let refund_amount = paid_funds
+                        .checked_add(&paid_tax)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
+                    let investor_fee = paid_funds
+                        .checked_div(&(100u128.into()))
+                        .ok_or(Error::<T>::DivisionError)?;
+                    let total_investor_amount = refund_amount
+                        .checked_add(&investor_fee)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                    // Release funds
+                    T::ForeignAssetsHolder::release(
+                        *asset,
+                        &MarketplaceHoldReason::Marketplace,
+                        signer,
+                        total_investor_amount,
+                        Precision::Exact,
+                    )?;
+                    if let Some(funds) = property_details.collected_funds.get_mut(asset) {
+                        *funds = funds
+                            .checked_sub(&paid_funds)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                    }
+                    if let Some(tax) = property_details.collected_tax.get_mut(asset) {
+                        *tax = tax
+                            .checked_sub(&paid_tax)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                    }
+                    if let Some(fee) = property_details.collected_fees.get_mut(asset) {
+                        *fee = fee
+                            .checked_sub(&investor_fee)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                    }
+
+                    if *asset == 1337u32 {
+                        principal_usdc = paid_funds;
+                        tax_usdc = paid_tax;
+                    } else if *asset == 1984u32 {
+                        principal_usdt = paid_funds;
+                        tax_usdt = paid_tax;
+                    }
+                }
+            }
+            Ok((principal_usdc, tax_usdc, principal_usdt, tax_usdt))
+        }
+
         fn calculate_fees(
             price: <T as pallet::Config>::Balance,
             sender: &AccountIdOf<T>,
@@ -2894,10 +3014,16 @@ pub mod pallet {
             asset_id_usdc: u32,
             collected_fee_usdc: <T as pallet::Config>::Balance,
             costs: <T as pallet::Config>::Balance,
-        ) -> Result<(<T as pallet::Config>::Balance, <T as pallet::Config>::Balance), DispatchError> {
+        ) -> Result<
+            (
+                <T as pallet::Config>::Balance,
+                <T as pallet::Config>::Balance,
+            ),
+            DispatchError,
+        > {
             let mut usdt_cost = 0u32.into();
             let mut usdc_cost = 0u32.into();
-            
+
             if collected_fee_usdt >= costs {
                 costs_map
                     .try_insert(asset_id_usdt, costs)

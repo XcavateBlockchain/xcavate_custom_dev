@@ -20,7 +20,7 @@ use pallet_nfts::PalletFeatures;
 
 use pallet_assets::{Instance1, Instance2};
 
-use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
+use primitives::{MarketplaceFreezeReason, MarketplaceHoldReason};
 
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -204,9 +204,9 @@ impl pallet_assets_holder::Config<pallet_assets::Instance2> for Test {
 }
 
 impl pallet_assets_freezer::Config<pallet_assets::Instance1> for Test {
-	type RuntimeFreezeReason = MarketplaceFreezeReason;
-	type RuntimeEvent = RuntimeEvent;
-} 
+    type RuntimeFreezeReason = MarketplaceFreezeReason;
+    type RuntimeEvent = RuntimeEvent;
+}
 
 parameter_types! {
     pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
@@ -389,6 +389,7 @@ impl pallet_property_management::Config for Test {
     type RuntimeHoldReason = RuntimeHoldReason;
     type NativeCurrency = Balances;
     type ForeignCurrency = ForeignAssets;
+    type AssetsFreezer = AssetsFreezer;
     type MarketplacePalletId = MarketplacePalletId;
     type AgentOrigin = EnsureRoot<Self::AccountId>;
     type LettingAgentDeposit = ConstU128<1000>;
