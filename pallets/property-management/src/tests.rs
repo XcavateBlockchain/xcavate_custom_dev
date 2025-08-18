@@ -2,12 +2,14 @@ use crate::{mock::*, Error};
 use frame_support::BoundedVec;
 use frame_support::{
     assert_noop, assert_ok,
-    traits::{fungible::InspectHold, OnFinalize, OnInitialize},
+    traits::{fungible::InspectHold, fungibles::InspectFreeze, OnFinalize, OnInitialize},
 };
 
+use primitives::MarketplaceFreezeReason;
+
 use crate::{
-    HoldReason, InvestorFunds, LettingAgentProposal, LettingInfo, LettingStorage,
-    OngoingLettingAgentVoting, UserLettingAgentVote,
+    AssetLettingProposal, HoldReason, InvestorFunds, LettingAgentProposal, LettingInfo,
+    LettingStorage, OngoingLettingAgentVoting, ProposalCounter, UserLettingAgentVote, VoteRecord,
 };
 
 use sp_runtime::{traits::BadOrigin, Permill, TokenError};
@@ -603,6 +605,7 @@ fn letting_agent_propose_works() {
             0,
         ));
         lawyer_process_helper([0; 32].into(), [1; 32].into(), 0, 100);
+        assert_eq!(ProposalCounter::<Test>::get(), 0);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -618,6 +621,8 @@ fn letting_agent_propose_works() {
                 no_voting_power: 0,
             },
         );
+        assert_eq!(AssetLettingProposal::<Test>::get(0).unwrap(), 0);
+        assert_eq!(ProposalCounter::<Test>::get(), 1);
     });
 }
 
@@ -702,6 +707,33 @@ fn letting_agent_propose_fails() {
             RealEstateAssetError::<Test>::PropertyNotFinalized
         );
         lawyer_process_helper([0; 32].into(), [1; 32].into(), 0, 100);
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([2; 32].into()), 0),
+            BadOrigin
+        );
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([2; 32].into()), 0),
+            Error::<Test>::AgentNotFound
+        );
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![20, 10]
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+            bvec![20, 10],
+        ));
+        assert_noop!(
+            PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([2; 32].into()), 0),
+            Error::<Test>::NoPermission
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -712,8 +744,9 @@ fn letting_agent_propose_fails() {
         );
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
-            60,
+            0,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -841,6 +874,22 @@ fn vote_on_letting_agent_works() {
                 no_voting_power: 0,
             },
         );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::Yes,
+                asset_id: 0,
+                power: 60,
+            }
+        );
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[1; 32].into()
+            ),
+            60
+        );
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -868,11 +917,20 @@ fn vote_on_letting_agent_works() {
             },
         );
         assert_eq!(
-            UserLettingAgentVote::<Test>::get(0)
-                .unwrap()
-                .get(&[1; 32].into())
-                .clone(),
-            Some(&crate::Vote::No)
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::No,
+                asset_id: 0,
+                power: 35,
+            }
+        );
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[1; 32].into()
+            ),
+            35
         );
     });
 }
@@ -926,6 +984,7 @@ fn vote_on_letting_agent_fails() {
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
                 crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NoLettingAgentProposed
         );
@@ -958,6 +1017,7 @@ fn vote_on_letting_agent_fails() {
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
                 crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NoLettingAgentProposed
         );
@@ -980,6 +1040,7 @@ fn vote_on_letting_agent_fails() {
                 RuntimeOrigin::signed([2; 32].into()),
                 0,
                 crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NoPermission
         );
@@ -988,6 +1049,7 @@ fn vote_on_letting_agent_fails() {
                 RuntimeOrigin::signed([2; 32].into()),
                 0,
                 crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NoPermission
         );
@@ -999,6 +1061,7 @@ fn vote_on_letting_agent_fails() {
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
                 crate::Vote::Yes,
+                100
             ),
             Error::<Test>::VotingExpired
         );
@@ -1145,16 +1208,22 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([4; 32].into()),
             0
         ));
+        assert_eq!(AssetLettingProposal::<Test>::get(0).unwrap(), 0);
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            70
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
@@ -1177,16 +1246,22 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([4; 32].into()),
             1
         ));
+        assert_eq!(AssetLettingProposal::<Test>::get(1).unwrap(), 1);
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             1,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
+            1,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
             1,
         ));
         assert_ok!(Marketplace::create_spv(
@@ -1198,16 +1273,22 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([3; 32].into()),
             2
         ));
+        assert_eq!(AssetLettingProposal::<Test>::get(2).unwrap(), 2);
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             2,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
             RuntimeOrigin::signed([2; 32].into()),
+            2,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
             2,
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
@@ -1235,7 +1316,19 @@ fn finalize_letting_agent_works() {
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
         assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
-        assert_eq!(UserLettingAgentVote::<Test>::get(0), None);
+        assert_eq!(AssetLettingProposal::<Test>::get(0), None);
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()),
+            None
+        );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(1, [1; 32].into()),
+            None
+        );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(2, [1; 32].into()),
+            None
+        );
     });
 }
 
@@ -1344,10 +1437,12 @@ fn finalize_letting_agent_fails() {
             RuntimeOrigin::signed([4; 32].into()),
             0
         ));
+        assert_eq!(AssetLettingProposal::<Test>::get(0).unwrap(), 0);
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            70
         ));
         assert_noop!(
             PropertyManagement::finalize_letting_agent(RuntimeOrigin::signed([2; 32].into()), 0,),
@@ -1393,6 +1488,7 @@ fn finalize_letting_agent_fails() {
                 RuntimeOrigin::signed([0; 32].into()),
                 x,
                 crate::Vote::Yes,
+                100
             ));
             let expiry =
                 frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1416,6 +1512,10 @@ fn finalize_letting_agent_fails() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ),);
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert!(LettingStorage::<Test>::get(0).is_some());
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([4; 32].into())
@@ -1429,7 +1529,277 @@ fn finalize_letting_agent_fails() {
         );
         assert!(LettingAgentProposal::<Test>::get(0).is_none());
         assert_eq!(OngoingLettingAgentVoting::<Test>::get(0), None);
-        assert_eq!(UserLettingAgentVote::<Test>::get(0), None);
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()),
+            None
+        );
+    });
+}
+
+#[test]
+fn unfreeze_letting_voting_token_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [6; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateDeveloper
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_ok!(Marketplace::list_property(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            70,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([4; 32].into()),
+            3,
+            bvec![10, 10],
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
+        lawyer_process_helper([0; 32].into(), [1; 32].into(), 0, 70);
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+            70
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::No,
+            10
+        ));
+        let expiry =
+            frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
+        run_to_block(expiry);
+        assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[1; 32].into()
+            ),
+            70
+        );
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[2; 32].into()
+            ),
+            10
+        );
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[1; 32].into()
+            ),
+            0
+        );
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &[2; 32].into()
+            ),
+            0
+        );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()),
+            None
+        );
+        assert_eq!(
+            UserLettingAgentVote::<Test>::get::<u64, AccountId>(0, [2; 32].into()),
+            None
+        );
+    });
+}
+
+#[test]
+fn unfreeze_letting_voting_token_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [8; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [6; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        new_region_helper();
+        assert_ok!(Regions::create_new_location(
+            RuntimeOrigin::signed([6; 32].into()),
+            3,
+            bvec![10, 10]
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateDeveloper
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [4; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        assert_ok!(Marketplace::list_property(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            bvec![10, 10],
+            10_000,
+            100,
+            bvec![22, 22],
+            false
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            100,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(PropertyManagement::add_letting_agent(
+            RuntimeOrigin::signed([4; 32].into()),
+            3,
+            bvec![10, 10],
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
+        lawyer_process_helper([0; 32].into(), [1; 32].into(), 0, 70);
+        assert_ok!(PropertyManagement::letting_agent_propose(
+            RuntimeOrigin::signed([4; 32].into()),
+            0
+        ));
+        assert_noop!(
+            PropertyManagement::unfreeze_letting_voting_token(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+            ),
+            Error::<Test>::NoFrozenAmount
+        );
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+            70
+        ));
+        assert_noop!(
+            PropertyManagement::unfreeze_letting_voting_token(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+            ),
+            Error::<Test>::VotingStillOngoing
+        );
     });
 }
 
@@ -1601,6 +1971,7 @@ fn distribute_income_works() {
             RuntimeOrigin::signed([3; 32].into()),
             0,
             crate::Vote::Yes,
+            50
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1730,6 +2101,7 @@ fn distribute_income_fails() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1905,6 +2277,7 @@ fn claim_income_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -2111,6 +2484,7 @@ fn claim_income_fails() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();

@@ -105,7 +105,7 @@ fn listing_process() {
     ));
 }
 
-fn setting_letting_agent(agent: AccountId, voter: AccountId) {
+fn setting_letting_agent(agent: AccountId, voter: AccountId, vote_amount: u32) {
     assert_ok!(PropertyManagement::add_letting_agent(
         RuntimeOrigin::signed(agent.clone()),
         3,
@@ -119,6 +119,7 @@ fn setting_letting_agent(agent: AccountId, voter: AccountId) {
         RuntimeOrigin::signed(voter.clone()),
         0,
         pallet_property_management::Vote::Yes,
+        vote_amount
     ));
     let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
     frame_system::Pallet::<Test>::set_block_number(expiry);
@@ -227,7 +228,7 @@ fn propose_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([2; 32].into()),
@@ -279,7 +280,7 @@ fn proposal_with_low_amount_works() {
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into());
+        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -359,7 +360,7 @@ fn propose_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_noop!(
             PropertyGovernance::propose(
@@ -412,7 +413,7 @@ fn challenge_against_letting_agent_works() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -472,7 +473,7 @@ fn challenge_against_letting_agent_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([2; 32].into()),
@@ -570,7 +571,7 @@ fn vote_on_proposal_works() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([0; 32].into()),
@@ -738,7 +739,7 @@ fn proposal_pass() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
         assert_ok!(PropertyManagement::distribute_income(
@@ -818,7 +819,7 @@ fn proposal_pass_2() {
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into());
+        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -893,7 +894,7 @@ fn proposal_not_pass() {
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into());
+        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -985,7 +986,7 @@ fn proposal_not_pass_2() {
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into());
+        setting_letting_agent([4; 32].into(), [1; 32].into(), 60);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1073,7 +1074,7 @@ fn vote_on_proposal_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
@@ -1196,7 +1197,7 @@ fn vote_on_challenge_works() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1313,11 +1314,16 @@ fn challenge_pass() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             pallet_property_management::Vote::Yes,
+            30
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         frame_system::Pallet::<Test>::set_block_number(expiry);
         assert_ok!(PropertyManagement::finalize_letting_agent(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
         ));
@@ -1460,6 +1466,7 @@ fn challenge_pass() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             pallet_property_management::Vote::Yes,
+            30
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1573,6 +1580,7 @@ fn challenge_does_not_pass() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             pallet_property_management::Vote::Yes,
+            75
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1707,6 +1715,7 @@ fn challenge_pass_only_one_agent() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             pallet_property_management::Vote::Yes,
+            30
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1820,7 +1829,7 @@ fn challenge_not_pass() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1891,7 +1900,7 @@ fn vote_on_challenge_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into());
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -2005,7 +2014,7 @@ fn different_proposals() {
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into());
+        setting_letting_agent([4; 32].into(), [1; 32].into(), 60);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -2191,7 +2200,7 @@ fn propose_property_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -2273,7 +2282,7 @@ fn propose_property_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0),
@@ -2372,7 +2381,7 @@ fn vote_on_property_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -2480,7 +2489,7 @@ fn vote_on_property_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
             PropertyGovernance::vote_on_property_sale(
@@ -2574,7 +2583,7 @@ fn auction_starts() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -2685,7 +2694,7 @@ fn proposal_does_not_pass() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 50);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -2805,7 +2814,7 @@ fn bid_on_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -3001,7 +3010,7 @@ fn bid_on_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -3120,7 +3129,7 @@ fn lawyer_claim_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3361,7 +3370,7 @@ fn lawyer_claim_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3634,7 +3643,7 @@ fn lawyer_claim_sale_fails_2() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3840,7 +3849,7 @@ fn lawyer_confirm_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3996,7 +4005,7 @@ fn lawyer_confirm_sale_works_2() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -4164,7 +4173,7 @@ fn lawyer_confirm_sale_works_deny() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4315,7 +4324,7 @@ fn lawyer_confirm_sale_works_deny_2() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4488,7 +4497,7 @@ fn lawyer_confirm_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4671,7 +4680,7 @@ fn finalize_sale_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4830,7 +4839,7 @@ fn finalize_sale_works_2() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4982,7 +4991,7 @@ fn finalize_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5140,7 +5149,11 @@ fn claim_sale_funds_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 90);
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5316,7 +5329,11 @@ fn claim_sale_funds_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into());
+        setting_letting_agent([2; 32].into(), [1; 32].into(), 90);
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
