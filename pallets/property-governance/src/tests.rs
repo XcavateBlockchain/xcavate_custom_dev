@@ -4,15 +4,16 @@ use frame_support::{
     sp_runtime::{traits::BadOrigin, Percent, Permill},
     traits::{
         fungible::InspectHold,
-        fungibles::{Inspect, InspectHold as FungiblesInspectHold},
+        fungibles::{Inspect, InspectFreeze, InspectHold as FungiblesInspectHold},
         OnFinalize, OnInitialize,
     },
 };
 
 use crate::{
-    ChallengeRoundsExpiring, Challenges, OngoingChallengeVotes, OngoingProposalVotes,
-    OngoingSaleProposalVotes, PropertySale, PropertySaleFunds, Proposals, Reserve, SaleAuctions,
-    SaleProposals, UserProposalVote, UserSaleProposalVote, VoteRecord, AssetLettingChallenge,
+    AssetLettingChallenge, AssetProposal, ChallengeRoundsExpiring, Challenges,
+    OngoingChallengeVotes, OngoingProposalVotes, OngoingSaleProposalVotes, PropertySale,
+    PropertySaleFunds, Proposals, Reserve, SaleAuctions, SaleProposals, UserProposalVote,
+    UserSaleProposalVote, VoteRecord, UserChallengeVote
 };
 
 use pallet_property_management::{InvestorFunds, LettingInfo, LettingStorage};
@@ -22,6 +23,8 @@ use pallet_marketplace::types::LegalProperty;
 use pallet_real_estate_asset::{Error as RealEstateAssetError, PropertyAssetInfo, PropertyOwner};
 
 use pallet_regions::{RealEstateLawyer, RegionIdentifier};
+
+use primitives::MarketplaceFreezeReason;
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -236,8 +239,9 @@ fn propose_works() {
             1000,
             bvec![10, 10]
         ));
-        assert_eq!(Proposals::<Test>::get(0).unwrap().asset_id, 0);
+        assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingProposalVotes::<Test>::get(0).is_some(), true);
+        assert_eq!(AssetProposal::<Test>::get(0).unwrap(), 0);
     });
 }
 
@@ -371,6 +375,21 @@ fn propose_fails() {
             ),
             Error::<Test>::NoPermission
         );
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_noop!(
+            PropertyGovernance::propose(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                1000,
+                bvec![10, 10]
+            ),
+            Error::<Test>::ProposalOngoing
+        );
     });
 }
 
@@ -418,6 +437,8 @@ fn challenge_against_letting_agent_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
+        assert_eq!(AssetLettingChallenge::<Test>::get(0).is_some(), true);
+        assert_eq!(OngoingChallengeVotes::<Test>::get(0).is_some(), true);
         assert_eq!(Challenges::<Test>::get(0).is_some(), true);
     });
 }
@@ -591,6 +612,22 @@ fn vote_on_proposal_works() {
             crate::Vote::Yes,
             50
         ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            50
+        );
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::Yes,
+                asset_id: 0,
+                power: 50,
+            }
+        );
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             0,
@@ -607,7 +644,7 @@ fn vote_on_proposal_works() {
             RuntimeOrigin::signed([1; 32].into()),
             0,
             crate::Vote::No,
-            50
+            30
         ));
         assert_eq!(
             OngoingProposalVotes::<Test>::get(0)
@@ -619,7 +656,23 @@ fn vote_on_proposal_works() {
             OngoingProposalVotes::<Test>::get(0)
                 .unwrap()
                 .no_voting_power,
-            90
+            70
+        );
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            30
+        );
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::No,
+                asset_id: 0,
+                power: 30,
+            }
         );
     });
 }
@@ -1136,6 +1189,315 @@ fn vote_on_proposal_fails() {
 }
 
 #[test]
+fn unfreeze_proposal_token_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        listing_process();
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [3; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            20,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
+        lawyer_process(20);
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+            50
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            50
+        );
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes,
+            10
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            crate::Vote::No,
+            40
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No,
+            30
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            30
+        );
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::No,
+                asset_id: 0,
+                power: 30,
+            }
+        );
+        let expiry = frame_system::Pallet::<Test>::block_number() + PropertyVotingTime::get();
+        run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert!(UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_none());
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            0
+        );
+    });
+}
+
+#[test]
+fn unfreeze_proposal_token_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        listing_process();
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [3; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            30,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            20,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            10,
+            1984
+        ));
+        assert_ok!(Marketplace::buy_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+            40,
+            1984
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0
+        ));
+        assert_ok!(Marketplace::claim_property_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [5; 32].into(),
+            pallet_xcavate_whitelist::Role::SpvConfirmation
+        ));
+        assert_ok!(Marketplace::create_spv(
+            RuntimeOrigin::signed([5; 32].into()),
+            0,
+        ));
+        lawyer_process(20);
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::LettingAgent
+        ));
+        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        assert_ok!(PropertyManagement::distribute_income(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            1984,
+        ));
+        assert_ok!(PropertyGovernance::propose(
+            RuntimeOrigin::signed([0; 32].into()),
+            0,
+            1000,
+            bvec![10, 10]
+        ));
+        assert_noop!(
+            PropertyGovernance::unfreeze_proposal_token(RuntimeOrigin::signed([1; 32].into()), 0,),
+            Error::<Test>::NoFrozenAmount
+        );
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::Yes,
+            50
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            50
+        );
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            crate::Vote::Yes,
+            10
+        ));
+        assert_ok!(PropertyGovernance::vote_on_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+            crate::Vote::No,
+            30
+        ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &[1; 32].into()
+            ),
+            30
+        );
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::No,
+                asset_id: 0,
+                power: 30,
+            }
+        );
+        assert_noop!(
+            PropertyGovernance::unfreeze_proposal_token(RuntimeOrigin::signed([1; 32].into()), 0,),
+            Error::<Test>::VotingStillOngoing
+        );
+        let expiry = frame_system::Pallet::<Test>::block_number() + PropertyVotingTime::get();
+        run_to_block(expiry);
+        assert_noop!(
+            PropertyGovernance::unfreeze_proposal_token(RuntimeOrigin::signed([3; 32].into()), 0,),
+            Error::<Test>::NoFrozenAmount
+        );
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_noop!(
+            PropertyGovernance::unfreeze_proposal_token(RuntimeOrigin::signed([1; 32].into()), 0,),
+            Error::<Test>::NoFrozenAmount
+        );
+    });
+}
+
+#[test]
 fn vote_on_challenge_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -1221,6 +1583,22 @@ fn vote_on_challenge_works() {
             crate::Vote::Yes,
             30
         ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ChallengeVoting,
+                &[2; 32].into()
+            ),
+            30
+        );
+        assert_eq!(
+            UserChallengeVote::<Test>::get::<u64, AccountId>(0, [2; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::Yes,
+                asset_id: 0,
+                power: 30,
+            }
+        );
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -1239,6 +1617,22 @@ fn vote_on_challenge_works() {
             crate::Vote::No,
             40
         ));
+        assert_eq!(
+            AssetsFreezer::balance_frozen(
+                0,
+                &MarketplaceFreezeReason::ChallengeVoting,
+                &[2; 32].into()
+            ),
+            40
+        );
+        assert_eq!(
+            UserChallengeVote::<Test>::get::<u64, AccountId>(0, [2; 32].into()).unwrap(),
+            VoteRecord {
+                vote: crate::Vote::No,
+                asset_id: 0,
+                power: 40,
+            }
+        );
         assert_eq!(
             OngoingChallengeVotes::<Test>::get(0)
                 .unwrap()
@@ -2116,24 +2510,26 @@ fn different_proposals() {
             3000
         );
         assert_eq!(
-            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
-                .is_some(),
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(),
             true
         );
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
-        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            0,
-        ));
-        assert_eq!(UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), false);
+        assert_eq!(
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(),
+            true
+        );
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
             3000
         );
         assert_eq!(Proposals::<Test>::get(0).is_none(), true);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([4; 32].into()),
             0,
@@ -2143,19 +2539,24 @@ fn different_proposals() {
         assert_eq!(Proposals::<Test>::get(1).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            1,
+            0,
             crate::Vote::Yes,
             60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
-            1,
+            0,
             crate::Vote::Yes,
             60
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
+        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+        assert_eq!(
+            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
+            3000
+        );
         assert_ok!(PropertyGovernance::unfreeze_proposal_token(
             RuntimeOrigin::signed([1; 32].into()),
             1,
@@ -2164,11 +2565,6 @@ fn different_proposals() {
             RuntimeOrigin::signed([2; 32].into()),
             1,
         ));
-        assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
-        assert_eq!(
-            ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
-            3000
-        );
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([4; 32].into()),
             0,
@@ -2178,37 +2574,25 @@ fn different_proposals() {
         assert_eq!(Proposals::<Test>::get(2).is_some(), true);
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            2,
+            0,
             crate::Vote::Yes,
             60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
-            2,
+            0,
             crate::Vote::No,
             60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
-            2,
+            0,
             crate::Vote::Yes,
             80
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
-        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
-            RuntimeOrigin::signed([1; 32].into()),
-            2,
-        ));
-        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
-            RuntimeOrigin::signed([2; 32].into()),
-            2,
-        ));
-        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
-            RuntimeOrigin::signed([3; 32].into()),
-            2,
-        ));
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -2233,21 +2617,33 @@ fn different_proposals() {
             bvec![10, 10]
         ));
         assert_eq!(Proposals::<Test>::get(3).is_some(), true);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            2,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            2,
+        ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
-            3,
+            0,
             crate::Vote::Yes,
             60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
-            3,
+            0,
             crate::Vote::Yes,
             60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
-            3,
+            0,
             crate::Vote::No,
             80
         ));
@@ -2732,7 +3128,10 @@ fn auction_starts() {
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), true);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(),
+            true
+        );
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, None);
@@ -2847,7 +3246,10 @@ fn proposal_does_not_pass() {
         System::assert_last_event(Event::PropertySaleProposalRejected { asset_id: 0 }.into());
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), true);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(),
+            true
+        );
         assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
     });
 }
@@ -5548,7 +5950,10 @@ fn claim_sale_funds_fails() {
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), false);
+        assert_eq!(
+            UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(),
+            false
+        );
         assert_ok!(PropertyGovernance::bid_on_sale(
             RuntimeOrigin::signed([7; 32].into()),
             0,

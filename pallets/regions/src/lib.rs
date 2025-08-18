@@ -528,6 +528,7 @@ pub mod pallet {
         LawyerRegistered {
             lawyer: T::AccountId,
             region_id: RegionId,
+            deposit: T::Balance
         },
         /// Lawyer has been unregistered.
         LawyerUnregistered {
@@ -1455,6 +1456,7 @@ pub mod pallet {
             Self::deposit_event(Event::<T>::LawyerRegistered {
                 lawyer: signer,
                 region_id: region,
+                deposit: deposit_amount,
             });
             Ok(())
         }
