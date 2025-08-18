@@ -17,7 +17,7 @@ use frame_support::{
     sp_runtime::{traits::AccountIdConversion, Percent, Saturating},
     traits::{
         fungible::{BalancedHold, Credit},
-        fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold},
+        fungibles::{Mutate as FungiblesMutate, MutateHold as FungiblesMutateHold, MutateFreeze},
         tokens::{fungible, fungibles},
         tokens::{imbalance::OnUnbalanced, Balance, Precision, Preservation},
         EnsureOriginWithArg,
@@ -27,7 +27,7 @@ use frame_support::{
 
 use codec::{Codec, DecodeWithMemTracking};
 
-use primitives::MarketplaceHoldReason;
+use primitives::{MarketplaceHoldReason, MarketplaceFreezeReason};
 
 use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
@@ -49,8 +49,6 @@ pub mod pallet {
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
-
-    pub type ProposalIndex = u32;
 
     /// Proposal with the proposal Details.
     #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
@@ -174,6 +172,15 @@ pub mod pallet {
         pub amount: <T as pallet::Config>::Balance,
     }
 
+    /// Vote record of a user.
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+    #[scale_info(skip_type_params(T))]
+    pub struct VoteRecord {
+        pub vote: Vote,
+        pub asset_id: u32,
+        pub power: u32,
+    }
+
     #[pallet::config]
     pub trait Config:
         frame_system::Config
@@ -228,6 +235,13 @@ pub mod pallet {
                 Balance = <Self as pallet::Config>::Balance,
                 Reason = MarketplaceHoldReason,
             > + fungibles::InspectHold<AccountIdOf<Self>, AssetId = u32>;
+
+        type AssetsFreezer: fungibles::MutateFreeze<
+            AccountIdOf<Self>,
+            AssetId = u32,
+            Balance = <Self as pallet::Config>::Balance,
+            Id = MarketplaceFreezeReason,
+        >;
 
         /// The amount of time given to vote for a proposal.
         #[pallet::constant]
@@ -295,82 +309,85 @@ pub mod pallet {
         >;
     }
 
+    pub type ProposalId = u64;
     pub type LocationId<T> = BoundedVec<u8, <T as pallet_regions::Config>::PostcodeLimit>;
 
     /// Number of proposals that have been made.
     #[pallet::storage]
-    pub(super) type ProposalCount<T> = StorageValue<_, ProposalIndex, ValueQuery>;
+    pub(super) type ProposalCount<T> = StorageValue<_, ProposalId, ValueQuery>;
 
     /// Proposals that have been made.
     #[pallet::storage]
     pub(super) type Proposals<T> =
-        StorageMap<_, Blake2_128Concat, ProposalIndex, Proposal<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, Proposal<T>, OptionQuery>;
 
     /// Sell proposals that have been made.
     #[pallet::storage]
     pub(super) type SaleProposals<T> =
-        StorageMap<_, Blake2_128Concat, u32, PropertySaleProposal<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, PropertySaleProposal<T>, OptionQuery>;
 
     /// Mapping of challenge index to the challenge info.
     #[pallet::storage]
-    pub(super) type Challenges<T> = StorageMap<_, Blake2_128Concat, u32, Challenge<T>, OptionQuery>;
+    pub(super) type Challenges<T> = StorageMap<_, Blake2_128Concat, ProposalId, Challenge<T>, OptionQuery>;
 
     /// Mapping of ongoing votes.
     #[pallet::storage]
     pub(super) type OngoingProposalVotes<T> =
-        StorageMap<_, Blake2_128Concat, ProposalIndex, VoteStats, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats, OptionQuery>;
 
     /// Mapping of a proposal id and account id to the vote of a user.
     #[pallet::storage]
-    pub(super) type UserProposalVote<T: Config> = StorageMap<
+    pub(super) type UserProposalVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        ProposalIndex,
-        BoundedBTreeMap<
-            AccountIdOf<T>,
-            Vote,
-            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
-        >,
+        ProposalId,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        VoteRecord,
         OptionQuery,
     >;
 
     /// Mapping of ongoing sales votes.
     #[pallet::storage]
     pub(super) type OngoingSaleProposalVotes<T> =
-        StorageMap<_, Blake2_128Concat, u32, VoteStats, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats, OptionQuery>;
 
     /// Mapping of a proposal id and account id to the vote of the user.
     #[pallet::storage]
-    pub(super) type UserSaleProposalVote<T: Config> = StorageMap<
+    pub(super) type UserSaleProposalVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        u32,
-        BoundedBTreeMap<
-            AccountIdOf<T>,
-            Vote,
-            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
-        >,
+        ProposalId,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        VoteRecord,
         OptionQuery,
     >;
+
+    #[pallet::storage]
+    pub type AssetSaleProposal<T: Config> =
+        StorageMap<_, Blake2_128Concat, u32, ProposalId, OptionQuery>;
 
     /// Mapping of ongoing votes about challenges.
     #[pallet::storage]
     pub(super) type OngoingChallengeVotes<T> =
-        StorageMap<_, Blake2_128Concat, u32, VoteStats, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats, OptionQuery>;
 
     /// Mapping of a proposal id and account id to the vote of the user.
     #[pallet::storage]
-    pub(super) type UserChallengeVote<T: Config> = StorageMap<
+    pub(super) type UserChallengeVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        u32,
-        BoundedBTreeMap<
-            AccountIdOf<T>,
-            Vote,
-            <T as pallet_real_estate_asset::Config>::MaxPropertyToken,
-        >,
+        ProposalId,
+        Blake2_128Concat,
+        AccountIdOf<T>,
+        VoteRecord,
         OptionQuery,
     >;
+
+    #[pallet::storage]
+    pub type AssetLettingChallenge<T: Config> =
+        StorageMap<_, Blake2_128Concat, u32, ProposalId, OptionQuery>;
 
     /// Stores the project keys and round types ending on a given block for proposal votings.
     #[pallet::storage]
@@ -378,7 +395,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         BlockNumberFor<T>,
-        BoundedVec<ProposalIndex, T::MaxVotesForBlock>,
+        BoundedVec<ProposalId, T::MaxVotesForBlock>,
         ValueQuery,
     >;
 
@@ -439,7 +456,7 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// New proposal has been created.
         Proposed {
-            proposal_id: ProposalIndex,
+            proposal_id: ProposalId,
             asset_id: u32,
             proposer: AccountIdOf<T>,
         },
@@ -447,10 +464,11 @@ pub mod pallet {
         Challenge {
             asset_id: u32,
             proposer: AccountIdOf<T>,
+            proposal_id: ProposalId,
         },
         /// Voted on proposal.
         VotedOnProposal {
-            proposal_id: ProposalIndex,
+            proposal_id: ProposalId,
             voter: AccountIdOf<T>,
             vote: Vote,
         },
@@ -479,12 +497,12 @@ pub mod pallet {
         /// The agent has been changed.
         AgentChanged { asset_id: u32 },
         /// A proposal got rejected.
-        ProposalRejected { proposal_id: ProposalIndex },
+        ProposalRejected { proposal_id: ProposalId },
         /// A challenge has been rejected/
         ChallengeRejected { asset_id: u32 },
         /// The threshold could not be reached for a proposal.
         ProposalThresHoldNotReached {
-            proposal_id: ProposalIndex,
+            proposal_id: ProposalId,
             required_threshold: Percent,
         },
         /// The threshold could not be reached for a challenge.
@@ -548,7 +566,7 @@ pub mod pallet {
         SaleRejected { asset_id: u32 },
         /// Processing of a proposal failed.
         ProposalProcessingFailed {
-            proposal_id: ProposalIndex,
+            proposal_id: ProposalId,
             error: DispatchResult,
         },
         /// Processing of a sale proposal failed.
@@ -565,6 +583,13 @@ pub mod pallet {
         AuctionProcessingFailed {
             asset_id: u32,
             error: DispatchResult,
+        },
+        /// A user has unfrozen his token.
+        TokenUnfrozen {
+            proposal_id: ProposalId,
+            asset_id: u32,
+            voter: AccountIdOf<T>,
+            amount: u32,
         },
     }
 
@@ -640,6 +665,10 @@ pub mod pallet {
         ChallengeAlreadyOngoing,
         /// There are already too many voters for this voting.
         TooManyVoters,
+        /// The user has no token amount frozen.
+        NoFrozenAmount,
+        /// The voting is still ongoing.
+        VotingStillOngoing,
     }
 
     #[pallet::hooks]
@@ -651,7 +680,7 @@ pub mod pallet {
             // checks if there is a voting for a proposal ending in this block.
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(4, 3));
-                UserProposalVote::<T>::remove(item);
+                //UserProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_proposal(*item) {
                     Self::deposit_event(Event::ProposalProcessingFailed {
                         proposal_id: *item,
@@ -664,7 +693,7 @@ pub mod pallet {
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 4));
-                UserSaleProposalVote::<T>::remove(item);
+                //UserSaleProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_sale_proposal(*item) {
                     Self::deposit_event(Event::SaleProposalProcessingFailed {
                         asset_id: *item,
@@ -677,7 +706,7 @@ pub mod pallet {
             // Checks if there is a voting for a sale porposal in this block;
             ended_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(3, 3));
-                UserSaleProposalVote::<T>::remove(item);
+                //UserSaleProposalVote::<T>::remove(item);
                 if let Err(e) = Self::finish_auction(*item) {
                     Self::deposit_event(Event::AuctionProcessingFailed {
                         asset_id: *item,
@@ -690,7 +719,7 @@ pub mod pallet {
             // checks if there is a voting for an challenge ending in this block.
             ended_challenge_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(7, 9));
-                UserChallengeVote::<T>::remove(item);
+                //UserChallengeVote::<T>::remove(item);
                 if let Err(e) = Self::finish_challenge(*item) {
                     Self::deposit_event(Event::ChallengeProcessingFailed {
                         asset_id: *item,
@@ -800,10 +829,10 @@ pub mod pallet {
                 Error::<T>::NoLettingAgentFound
             );
             ensure!(
-                Challenges::<T>::get(asset_id).is_none(),
+                !AssetLettingChallenge::<T>::contains_key(asset_id),
                 Error::<T>::ChallengeAlreadyOngoing
             );
-
+            let proposal_id = ProposalCount::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(<T as Config>::VotingTime::get());
@@ -820,12 +849,18 @@ pub mod pallet {
                 yes_voting_power: 0,
                 no_voting_power: 0,
             };
-            OngoingChallengeVotes::<T>::insert(asset_id, vote_stats);
-            Challenges::<T>::insert(asset_id, challenge);
+            AssetLettingChallenge::<T>::insert(asset_id, proposal_id);
+            OngoingChallengeVotes::<T>::insert(proposal_id, vote_stats);
+            Challenges::<T>::insert(proposal_id, challenge);
 
+            let next_proposal_id = proposal_id
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ProposalCount::<T>::put(next_proposal_id);
             Self::deposit_event(Event::Challenge {
                 asset_id,
                 proposer: signer,
+                proposal_id,
             });
             Ok(())
         }
@@ -843,8 +878,9 @@ pub mod pallet {
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_proposal())]
         pub fn vote_on_proposal(
             origin: OriginFor<T>,
-            proposal_id: ProposalIndex,
+            proposal_id: ProposalId,
             vote: Vote,
+            amount: u32
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
@@ -856,36 +892,53 @@ pub mod pallet {
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(proposal.asset_id, &signer);
+            ensure!(voting_power >= amount, Error::<T>::NoPermission);
             OngoingProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserProposalVote::<T>::try_mutate(proposal_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
-                        match previous_vote {
+                UserProposalVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                            proposal.asset_id,
+                            &MarketplaceFreezeReason::ProposalVoting,
+                            &signer,
+                            previous_vote.power.into(),
+                        )?;
+
+                        match previous_vote.vote {
                             Vote::Yes => {
                                 current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                                    current_vote.yes_voting_power.saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
                                 current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                                    current_vote.no_voting_power.saturating_sub(previous_vote.power)
                             }
                         }
                     }
+
+                    <T as pallet::Config>::AssetsFreezer::increase_frozen(
+                        proposal.asset_id,
+                        &MarketplaceFreezeReason::ProposalVoting,
+                        &signer,
+                        amount.into(),
+                    )?;
 
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
 
-                    map.try_insert(signer.clone(), vote.clone())
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        asset_id: proposal.asset_id,
+                        power: amount,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -894,6 +947,36 @@ pub mod pallet {
                 proposal_id,
                 voter: signer,
                 vote,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(27)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_proposal_token(
+            origin: OriginFor<T>,
+            proposal_id: ProposalId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserProposalVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            ensure!(!Proposals::<T>::contains_key(proposal_id), Error::<T>::VotingStillOngoing);
+
+            <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                vote_record.asset_id,
+                &MarketplaceFreezeReason::ProposalVoting,
+                &signer,
+                vote_record.power.into(),
+            )?;
+
+            UserProposalVote::<T>::remove(proposal_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                proposal_id,
+                asset_id: vote_record.asset_id,
+                voter: signer,
+                amount: vote_record.power,
             });
             Ok(())
         }
@@ -913,49 +996,70 @@ pub mod pallet {
             origin: OriginFor<T>,
             asset_id: u32,
             vote: Vote,
+            amount: u32,
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let proposal_id = AssetLettingChallenge::<T>::get(asset_id)
+                .ok_or(Error::<T>::NotOngoing)?;
             ensure!(
-                Challenges::<T>::get(asset_id).is_some(),
+                Challenges::<T>::get(proposal_id).is_some(),
                 Error::<T>::NotOngoing
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
-            OngoingChallengeVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
+            ensure!(voting_power >= amount, Error::<T>::NoPermission);
+            OngoingChallengeVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserChallengeVote::<T>::try_mutate(asset_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
-                        match previous_vote {
+                UserChallengeVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                            asset_id,
+                            &MarketplaceFreezeReason::ChallengeVoting,
+                            &signer,
+                            previous_vote.power.into(),
+                        )?;
+                        match previous_vote.vote {
                             Vote::Yes => {
-                                current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power = current_vote
+                                    .yes_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
-                                current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power = current_vote
+                                    .no_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                         }
                     }
+
+                    <T as pallet::Config>::AssetsFreezer::increase_frozen(
+                        asset_id,
+                        &MarketplaceFreezeReason::ChallengeVoting,
+                        &signer,
+                        amount.into(),
+                    )?;
 
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
 
-                    map.try_insert(signer.clone(), vote.clone())
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        asset_id,
+                        power: amount,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -964,6 +1068,36 @@ pub mod pallet {
                 asset_id,
                 voter: signer,
                 vote,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(28)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_challenge_token(
+            origin: OriginFor<T>,
+            proposal_id: ProposalId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserChallengeVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            ensure!(!Challenges::<T>::contains_key(proposal_id), Error::<T>::VotingStillOngoing);
+
+            <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                vote_record.asset_id,
+                &MarketplaceFreezeReason::ChallengeVoting,
+                &signer,
+                vote_record.power.into(),
+            )?;
+
+            UserChallengeVote::<T>::remove(proposal_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                proposal_id,
+                asset_id: vote_record.asset_id,
+                voter: signer,
+                amount: vote_record.power,
             });
             Ok(())
         }
@@ -991,11 +1125,12 @@ pub mod pallet {
                 Error::<T>::SaleOngoing
             );
             ensure!(
-                SaleProposals::<T>::get(asset_id).is_none(),
+                AssetSaleProposal::<T>::get(asset_id).is_none(),
                 Error::<T>::PropertySaleProposalOngoing
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+            let proposal_id = ProposalCount::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let sale_proposal = PropertySaleProposal {
                 proposer: signer.clone(),
@@ -1013,8 +1148,13 @@ pub mod pallet {
                 no_voting_power: 0,
             };
 
-            SaleProposals::<T>::insert(asset_id, sale_proposal);
-            OngoingSaleProposalVotes::<T>::insert(asset_id, vote_stats);
+            AssetSaleProposal::<T>::insert(asset_id, proposal_id);
+            SaleProposals::<T>::insert(proposal_id, sale_proposal);
+            OngoingSaleProposalVotes::<T>::insert(proposal_id, vote_stats);
+            let next_proposal_id = proposal_id
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ProposalCount::<T>::put(next_proposal_id);
             Self::deposit_event(Event::PropertySaleProposed {
                 asset_id,
                 proposer: signer,
@@ -1037,49 +1177,71 @@ pub mod pallet {
             origin: OriginFor<T>,
             asset_id: u32,
             vote: Vote,
+            amount: u32
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let proposal_id = AssetSaleProposal::<T>::get(asset_id)
+                .ok_or(Error::<T>::NotOngoing)?;
             ensure!(
-                SaleProposals::<T>::get(asset_id).is_some(),
+                SaleProposals::<T>::get(proposal_id).is_some(),
                 Error::<T>::NotOngoing
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
-            OngoingSaleProposalVotes::<T>::try_mutate(asset_id, |maybe_current_vote| {
+            ensure!(voting_power >= amount, Error::<T>::NoPermission);
+            OngoingSaleProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserSaleProposalVote::<T>::try_mutate(asset_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
-                        match previous_vote {
+                UserSaleProposalVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                            asset_id,
+                            &MarketplaceFreezeReason::SaleVoting,
+                            &signer,
+                            previous_vote.power.into(),
+                        )?;
+
+                        match previous_vote.vote {
                             Vote::Yes => {
-                                current_vote.yes_voting_power =
-                                    current_vote.yes_voting_power.saturating_sub(voting_power)
+                                current_vote.yes_voting_power = current_vote
+                                    .yes_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                             Vote::No => {
-                                current_vote.no_voting_power =
-                                    current_vote.no_voting_power.saturating_sub(voting_power)
+                                current_vote.no_voting_power = current_vote
+                                    .no_voting_power
+                                    .saturating_sub(previous_vote.power)
                             }
                         }
                     }
+
+                    <T as pallet::Config>::AssetsFreezer::increase_frozen(
+                        asset_id,
+                        &MarketplaceFreezeReason::SaleVoting,
+                        &signer,
+                        amount.into(),
+                    )?;
 
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
 
-                    map.try_insert(signer.clone(), vote.clone())
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        asset_id,
+                        power: amount,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -1088,6 +1250,36 @@ pub mod pallet {
                 asset_id,
                 voter: signer,
                 vote,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(29)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_sale_proposal_token(
+            origin: OriginFor<T>,
+            proposal_id: ProposalId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserSaleProposalVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            ensure!(!SaleProposals::<T>::contains_key(proposal_id), Error::<T>::VotingStillOngoing);
+
+            <T as pallet::Config>::AssetsFreezer::decrease_frozen(
+                vote_record.asset_id,
+                &MarketplaceFreezeReason::SaleVoting,
+                &signer,
+                vote_record.power.into(),
+            )?;
+
+            UserSaleProposalVote::<T>::remove(proposal_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                proposal_id,
+                asset_id: vote_record.asset_id,
+                voter: signer,
+                amount: vote_record.power,
             });
             Ok(())
         }
@@ -1657,7 +1849,7 @@ pub mod pallet {
             Ok(())
         }
 
-        fn finish_proposal(proposal_id: ProposalIndex) -> DispatchResult {
+        fn finish_proposal(proposal_id: ProposalId) -> DispatchResult {
             let voting_results = OngoingProposalVotes::<T>::take(proposal_id);
             let proposals = Proposals::<T>::take(proposal_id);
             if let Some(proposal) = proposals {
@@ -1703,8 +1895,9 @@ pub mod pallet {
         }
 
         fn finish_sale_proposal(asset_id: u32) -> DispatchResult {
-            let voting_results = OngoingSaleProposalVotes::<T>::take(asset_id);
-            SaleProposals::<T>::remove(asset_id);
+            let proposal_id = AssetSaleProposal::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let voting_results = OngoingSaleProposalVotes::<T>::take(proposal_id);
+            SaleProposals::<T>::remove(proposal_id);
             if let Some(voting_result) = voting_results {
                 let asset_details =
                     <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id);
@@ -1748,9 +1941,10 @@ pub mod pallet {
         }
 
         fn finish_challenge(asset_id: u32) -> DispatchResult {
-            let _ = Challenges::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let proposal_id = AssetLettingChallenge::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+            let _ = Challenges::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let voting_result =
-                OngoingChallengeVotes::<T>::take(asset_id).ok_or(Error::<T>::NotOngoing)?;
+                OngoingChallengeVotes::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let asset_details =
                 <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
                     .ok_or(Error::<T>::AssetNotFound)?;

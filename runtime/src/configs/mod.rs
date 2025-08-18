@@ -738,6 +738,7 @@ impl pallet_property_governance::Config for Runtime {
     type LocalCurrency = RealEstateAssets;
     type ForeignCurrency = Assets;
     type ForeignAssetsHolder = AssetsHolder;
+    type AssetsFreezer = AssetsFreezer;
     type VotingTime = PropertyVotingTime;
     type SaleVotingTime = PropertySaleVotingTime;
     type MaxVotesForBlock = MaxVoteForBlock;

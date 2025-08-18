@@ -12,7 +12,7 @@ use frame_support::{
 use crate::{
     ChallengeRoundsExpiring, Challenges, OngoingChallengeVotes, OngoingProposalVotes,
     OngoingSaleProposalVotes, PropertySale, PropertySaleFunds, Proposals, Reserve, SaleAuctions,
-    SaleProposals, UserProposalVote, UserSaleProposalVote,
+    SaleProposals, UserProposalVote, UserSaleProposalVote, VoteRecord, AssetLettingChallenge,
 };
 
 use pallet_property_management::{InvestorFunds, LettingInfo, LettingStorage};
@@ -588,22 +588,26 @@ fn vote_on_proposal_works() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            50
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            40
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            50
         ));
         assert_eq!(
             OngoingProposalVotes::<Test>::get(0)
@@ -757,7 +761,8 @@ fn proposal_pass() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_000);
@@ -830,12 +835,14 @@ fn proposal_pass_2() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            100
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertyVotingTime::get();
@@ -911,7 +918,8 @@ fn proposal_not_pass() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            100
         ));
         assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
@@ -1003,7 +1011,8 @@ fn proposal_not_pass_2() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(Proposals::<Test>::get(0).unwrap().amount, 10000);
@@ -1080,7 +1089,8 @@ fn vote_on_proposal_fails() {
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NotOngoing
         );
@@ -1099,13 +1109,15 @@ fn vote_on_proposal_fails() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([2; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NoPermission
         );
@@ -1115,7 +1127,8 @@ fn vote_on_proposal_fails() {
             PropertyGovernance::vote_on_proposal(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NotOngoing
         );
@@ -1205,28 +1218,32 @@ fn vote_on_challenge_works() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            20
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            40
         ));
         assert_eq!(
             OngoingChallengeVotes::<Test>::get(0)
                 .unwrap()
                 .yes_voting_power,
-            60
+            30
         );
         assert_eq!(
             OngoingChallengeVotes::<Test>::get(0)
@@ -1336,22 +1353,35 @@ fn challenge_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
+        assert_eq!(AssetLettingChallenge::<Test>::get(0), Some(0));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
+        assert_eq!(AssetLettingChallenge::<Test>::get(0), None);
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
         assert_eq!(
             LettingInfo::<Test>::get::<AccountId>([0; 32].into())
                 .unwrap()
@@ -1368,12 +1398,14 @@ fn challenge_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
         assert_eq!(Balances::total_balance_on_hold(&[0; 32].into()), 900);
         assert_eq!(Balances::total_issuance(), 57_509_901);
@@ -1388,6 +1420,14 @@ fn challenge_pass() {
                 .unwrap(),
             &2u8
         );
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+        ));
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1397,12 +1437,14 @@ fn challenge_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_eq!(
@@ -1598,17 +1640,23 @@ fn challenge_does_not_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            75
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            175
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1617,7 +1665,8 @@ fn challenge_does_not_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            75
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -1733,17 +1782,27 @@ fn challenge_pass_only_one_agent() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         assert_eq!(ChallengeRoundsExpiring::<Test>::get(expiry).len(), 1);
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1752,16 +1811,26 @@ fn challenge_pass_only_one_agent() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_challenge_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+        ));
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1769,12 +1838,14 @@ fn challenge_pass_only_one_agent() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            30
         ));
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            70
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         run_to_block(211);
@@ -1837,7 +1908,8 @@ fn challenge_not_pass() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            100
         ));
         assert_eq!(Challenges::<Test>::get(0).is_some(), true);
         let expiry =
@@ -1891,7 +1963,8 @@ fn vote_on_challenge_fails() {
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NotOngoing
         );
@@ -1908,13 +1981,15 @@ fn vote_on_challenge_fails() {
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([2; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                10
             ),
             Error::<Test>::NoPermission
         );
@@ -2031,7 +2106,8 @@ fn different_proposals() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_eq!(Proposals::<Test>::get(0).is_some(), true);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
@@ -2040,16 +2116,18 @@ fn different_proposals() {
             3000
         );
         assert_eq!(
-            UserProposalVote::<Test>::get(0)
-                .unwrap()
-                .get(&[1; 32].into())
+            UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
                 .is_some(),
             true
         );
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
-        assert_eq!(UserProposalVote::<Test>::get(0).is_some(), false);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_eq!(UserProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), false);
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -2066,16 +2144,26 @@ fn different_proposals() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            1,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+        ));
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -2091,21 +2179,36 @@ fn different_proposals() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             2,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             2,
-            crate::Vote::No
+            crate::Vote::No,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
             2,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            80
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            2,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            2,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_proposal_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            2,
+        ));
         assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
         assert_eq!(
             ForeignAssets::balance(1984, &PropertyGovernance::property_account_id(0)),
@@ -2133,17 +2236,20 @@ fn different_proposals() {
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([3; 32].into()),
             3,
-            crate::Vote::No
+            crate::Vote::No,
+            80
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -2299,7 +2405,8 @@ fn propose_property_sale_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -2392,17 +2499,20 @@ fn vote_on_property_sale_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            35
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            25
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -2417,16 +2527,16 @@ fn vote_on_property_sale_works() {
             35
         );
         assert_eq!(
-            UserSaleProposalVote::<Test>::get(0)
+            UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
                 .unwrap()
-                .get(&[1; 32].into())
-                .clone(),
-            Some(&crate::Vote::Yes)
+                .vote,
+            crate::Vote::Yes
         );
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            40
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -2441,11 +2551,10 @@ fn vote_on_property_sale_works() {
             75
         );
         assert_eq!(
-            UserSaleProposalVote::<Test>::get(0)
+            UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into())
                 .unwrap()
-                .get(&[1; 32].into())
-                .clone(),
-            Some(&crate::Vote::No)
+                .vote,
+            crate::Vote::No
         );
     });
 }
@@ -2495,7 +2604,8 @@ fn vote_on_property_sale_fails() {
             PropertyGovernance::vote_on_property_sale(
                 RuntimeOrigin::signed([1; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                100
             ),
             Error::<Test>::NotOngoing
         );
@@ -2507,7 +2617,8 @@ fn vote_on_property_sale_fails() {
             PropertyGovernance::vote_on_property_sale(
                 RuntimeOrigin::signed([6; 32].into()),
                 0,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                10
             ),
             Error::<Test>::NoPermission
         );
@@ -2594,17 +2705,20 @@ fn auction_starts() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            5
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -2618,7 +2732,7 @@ fn auction_starts() {
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get(0).is_some(), false);
+        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), true);
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().highest_bidder, None);
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().price, 0);
         assert_eq!(SaleAuctions::<Test>::get(0).unwrap().reserve, None);
@@ -2705,17 +2819,20 @@ fn proposal_does_not_pass() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            50
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            15
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -2730,7 +2847,7 @@ fn proposal_does_not_pass() {
         System::assert_last_event(Event::PropertySaleProposalRejected { asset_id: 0 }.into());
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get(0).is_some(), false);
+        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), true);
         assert_eq!(SaleAuctions::<Test>::get(0).is_none(), true);
     });
 }
@@ -2822,17 +2939,20 @@ fn bid_on_sale_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            5
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -3018,17 +3138,20 @@ fn bid_on_sale_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            60
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            5
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -3138,17 +3261,20 @@ fn lawyer_claim_sale_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -3379,17 +3505,20 @@ fn lawyer_claim_sale_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_noop!(
             PropertyGovernance::lawyer_claim_sale(
@@ -3652,17 +3781,20 @@ fn lawyer_claim_sale_fails_2() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            25
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -3678,6 +3810,18 @@ fn lawyer_claim_sale_fails_2() {
         );
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([3; 32].into()),
+            0,
+        ));
         assert_eq!(PropertySale::<Test>::get(0).is_some(), false);
         assert_noop!(
             PropertyGovernance::lawyer_claim_sale(
@@ -3731,17 +3875,20 @@ fn lawyer_claim_sale_fails_2() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            40
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            25
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -3858,17 +4005,20 @@ fn lawyer_confirm_sale_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4014,17 +4164,20 @@ fn lawyer_confirm_sale_works_2() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4181,17 +4334,20 @@ fn lawyer_confirm_sale_works_deny() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4332,17 +4488,20 @@ fn lawyer_confirm_sale_works_deny_2() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4505,17 +4664,20 @@ fn lawyer_confirm_sale_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_eq!(
             OngoingSaleProposalVotes::<Test>::get(0)
@@ -4688,17 +4850,20 @@ fn finalize_sale_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4847,17 +5012,20 @@ fn finalize_sale_works_2() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -4999,17 +5167,20 @@ fn finalize_sale_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            55
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([3; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            35
         ));
         assert_noop!(
             PropertyGovernance::finalize_sale(RuntimeOrigin::signed([10; 32].into()), 0, 1984),
@@ -5161,12 +5332,14 @@ fn claim_sale_funds_works() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            90
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
@@ -5178,6 +5351,14 @@ fn claim_sale_funds_works() {
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
         assert_ok!(PropertyGovernance::lawyer_claim_sale(
             RuntimeOrigin::signed([11; 32].into()),
             0,
@@ -5341,12 +5522,14 @@ fn claim_sale_funds_fails() {
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            90
         ));
         assert_ok!(PropertyGovernance::vote_on_property_sale(
             RuntimeOrigin::signed([2; 32].into()),
             0,
-            crate::Vote::No
+            crate::Vote::No,
+            10
         ));
         assert_noop!(
             PropertyGovernance::claim_sale_funds(RuntimeOrigin::signed([1; 32].into()), 0, 1984),
@@ -5354,10 +5537,18 @@ fn claim_sale_funds_fails() {
         );
         let expiry = frame_system::Pallet::<Test>::block_number() + PropertySaleVotingTime::get();
         run_to_block(expiry);
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyGovernance::unfreeze_sale_proposal_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+        ));
         assert_eq!(PropertySale::<Test>::get(0).is_some(), true);
         assert_eq!(OngoingSaleProposalVotes::<Test>::get(0).is_some(), false);
         assert_eq!(SaleProposals::<Test>::get(0).is_some(), false);
-        assert_eq!(UserSaleProposalVote::<Test>::get(0).is_some(), false);
+        assert_eq!(UserSaleProposalVote::<Test>::get::<u64, AccountId>(0, [1; 32].into()).is_some(), false);
         assert_ok!(PropertyGovernance::bid_on_sale(
             RuntimeOrigin::signed([7; 32].into()),
             0,

@@ -422,6 +422,7 @@ impl pallet_property_governance::Config for Test {
     type LocalCurrency = LocalAssets;
     type ForeignCurrency = ForeignAssets;
     type ForeignAssetsHolder = AssetsHolder;
+    type AssetsFreezer = AssetsFreezer;
     type VotingTime = PropertyVotingTime;
     type SaleVotingTime = PropertySaleVotingTime;
     type MaxVotesForBlock = MaxVoteForBlock;

@@ -164,7 +164,7 @@ pub mod pallet {
             + fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
             + fungibles::Mutate<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>
             + fungibles::Inspect<AccountIdOf<Self>, Balance = <Self as pallet::Config>::Balance>;
-
+        
         type AssetsFreezer: fungibles::MutateFreeze<
             AccountIdOf<Self>,
             AssetId = u32,
@@ -289,11 +289,7 @@ pub mod pallet {
             amount: <T as pallet::Config>::Balance,
         },
         /// A letting agent has been proposed for a property.
-        LettingAgentProposed {
-            asset_id: u32,
-            who: T::AccountId,
-            proposal_id: ProposalId,
-        },
+        LettingAgentProposed { asset_id: u32, who: T::AccountId, proposal_id: ProposalId },
         /// Someone has voted on a letting agent.
         VotedOnLettingAgent {
             asset_id: u32,
@@ -542,10 +538,6 @@ pub mod pallet {
                 !AssetLettingProposal::<T>::contains_key(asset_id),
                 Error::<T>::LettingAgentProposalOngoing
             );
-            ensure!(
-                LettingInfo::<T>::contains_key(&signer),
-                Error::<T>::AgentNotFound
-            );
             let proposal_id = ProposalCounter::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
@@ -609,7 +601,7 @@ pub mod pallet {
                 Error::<T>::VotingExpired
             );
             let voting_power = T::PropertyToken::get_token_balance(asset_id, &signer);
-            ensure!(!voting_power.is_zero(), Error::<T>::NoPermission);
+            ensure!(voting_power >= amount, Error::<T>::NoPermission);
             OngoingLettingAgentVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote
                     .as_mut()
@@ -752,8 +744,8 @@ pub mod pallet {
             proposal_id: ProposalId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let vote_record = UserLettingAgentVote::<T>::get(proposal_id, &signer)
-                .ok_or(Error::<T>::NoFrozenAmount)?;
+            let vote_record =
+                UserLettingAgentVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
 
             if let Some(proposal) = LettingAgentProposal::<T>::get(proposal_id) {
                 let current_block_number = frame_system::Pallet::<T>::block_number();
@@ -906,7 +898,8 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoObjectFound)?;
             LettingInfo::<T>::try_mutate(&letting_agent, |maybe_info| {
                 let letting_info = maybe_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
-                if let Some(location_info) = letting_info.locations.get_mut(&property_info.location)
+                if let Some(location_info) =
+                    letting_info.locations.get_mut(&property_info.location)
                 {
                     location_info.assigned_properties = location_info
                         .assigned_properties
