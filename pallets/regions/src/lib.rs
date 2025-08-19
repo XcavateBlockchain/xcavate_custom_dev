@@ -19,7 +19,7 @@ use frame_support::{
     pallet_prelude::*,
     sp_runtime::{traits::Zero, Percent, Saturating},
     traits::{
-        fungible::{BalancedHold, Credit, Inspect, Mutate, MutateHold},
+        fungible::{BalancedHold, Credit, Inspect, Mutate, MutateHold, InspectHold},
         nonfungibles_v2::{Create, Transfer},
         tokens::{
             fungible, imbalance::OnUnbalanced, nonfungibles_v2, Balance, Precision, Preservation,
@@ -162,6 +162,10 @@ pub mod pallet {
         RegionProposalReserve,
         #[codec(index = 3)]
         LawyerDepositReserve,
+        #[codec(index = 4)]
+        RegionVotingReserve,
+        #[codec(index = 5)]
+        RegionOperatorRemovalVoting,
     }
 
     #[pallet::config]
@@ -324,11 +328,13 @@ pub mod pallet {
 
     /// User votes on region proposals.
     #[pallet::storage]
-    pub(super) type UserRegionVote<T: Config> = StorageMap<
+    pub(super) type UserRegionVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
         RegionId,
-        BoundedBTreeMap<T::AccountId, VoteRecord<T>, <T as pallet::Config>::MaxRegionVoters>,
+        Blake2_128Concat,
+        T::AccountId,
+        VoteRecord<T>,
         OptionQuery,
     >;
 
@@ -539,6 +545,12 @@ pub mod pallet {
             lawyer_account: T::AccountId,
             new_active_cases: u32,
         },
+        /// A user has unfrozen his token.
+        TokenUnfrozen {
+            region_id: RegionId,
+            voter: T::AccountId,
+            amount: T::Balance,
+        },
     }
 
     #[pallet::error]
@@ -615,6 +627,10 @@ pub mod pallet {
         LawyerNotRegistered,
         /// The lawyer is still active in some cases.
         LawyerStillActive,
+        /// The user has no token amount frozen.
+        NoFrozenAmount,
+        /// The token amount for voting is below minimum.
+        BelowMinimumVotingAmount,
     }
 
     #[pallet::hooks]
@@ -733,6 +749,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             region_id: RegionId,
             vote: Vote,
+            amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
@@ -745,10 +762,19 @@ pub mod pallet {
                 region_proposal.proposal_expiry > current_block_number,
                 Error::<T>::ProposalExpired
             );
-            let voting_power = T::NativeCurrency::balance(&signer);
+            let free_balance = T::NativeCurrency::balance(&signer);
+            let held_balance = T::NativeCurrency::balance_on_hold(
+                &HoldReason::RegionVotingReserve.into(),
+                &signer,
+            );
+            let total_available = free_balance.saturating_add(held_balance);
             ensure!(
-                voting_power >= T::MinimumVotingAmount::get(),
+                total_available >= amount,
                 Error::<T>::NotEnoughTokenToVote
+            );
+            ensure!(
+                amount >= T::MinimumVotingAmount::get(),
+                Error::<T>::BelowMinimumVotingAmount
             );
 
             let mut new_yes_power = Default::default();
@@ -756,9 +782,15 @@ pub mod pallet {
 
             OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserRegionVote::<T>::try_mutate(region_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
+                UserRegionVote::<T>::try_mutate(region_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        T::NativeCurrency::release(
+                            &HoldReason::RegionVotingReserve.into(),
+                            &signer,
+                            previous_vote.power,
+                            Precision::Exact,
+                        )?;
+
                         match previous_vote.vote {
                             Vote::Yes => {
                                 current_vote.yes_voting_power = current_vote
@@ -773,27 +805,30 @@ pub mod pallet {
                         }
                     }
 
+                    T::NativeCurrency::hold(
+                        &HoldReason::RegionVotingReserve.into(),
+                        &signer,
+                        amount,
+                    )?;
+
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
-                    let vote_record = VoteRecord {
-                        vote: vote.clone(),
-                        power: voting_power,
-                    };
-
-                    map.try_insert(signer.clone(), vote_record)
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
 
                     new_yes_power = current_vote.yes_voting_power;
                     new_no_power = current_vote.no_voting_power;
 
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        power: amount,
+                    });
                     Ok::<(), DispatchError>(())
                 })?;
                 Ok::<(), DispatchError>(())
@@ -802,9 +837,44 @@ pub mod pallet {
                 region_id,
                 voter: signer,
                 vote,
-                voting_power,
+                voting_power: amount,
                 new_yes_power,
                 new_no_power,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(27)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_region_voting_token(
+            origin: OriginFor<T>,
+            region_id: RegionId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserRegionVote::<T>::get(region_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            if let Some(proposal) = RegionProposals::<T>::get(region_id) {
+                let current_block_number = frame_system::Pallet::<T>::block_number();
+                ensure!(
+                    proposal.proposal_expiry <= current_block_number,
+                    Error::<T>::VotingStillOngoing
+                );
+            }
+
+            T::NativeCurrency::release(
+                &HoldReason::RegionVotingReserve.into(),
+                &signer,
+                vote_record.power,
+                Precision::Exact,
+            )?;
+
+            UserRegionVote::<T>::remove(region_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                region_id,
+                voter: signer,
+                amount: vote_record.power,
             });
             Ok(())
         }
@@ -1520,7 +1590,6 @@ pub mod pallet {
             let voting_results =
                 OngoingRegionProposalVotes::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let proposal = RegionProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-            UserRegionVote::<T>::remove(region_id);
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results
                 .yes_voting_power

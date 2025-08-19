@@ -39,7 +39,8 @@ fn new_region_helper() {
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([8; 32].into()),
         3,
-        crate::Vote::Yes
+        crate::Vote::Yes,
+        100_000
     ));
     run_to_block(31);
     assert_ok!(Regions::bid_on_region(
@@ -53,6 +54,10 @@ fn new_region_helper() {
         3,
         30,
         Permill::from_percent(3)
+    ));
+    assert_ok!(Regions::unfreeze_region_voting_token(
+        RuntimeOrigin::signed([8; 32].into()),
+        3,
     ));
 }
 
@@ -115,7 +120,8 @@ fn propose_new_region_works_after_rejected() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             1,
-            crate::Vote::No
+            crate::Vote::No,
+            10_000
         ));
         assert_eq!(ProposedRegionIds::<Test>::get(1).is_some(), true);
         run_to_block(31);
@@ -162,7 +168,8 @@ fn propose_new_region_slash_proposer() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::No
+            crate::Vote::No,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Balances::force_set_balance(
@@ -176,7 +183,7 @@ fn propose_new_region_slash_proposer() {
             3,
             10_000
         ));
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 195_000);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 185_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionProposalReserve.into(), &([0; 32].into())),
             0
@@ -215,7 +222,8 @@ fn propose_new_region_no_treasury_rewards() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -223,7 +231,7 @@ fn propose_new_region_no_treasury_rewards() {
             3,
             10_000
         ));
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 200_000);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 190_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionProposalReserve.into(), &([0; 32].into())),
             0
@@ -281,7 +289,8 @@ fn propose_new_region_fails() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -345,48 +354,69 @@ fn vote_on_region_proposal_works() {
             RuntimeOrigin::signed([0; 32].into()),
             crate::RegionIdentifier::Japan
         ));
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            0
+        );
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            250_000
         ));
         assert_eq!(
             OngoingRegionProposalVotes::<Test>::get(3).unwrap(),
             VoteStats {
-                yes_voting_power: 300_000,
+                yes_voting_power: 250_000,
                 no_voting_power: 0
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get(3)
-                .unwrap()
-                .get(&[2; 32].into())
-                .clone(),
-            Some(&crate::VoteRecord {
+            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into())
+                .unwrap(),
+            crate::VoteRecord {
                 vote: crate::Vote::Yes,
-                power: 300_000
-            })
+                power: 250_000
+            }
+        );
+        assert_eq!(Balances::free_balance(&([2; 32].into())), 50_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            250_000
         );
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            150_000
         ));
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             3,
-            crate::Vote::No
+            crate::Vote::No,
+            120_000
         ));
+        assert_eq!(Balances::free_balance(&([1; 32].into())), 30_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([1; 32].into())),
+            120_000
+        );
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([2; 32].into()),
             3,
-            crate::Vote::No
+            crate::Vote::No,
+            200_000
         ));
+        assert_eq!(Balances::free_balance(&([2; 32].into())), 100_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            200_000
+        );
         assert_eq!(
             OngoingRegionProposalVotes::<Test>::get(3).unwrap(),
             VoteStats {
-                yes_voting_power: 195_000,
-                no_voting_power: 450_000
+                yes_voting_power: 150_000,
+                no_voting_power: 320_000
             }
         );
         assert_ok!(Balances::force_set_balance(
@@ -397,24 +427,28 @@ fn vote_on_region_proposal_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            510_000
         ));
+        assert_eq!(Balances::free_balance(&([1; 32].into())), 210_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([1; 32].into())),
+            510_000
+        );
         assert_eq!(
             OngoingRegionProposalVotes::<Test>::get(3).unwrap(),
             VoteStats {
-                yes_voting_power: 795_000,
-                no_voting_power: 300_000
+                yes_voting_power: 660_000,
+                no_voting_power: 200_000
             }
         );
         assert_eq!(
-            UserRegionVote::<Test>::get(3)
-                .unwrap()
-                .get(&[2; 32].into())
-                .clone(),
-            Some(&crate::VoteRecord {
+            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into())
+                .unwrap(),
+            crate::VoteRecord {
                 vote: crate::Vote::No,
-                power: 300_000
-            })
+                power: 200_000
+            }
         );
     })
 }
@@ -455,13 +489,14 @@ fn vote_on_region_proposal_fails() {
         assert_ok!(Balances::force_set_balance(
             RuntimeOrigin::root(),
             sp_runtime::MultiAddress::Id([9; 32].into()),
-            90
+            900
         ));
         assert_noop!(
             Regions::vote_on_region_proposal(
                 RuntimeOrigin::signed([2; 32].into()),
                 3,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                200_000
             ),
             Error::<Test>::NotOngoing
         );
@@ -473,7 +508,8 @@ fn vote_on_region_proposal_fails() {
             Regions::vote_on_region_proposal(
                 RuntimeOrigin::signed([3; 32].into()),
                 3,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                4_000
             ),
             BadOrigin
         );
@@ -481,19 +517,236 @@ fn vote_on_region_proposal_fails() {
             Regions::vote_on_region_proposal(
                 RuntimeOrigin::signed([9; 32].into()),
                 3,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                10_000
             ),
             Error::<Test>::NotEnoughTokenToVote
+        );
+        assert_noop!(
+            Regions::vote_on_region_proposal(
+                RuntimeOrigin::signed([9; 32].into()),
+                3,
+                crate::Vote::Yes,
+                50
+            ),
+            Error::<Test>::BelowMinimumVotingAmount
         );
         run_to_block(40);
         assert_noop!(
             Regions::vote_on_region_proposal(
                 RuntimeOrigin::signed([2; 32].into()),
                 3,
-                crate::Vote::Yes
+                crate::Vote::Yes,
+                200_000
             ),
             Error::<Test>::ProposalExpired
         );
+    })
+}
+
+#[test]
+fn unfreeze_region_voting_token_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            crate::RegionIdentifier::Japan
+        ));
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            0
+        );
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+            crate::Vote::Yes,
+            250_000
+        ));
+        assert_eq!(
+            OngoingRegionProposalVotes::<Test>::get(3).unwrap(),
+            VoteStats {
+                yes_voting_power: 250_000,
+                no_voting_power: 0
+            }
+        );
+        assert_eq!(
+            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into())
+                .unwrap(),
+            crate::VoteRecord {
+                vote: crate::Vote::Yes,
+                power: 250_000
+            }
+        );
+        assert_eq!(Balances::free_balance(&([2; 32].into())), 50_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            250_000
+        );
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            crate::Vote::Yes,
+            150_000
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            3,
+            crate::Vote::No,
+            120_000
+        ));
+        assert_eq!(Balances::free_balance(&([1; 32].into())), 30_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([1; 32].into())),
+            120_000
+        );
+        run_to_block(31);
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ));
+        assert!(UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into()).is_none());
+        assert_eq!(Balances::free_balance(&([2; 32].into())), 300_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            0
+        );
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([1; 32].into()),
+            3,
+        ));
+        assert!(UserRegionVote::<Test>::get::<u16, AccountId>(3, [1; 32].into()).is_none());
+        assert_eq!(Balances::free_balance(&([1; 32].into())), 150_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([1; 32].into())),
+            0
+        );
+    })
+}
+
+#[test]
+fn unfreeze_region_voting_token_fails() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        assert_ok!(XcavateWhitelist::add_admin(
+            RuntimeOrigin::root(),
+            [20; 32].into(),
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor
+        ));
+        assert_ok!(XcavateWhitelist::assign_role(
+            RuntimeOrigin::signed([20; 32].into()),
+            [0; 32].into(),
+            pallet_xcavate_whitelist::Role::RegionalOperator
+        ));
+        assert_noop!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ), Error::<Test>::NoFrozenAmount);
+        assert_ok!(Regions::propose_new_region(
+            RuntimeOrigin::signed([0; 32].into()),
+            crate::RegionIdentifier::Japan
+        ));
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            0
+        );
+        assert_noop!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ), Error::<Test>::NoFrozenAmount);
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+            crate::Vote::Yes,
+            250_000
+        ));
+        assert_eq!(
+            OngoingRegionProposalVotes::<Test>::get(3).unwrap(),
+            VoteStats {
+                yes_voting_power: 250_000,
+                no_voting_power: 0
+            }
+        );
+        assert_eq!(
+            UserRegionVote::<Test>::get::<u16, AccountId>(3, [2; 32].into())
+                .unwrap(),
+            crate::VoteRecord {
+                vote: crate::Vote::Yes,
+                power: 250_000
+            }
+        );
+        assert_eq!(Balances::free_balance(&([2; 32].into())), 50_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([2; 32].into())),
+            250_000
+        );
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+            crate::Vote::Yes,
+            150_000
+        ));
+        assert_ok!(Regions::vote_on_region_proposal(
+            RuntimeOrigin::signed([1; 32].into()),
+            3,
+            crate::Vote::No,
+            120_000
+        ));
+        assert_eq!(Balances::free_balance(&([1; 32].into())), 30_000);
+        assert_eq!(
+            Balances::balance_on_hold(&HoldReason::RegionVotingReserve.into(), &([1; 32].into())),
+            120_000
+        );
+        assert_noop!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ), Error::<Test>::VotingStillOngoing);
+        run_to_block(31);
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ));
+        assert_noop!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
+            3,
+        ), Error::<Test>::NoFrozenAmount);
     })
 }
 
@@ -532,7 +785,8 @@ fn bid_on_region_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Balances::force_set_balance(
@@ -544,6 +798,10 @@ fn bid_on_region_works() {
             RuntimeOrigin::signed([2; 32].into()),
             3,
             10_000
+        ));
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
         ));
         assert_eq!(Balances::free_balance(&([0; 32].into())), 205_000);
         assert_eq!(
@@ -655,7 +913,8 @@ fn bid_on_region_fails() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         assert_noop!(
             Regions::bid_on_region(RuntimeOrigin::signed([0; 32].into()), 3, 1_000),
@@ -679,6 +938,10 @@ fn bid_on_region_fails() {
             3,
             10_000
         ));
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([0; 32].into()),
+            3,
+        ));
         assert_noop!(
             Regions::bid_on_region(RuntimeOrigin::signed([1; 32].into()), 3, 5_000),
             Error::<Test>::BidTooLow,
@@ -699,13 +962,14 @@ fn bid_on_region_fails() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             2,
-            crate::Vote::No
+            crate::Vote::No,
+            120_000
         ));
         assert_eq!(
             OngoingRegionProposalVotes::<Test>::get(2).unwrap(),
             VoteStats {
                 yes_voting_power: 0,
-                no_voting_power: 185_000
+                no_voting_power: 120_000
             }
         );
         run_to_block(61);
@@ -764,7 +1028,8 @@ fn create_new_region_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             4,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(29);
         assert_ok!(Regions::propose_new_region(
@@ -774,7 +1039,8 @@ fn create_new_region_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             2,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            100_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -788,7 +1054,7 @@ fn create_new_region_works() {
             2,
             70_000
         ));
-        assert_eq!(Balances::free_balance(&([0; 32].into())), 30_000);
+        assert_eq!(Balances::free_balance(&([0; 32].into())), 20_000);
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::RegionDepositReserve.into(), &([0; 32].into())),
             170_000
@@ -807,6 +1073,10 @@ fn create_new_region_works() {
             2,
             30,
             Permill::from_percent(3)
+        ));
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([0; 32].into()),
+            4,
         ));
         assert_eq!(Balances::free_balance(&([0; 32].into())), 30_000);
         assert_eq!(
@@ -864,7 +1134,8 @@ fn create_new_region_does_not_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             3,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            20_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -917,7 +1188,8 @@ fn create_new_region_does_not_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             4,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(121);
         assert_noop!(
@@ -1049,13 +1321,18 @@ fn create_new_location_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
             RuntimeOrigin::signed([8; 32].into()),
             1,
             100_000
+        ));
+        assert_ok!(Regions::unfreeze_region_voting_token(
+            RuntimeOrigin::signed([8; 32].into()),
+            1,
         ));
         run_to_block(121);
         assert_ok!(Regions::create_new_region(
@@ -2244,7 +2521,8 @@ fn register_lawyer_fails() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             2,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
@@ -2400,7 +2678,8 @@ fn increment_active_cases_works() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([0; 32].into()),
             1,
-            crate::Vote::Yes
+            crate::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
