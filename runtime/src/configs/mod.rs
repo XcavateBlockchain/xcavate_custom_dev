@@ -730,6 +730,7 @@ parameter_types! {
     pub const HighProposal: Balance = 10_000 * UNIT;
     pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
     pub const AuctionDuration: BlockNumber = 28;
+    pub const MinimumPropertySaleQuorum: Percent = Percent::from_percent(75);
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -746,7 +747,6 @@ impl pallet_property_governance::Config for Runtime {
     type SaleVotingTime = PropertySaleVotingTime;
     type MaxVotesForBlock = MaxVoteForBlock;
     type MinSlashingAmount = MinimumSlashingAmount;
-    type Threshold = VotingThreshold;
     type HighThreshold = HighVotingThreshold;
     type LowProposal = LowProposal;
     type HighProposal = HighProposal;
@@ -758,6 +758,8 @@ impl pallet_property_governance::Config for Runtime {
     type TreasuryId = TreasuryPalletId;
     type PropertyToken = RealEstateAsset;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
+    type MinPropertySaleQuorum = MinimumPropertySaleQuorum;
 }
 
 parameter_types! {

@@ -414,6 +414,7 @@ parameter_types! {
     pub const PropertyGovernancePalletId: PalletId = PalletId(*b"py/gvrnc");
     pub const SalesProposalThreshold: Percent = Percent::from_percent(90);
     pub const AuctionDuration: BlockNumber = 30;
+    pub const MinimumPropertySaleQuorum: Percent = Percent::from_percent(75);
 }
 
 /// Configure the pallet-property-governance in pallets/property-governance.
@@ -430,7 +431,6 @@ impl pallet_property_governance::Config for Test {
     type SaleVotingTime = PropertySaleVotingTime;
     type MaxVotesForBlock = MaxVoteForBlock;
     type MinSlashingAmount = ConstU128<100>;
-    type Threshold = VotingThreshold;
     type HighThreshold = HighVotingThreshold;
     type LowProposal = ConstU128<500>;
     type HighProposal = ConstU128<2000>;
@@ -442,6 +442,8 @@ impl pallet_property_governance::Config for Test {
     type TreasuryId = TreasuryPalletId;
     type PropertyToken = RealEstateAsset;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
+    type MinPropertySaleQuorum = MinimumPropertySaleQuorum;
 }
 
 // Build genesis storage according to the mock runtime.
