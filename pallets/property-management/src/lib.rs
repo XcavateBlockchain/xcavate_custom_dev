@@ -27,7 +27,7 @@ use frame_support::{
 
 use frame_support::sp_runtime::{
     traits::{AccountIdConversion, Zero},
-    Saturating,
+    Saturating, Percent,
 };
 
 use codec::Codec;
@@ -209,6 +209,9 @@ pub mod pallet {
             pallet_xcavate_whitelist::Role,
             Success = Self::AccountId,
         >;
+
+        #[pallet::constant]
+        type MinVotingQuorum: Get<Percent>;
     }
 
     pub type ProposalId = u64;
@@ -695,7 +698,19 @@ pub mod pallet {
             let voting_result = OngoingLettingAgentVoting::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
 
-            if voting_result.yes_voting_power > voting_result.no_voting_power {
+            let asset_details =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id).ok_or(Error::<T>::NoObjectFound)?;
+            let total_votes = voting_result.yes_voting_power
+                .saturating_add(voting_result.no_voting_power);
+            let total_supply = asset_details.token_amount;
+
+            ensure!(total_supply > Zero::zero(), Error::<T>::NoObjectFound);
+
+            let quorum_percent: u32 = T::MinVotingQuorum::get().deconstruct().into();
+
+            let meets_quorum = total_votes.saturating_mul(100u32) > 
+                total_supply.saturating_mul(quorum_percent);
+            if voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum {
                 LettingInfo::<T>::try_mutate(
                     proposal.letting_agent.clone(),
                     |maybe_letting_info| {

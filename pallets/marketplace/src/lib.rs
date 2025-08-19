@@ -32,7 +32,7 @@ use frame_support::{
 
 use frame_support::sp_runtime::{
     traits::{AccountIdConversion, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero},
-    Permill, Saturating,
+    Permill, Saturating, Percent,
 };
 
 use codec::Codec;
@@ -198,6 +198,9 @@ pub mod pallet {
             pallet_xcavate_whitelist::Role,
             Success = Self::AccountId,
         >;
+
+        #[pallet::constant]
+        type MinVotingQuorum: Get<Percent>;
     }
 
     pub type RegionId = u16;
@@ -675,11 +678,7 @@ pub mod pallet {
             let property_price = token_price
                 .checked_mul(&((token_amount as u128).into()))
                 .ok_or(Error::<T>::MultiplyError)?;
-            let deposit_amount = property_price
-                .checked_mul(&T::ListingDeposit::get())
-                .ok_or(Error::<T>::MultiplyError)?
-                .checked_div(&((100u128).into()))
-                .ok_or(Error::<T>::DivisionError)?;
+            let deposit_amount = T::ListingDeposit::get();
 
             // Check signer balance before doing anything
             match <T as pallet::Config>::NativeCurrency::can_withdraw(&signer, deposit_amount) {
@@ -2201,7 +2200,19 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let is_approved = voting_result.yes_voting_power > voting_result.no_voting_power;
+            let asset_details =
+                    <T as pallet::Config>::PropertyToken::get_property_asset_info(property_details.asset_id).ok_or(Error::<T>::NoObjectFound)?;
+            let total_votes = voting_result.yes_voting_power
+                .saturating_add(voting_result.no_voting_power);
+            let total_supply = asset_details.token_amount;
+
+            ensure!(total_supply > Zero::zero(), Error::<T>::NoObjectFound);
+
+            let quorum_percent: u32 = T::MinVotingQuorum::get().deconstruct().into();
+
+            let meets_quorum = total_votes.saturating_mul(100u32) > 
+                total_supply.saturating_mul(quorum_percent);
+            let is_approved = voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum;
             if is_approved {
                 property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();

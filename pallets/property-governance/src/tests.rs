@@ -108,7 +108,7 @@ fn listing_process() {
     ));
 }
 
-fn setting_letting_agent(agent: AccountId, voter: AccountId, vote_amount: u32) {
+fn setting_letting_agent(agent: AccountId, voters: Vec<(AccountId, u32)>) {
     assert_ok!(PropertyManagement::add_letting_agent(
         RuntimeOrigin::signed(agent.clone()),
         3,
@@ -118,21 +118,24 @@ fn setting_letting_agent(agent: AccountId, voter: AccountId, vote_amount: u32) {
         RuntimeOrigin::signed(agent.clone()),
         0
     ));
-    assert_ok!(PropertyManagement::vote_on_letting_agent(
-        RuntimeOrigin::signed(voter.clone()),
-        0,
-        pallet_property_management::Vote::Yes,
-        vote_amount
-    ));
+    for voter in &voters {
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed(voter.0.clone()),
+            0,
+            pallet_property_management::Vote::Yes,
+            voter.1
+        ));
+    }
     let expiry = frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
     frame_system::Pallet::<Test>::set_block_number(expiry);
     assert_ok!(PropertyManagement::finalize_letting_agent(
-        RuntimeOrigin::signed(voter),
+        RuntimeOrigin::signed(voters[0].0.clone()),
         0,
     ));
+    assert_eq!(LettingStorage::<Test>::get(0).unwrap(), agent);
 }
 
-fn lawyer_process(vote_amount: u32) {
+fn lawyer_process(accounts: Vec<(AccountId, u32)>) {
     assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::signed([20; 32].into()),
         [10; 32].into(),
@@ -168,12 +171,14 @@ fn lawyer_process(vote_amount: u32) {
         LegalProperty::SpvSide,
         4_000,
     ));
-    assert_ok!(Marketplace::vote_on_spv_lawyer(
-        RuntimeOrigin::signed([1; 32].into()),
-        0,
-        pallet_marketplace::types::Vote::Yes,
-        vote_amount,
-    ));
+    for account in accounts {
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed(account.0),
+            0,
+            pallet_marketplace::types::Vote::Yes,
+            account.1,
+        ));
+    }
     let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
     run_to_block(expiry);
     assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -225,13 +230,13 @@ fn propose_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([2; 32].into()),
@@ -278,13 +283,13 @@ fn proposal_with_low_amount_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([4; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -358,13 +363,13 @@ fn propose_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_noop!(
             PropertyGovernance::propose(
@@ -426,13 +431,13 @@ fn challenge_against_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -481,7 +486,7 @@ fn challenge_against_letting_agent_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -494,7 +499,7 @@ fn challenge_against_letting_agent_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([2; 32].into()),
@@ -586,13 +591,13 @@ fn vote_on_proposal_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([0; 32].into()),
@@ -796,7 +801,7 @@ fn proposal_pass() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
         assert_ok!(PropertyManagement::distribute_income(
@@ -871,13 +876,13 @@ fn proposal_pass_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([4; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyGovernance::propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -948,13 +953,13 @@ fn proposal_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([4; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1041,13 +1046,13 @@ fn proposal_not_pass_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(60);
+        lawyer_process(vec![([1; 32].into(), 60)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into(), 60);
+        setting_letting_agent([4; 32].into(), vec![([1; 32].into(), 60)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -1130,13 +1135,13 @@ fn vote_on_proposal_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
         assert_noop!(
             PropertyGovernance::vote_on_proposal(
@@ -1257,13 +1262,13 @@ fn unfreeze_proposal_token_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1411,13 +1416,13 @@ fn unfreeze_proposal_token_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([0; 32].into()),
             0,
@@ -1566,13 +1571,13 @@ fn vote_on_challenge_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -1716,7 +1721,7 @@ fn challenge_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(30);
+        lawyer_process(vec![([1; 32].into(), 30), ([2; 32].into(), 70)]);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
@@ -1727,6 +1732,12 @@ fn challenge_pass() {
             pallet_property_management::Vote::Yes,
             30
         ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            pallet_property_management::Vote::Yes,
+            50
+        ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         frame_system::Pallet::<Test>::set_block_number(expiry);
@@ -1736,6 +1747,10 @@ fn challenge_pass() {
         ));
         assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
             RuntimeOrigin::signed([1; 32].into()),
+            0,
+        ));
+        assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
+            RuntimeOrigin::signed([2; 32].into()),
             0,
         ));
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
@@ -1904,6 +1919,12 @@ fn challenge_pass() {
             pallet_property_management::Vote::Yes,
             30
         ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            pallet_property_management::Vote::Yes,
+            30
+        ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
         run_to_block(expiry);
@@ -2007,13 +2028,19 @@ fn challenge_does_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(75);
+        lawyer_process(vec![([1; 32].into(), 75), ([2; 32].into(), 75)]);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
         ));
         assert_ok!(PropertyManagement::vote_on_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
+            0,
+            pallet_property_management::Vote::Yes,
+            75
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
             0,
             pallet_property_management::Vote::Yes,
             75
@@ -2149,7 +2176,7 @@ fn challenge_pass_only_one_agent() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(30);
+        lawyer_process(vec![([1; 32].into(), 30), ([2; 32].into(), 70)]);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([0; 32].into()),
             0
@@ -2159,6 +2186,12 @@ fn challenge_pass_only_one_agent() {
             0,
             pallet_property_management::Vote::Yes,
             30
+        ));
+        assert_ok!(PropertyManagement::vote_on_letting_agent(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            pallet_property_management::Vote::Yes,
+            70
         ));
         let expiry =
             frame_system::Pallet::<Test>::block_number() + LettingAgentVotingDuration::get();
@@ -2281,7 +2314,7 @@ fn challenge_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_noop!(
             PropertyGovernance::challenge_against_letting_agent(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -2294,7 +2327,7 @@ fn challenge_not_pass() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -2352,7 +2385,7 @@ fn vote_on_challenge_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_noop!(
             PropertyGovernance::vote_on_letting_agent_challenge(
                 RuntimeOrigin::signed([1; 32].into()),
@@ -2367,7 +2400,7 @@ fn vote_on_challenge_fails() {
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 100)]);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -2459,13 +2492,13 @@ fn unfreeze_challenge_token_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(PropertyGovernance::challenge_against_letting_agent(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -2592,13 +2625,13 @@ fn unfreeze_challenge_token_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(20);
+        lawyer_process(vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [0; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([0; 32].into(), [1; 32].into(), 20);
+        setting_letting_agent([0; 32].into(), vec![([1; 32].into(), 20), ([3; 32].into(), 40)]);
         assert_noop!(PropertyGovernance::unfreeze_challenge_token(
             RuntimeOrigin::signed([2; 32].into()),
             0,
@@ -2744,13 +2777,13 @@ fn different_proposals() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(60);
+        lawyer_process(vec![([1; 32].into(), 60), ([2; 32].into(), 60)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [4; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([4; 32].into(), [1; 32].into(), 60);
+        setting_letting_agent([4; 32].into(), vec![([1; 32].into(), 60), ([2; 32].into(), 60)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
         assert_ok!(PropertyManagement::distribute_income(
             RuntimeOrigin::signed([4; 32].into()),
@@ -2963,13 +2996,13 @@ fn propose_property_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3046,13 +3079,13 @@ fn propose_property_sale_fails() {
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([1; 32].into()), 0),
             RealEstateAssetError::<Test>::PropertyNotFinalized
         );
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
             PropertyGovernance::propose_property_sale(RuntimeOrigin::signed([6; 32].into()), 0),
@@ -3146,13 +3179,13 @@ fn vote_on_property_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(40);
+        lawyer_process(vec![([1; 32].into(), 40), ([2; 32].into(), 35)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 40), ([2; 32].into(), 35)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3276,13 +3309,13 @@ fn vote_on_property_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(100);
+        lawyer_process(vec![([1; 32].into(), 100)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 100);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 100)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_noop!(
             PropertyGovernance::vote_on_property_sale(
@@ -3372,13 +3405,13 @@ fn unfreeze_sale_proposal_token_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(40);
+        lawyer_process(vec![([1; 32].into(), 40), ([2; 32].into(), 25)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 40), ([2; 32].into(), 25)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -3500,13 +3533,13 @@ fn unfreeze_sale_proposal_token_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(40);
+        lawyer_process(vec![([1; 32].into(), 40), ([2; 32].into(), 35)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 40), ([2; 32].into(), 35)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -3614,13 +3647,13 @@ fn auction_starts() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(60);
+        lawyer_process(vec![([1; 32].into(), 60)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 60)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3731,13 +3764,13 @@ fn proposal_does_not_pass() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(50);
+        lawyer_process(vec![([1; 32].into(), 50), ([2; 32].into(), 15)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 50);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 50), ([2; 32].into(), 15)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -3857,13 +3890,13 @@ fn bid_on_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(60);
+        lawyer_process(vec![([1; 32].into(), 60)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 60)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4056,13 +4089,13 @@ fn bid_on_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(60);
+        lawyer_process(vec![([1; 32].into(), 60)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 60);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 60)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -4178,13 +4211,13 @@ fn lawyer_claim_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -4428,7 +4461,7 @@ fn lawyer_claim_sale_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -4683,6 +4716,12 @@ fn lawyer_claim_sale_fails_2() {
             pallet_marketplace::types::Vote::Yes,
             40
         ));
+        assert_ok!(Marketplace::vote_on_spv_lawyer(
+            RuntimeOrigin::signed([2; 32].into()),
+            0,
+            pallet_marketplace::types::Vote::Yes,
+            25
+        ));
         let expiry = frame_system::Pallet::<Test>::block_number() + LawyerVotingDuration::get();
         run_to_block(expiry);
         assert_ok!(Marketplace::finalize_spv_lawyer(
@@ -4704,7 +4743,7 @@ fn lawyer_claim_sale_fails_2() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 40);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 40), ([2; 32].into(), 25)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -4922,13 +4961,13 @@ fn lawyer_confirm_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -5081,13 +5120,13 @@ fn lawyer_confirm_sale_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [2; 32].into());
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
@@ -5252,13 +5291,13 @@ fn lawyer_confirm_sale_works_deny() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5406,13 +5445,13 @@ fn lawyer_confirm_sale_works_deny_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5582,13 +5621,13 @@ fn lawyer_confirm_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5768,13 +5807,13 @@ fn finalize_sale_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -5930,13 +5969,13 @@ fn finalize_sale_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -6085,13 +6124,13 @@ fn finalize_sale_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(55);
+        lawyer_process(vec![([1; 32].into(), 55)]);
         assert_ok!(XcavateWhitelist::assign_role(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 55);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 55)]);
         assert_ok!(PropertyGovernance::propose_property_sale(
             RuntimeOrigin::signed([1; 32].into()),
             0
@@ -6242,7 +6281,7 @@ fn claim_sale_funds_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(90);
+        lawyer_process(vec![([1; 32].into(), 90)]);
         assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -6252,7 +6291,7 @@ fn claim_sale_funds_works() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 90);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 90)]);
         assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -6432,7 +6471,7 @@ fn claim_sale_funds_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process(90);
+        lawyer_process(vec![([1; 32].into(), 90)]);
         assert_ok!(Marketplace::unfreeze_spv_lawyer_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -6442,7 +6481,7 @@ fn claim_sale_funds_fails() {
             [2; 32].into(),
             pallet_xcavate_whitelist::Role::LettingAgent
         ));
-        setting_letting_agent([2; 32].into(), [1; 32].into(), 90);
+        setting_letting_agent([2; 32].into(), vec![([1; 32].into(), 90)]);
         assert_ok!(PropertyManagement::unfreeze_letting_voting_token(
             RuntimeOrigin::signed([1; 32].into()),
             0,

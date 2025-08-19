@@ -616,6 +616,7 @@ parameter_types! {
     pub const AcceptedPaymentAssets: [u32; 2] = [1337, 1984];
     pub const LawyerVotingDuration: BlockNumber = 20;
     pub const LegalProcessDuration: BlockNumber = 30;
+    pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -643,6 +644,7 @@ impl pallet_marketplace::Config for Runtime {
     type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
 }
 
 parameter_types! {
@@ -714,6 +716,7 @@ impl pallet_property_management::Config for Runtime {
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
 }
 
 parameter_types! {

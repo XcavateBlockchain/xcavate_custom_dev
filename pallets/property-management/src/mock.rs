@@ -344,6 +344,7 @@ parameter_types! {
     pub const MaximumAcceptedAssets: u32 = 2;
     pub const LawyerVotingDuration: BlockNumber = 30;
     pub const LegalProcessDuration: BlockNumber = 150;
+    pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -371,6 +372,7 @@ impl pallet_marketplace::Config for Test {
     type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
 }
 
 parameter_types! {
@@ -399,6 +401,7 @@ impl pallet_property_management::Config for Test {
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
     type PermissionOrigin = EnsurePermission<Self>;
+    type MinVotingQuorum = MinimumVotingQuorum;
 }
 
 // Build genesis storage according to the mock runtime.
