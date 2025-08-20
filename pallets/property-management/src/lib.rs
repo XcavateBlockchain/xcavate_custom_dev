@@ -395,7 +395,7 @@ pub mod pallet {
         /// - `location`: The location number where the letting agent should be added to.
         /// - `letting_agent`: The account of the letting_agent.
         ///
-        /// Emits `LettingAgentAdded` event when succesfful.
+        /// Emits `LettingAgentAdded` event when successful.
         #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::add_letting_agent())]
         pub fn add_letting_agent(
@@ -474,7 +474,7 @@ pub mod pallet {
         /// Parameters:
         /// - `location`: The location where the letting agent should be removed from.
         ///
-        /// Emits `LettingAgentRemoved` event when succesfful.
+        /// Emits `LettingAgentRemoved` event when successful.
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_letting_agent(
@@ -521,7 +521,7 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id`: The asset id of the property.
         ///
-        /// Emits `LettingAgentProposed` event when succesfful.
+        /// Emits `LettingAgentProposed` event when successful.
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::letting_agent_propose())]
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
@@ -585,7 +585,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
-        /// Emits `VotedOnLettingAgent` event when succesfful.
+        /// Emits `VotedOnLettingAgent` event when successful.
         #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent())]
         pub fn vote_on_letting_agent(
@@ -802,7 +802,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         /// - `amount`: The amount of funds that should be distributed.
         ///
-        /// Emits `IncomeDistributed` event when succesfful.
+        /// Emits `IncomeDistributed` event when successful.
         #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::distribute_income())]
         pub fn distribute_income(
@@ -864,7 +864,7 @@ pub mod pallet {
         ///
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
-        /// Emits `WithdrawFunds` event when succesfful.
+        /// Emits `WithdrawFunds` event when successful.
         #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
         pub fn claim_income(

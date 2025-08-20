@@ -371,17 +371,17 @@ pub mod pallet {
     /// Mapping from Region ID to a proposal to remove the region owner.
     #[pallet::storage]
     pub(super) type RegionOwnerProposals<T: Config> =
-        StorageMap<_, Blake2_128Concat, RegionId, RemoveRegionOwnerProposal<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, RemoveRegionOwnerProposal<T>, OptionQuery>;
 
     #[pallet::storage]
     pub(super) type OngoingRegionOwnerProposalVotes<T: Config> =
-        StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats<T>, OptionQuery>;
 
     #[pallet::storage]
     pub(super) type UserRegionOwnerVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        RegionId,
+        ProposalId,
         Blake2_128Concat,
         T::AccountId,
         VoteRecord<T>,
@@ -408,7 +408,6 @@ pub mod pallet {
         ValueQuery,
     >;
 
-    /// !!!!To be removed!!!!
     /// Stores in which region a lawyer is active.
     #[pallet::storage]
     pub type RealEstateLawyer<T: Config> =
@@ -421,7 +420,7 @@ pub mod pallet {
     #[pallet::storage]
     pub type RegionProposalId<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, ProposalId, OptionQuery>;
-    
+
     #[pallet::storage]
     pub type RegionOwnerProposalId<T: Config> =
         StorageMap<_, Blake2_128Concat, RegionId, ProposalId, OptionQuery>;
@@ -433,10 +432,12 @@ pub mod pallet {
         RegionProposed {
             region_id: RegionId,
             proposer: T::AccountId,
+            proposal_id: ProposalId,
         },
         /// Voted on region proposal.
         VotedOnRegionProposal {
             region_id: RegionId,
+            proposal_id: ProposalId,
             voter: T::AccountId,
             vote: Vote,
             voting_power: T::Balance,
@@ -492,12 +493,14 @@ pub mod pallet {
         /// A proposal to remove the region owner has been proposed.
         RemoveRegionOwnerProposed {
             region_id: RegionId,
+            proposal_id: ProposalId,
             proposer: T::AccountId,
             proposal_expiry: BlockNumberFor<T>,
         },
         /// Voted on proposal to remove region owner.
         VotedOnRegionOwnerProposal {
             region_id: RegionId,
+            proposal_id: ProposalId,
             voter: T::AccountId,
             vote: Vote,
             voting_power: T::Balance,
@@ -563,8 +566,9 @@ pub mod pallet {
             new_active_cases: u32,
         },
         /// A user has unfrozen his token.
-        TokenUnfrozen {
+        TokenUnlocked {
             region_id: RegionId,
+            proposal_id: ProposalId,
             voter: T::AccountId,
             amount: T::Balance,
         },
@@ -691,7 +695,7 @@ pub mod pallet {
         /// Parameters:
         /// - `region_identifier`: The id of the region the caller is proposing.
         ///
-        /// Emits `RegionProposed` event when succesfful.
+        /// Emits `RegionProposed` event when successful.
         #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_new_region())]
         pub fn propose_new_region(
@@ -752,6 +756,7 @@ pub mod pallet {
             Self::deposit_event(Event::RegionProposed {
                 region_id,
                 proposer: signer,
+                proposal_id,
             });
             Ok(())
         }
@@ -763,22 +768,23 @@ pub mod pallet {
         /// Parameters:
         /// - `region_id`: Id of the region.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount that the caller is using for voting.
         ///
-        /// Emits `VotedOnRegionProposal` event when succesfful.
+        /// Emits `VotedOnRegionProposal` event when successful.
         #[pallet::call_index(1)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_region_proposal())]
         pub fn vote_on_region_proposal(
             origin: OriginFor<T>,
             region_id: RegionId,
             vote: Vote,
-            amount: T::Balance,
+            #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-            let proposal_id = RegionProposalId::<T>::get(region_id)
-                .ok_or(Error::<T>::NotOngoing)?;
+            let proposal_id =
+                RegionProposalId::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
             let region_proposal =
                 RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -857,6 +863,7 @@ pub mod pallet {
             })?;
             Self::deposit_event(Event::VotedOnRegionProposal {
                 region_id,
+                proposal_id,
                 voter: signer,
                 vote,
                 voting_power: amount,
@@ -866,9 +873,17 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(27)]
+        /// Lets a voter unlock his locked token after voting on a region.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the region proposal.
+        ///
+        /// Emits `TokenUnlocked` event when successful.
+        #[pallet::call_index(2)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn unfreeze_region_voting_token(
+        pub fn unlock_region_voting_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
         ) -> DispatchResult {
@@ -893,8 +908,9 @@ pub mod pallet {
 
             UserRegionVote::<T>::remove(proposal_id, &signer);
 
-            Self::deposit_event(Event::TokenUnfrozen {
+            Self::deposit_event(Event::TokenUnlocked {
                 region_id: vote_record.region_id,
+                proposal_id,
                 voter: signer,
                 amount: vote_record.power,
             });
@@ -909,13 +925,13 @@ pub mod pallet {
         /// - `region_id`: Id of the region.
         /// - `amount`: The amount that the caller is willing to bid and to have locked.
         ///
-        /// Emits `BidSuccessfullyPlaced` event when succesfful.
-        #[pallet::call_index(2)]
+        /// Emits `BidSuccessfullyPlaced` event when successful.
+        #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_region())]
         pub fn bid_on_region(
             origin: OriginFor<T>,
             region_id: RegionId,
-            amount: T::Balance,
+            #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
@@ -923,7 +939,8 @@ pub mod pallet {
             )?;
 
             if let Some(proposal_id) = RegionProposalId::<T>::get(region_id) {
-                let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+                let region_proposal =
+                    RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
                 let current_block_number = <frame_system::Pallet<T>>::block_number();
                 ensure!(
                     region_proposal.proposal_expiry <= current_block_number,
@@ -1003,8 +1020,8 @@ pub mod pallet {
         /// - `listing_duration`: Duration of a listing in this region.
         /// - `tax`: Tax percentage for selling a property in this region.
         ///
-        /// Emits `RegionCreated` event when succesfful.
-        #[pallet::call_index(3)]
+        /// Emits `RegionCreated` event when successful.
+        #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
         pub fn create_new_region(
             origin: OriginFor<T>,
@@ -1085,8 +1102,8 @@ pub mod pallet {
         /// - `region_id`: Region in where the listing duration should be changed.
         /// - `listing_duration`: New duration of a listing in this region.
         ///
-        /// Emits `ListingDurationChanged` event when succesfful.
-        #[pallet::call_index(4)]
+        /// Emits `ListingDurationChanged` event when successful.
+        #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::adjust_listing_duration())]
         pub fn adjust_listing_duration(
             origin: OriginFor<T>,
@@ -1129,8 +1146,8 @@ pub mod pallet {
         /// - `region_id`: Region in where the tax should be changed.
         /// - `new_tax`: New tax for a property sell in this region.
         ///
-        /// Emits `RegionTaxChanged` event when succesfful.
-        #[pallet::call_index(5)]
+        /// Emits `RegionTaxChanged` event when successful.
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::adjust_region_tax())]
         pub fn adjust_region_tax(
             origin: OriginFor<T>,
@@ -1162,8 +1179,8 @@ pub mod pallet {
         /// - `region_id`: The region where the new location should be created.
         /// - `location`: The postcode of the new location.
         ///
-        /// Emits `LocationCreated` event when succesfful.
-        #[pallet::call_index(6)]
+        /// Emits `LocationCreated` event when successful.
+        #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_location())]
         pub fn create_new_location(
             origin: OriginFor<T>,
@@ -1225,8 +1242,8 @@ pub mod pallet {
         /// Parameters:
         /// - `region_id`: The region where the region owner should be removed.
         ///
-        /// Emits `RemoveRegionOwnerProposed` event when succesfful.
-        #[pallet::call_index(7)]
+        /// Emits `RemoveRegionOwnerProposed` event when successful.
+        #[pallet::call_index(8)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_remove_regional_operator())]
         pub fn propose_remove_regional_operator(
             origin: OriginFor<T>,
@@ -1241,7 +1258,7 @@ pub mod pallet {
                 Error::<T>::RegionUnknown
             );
             ensure!(
-                RegionOwnerProposals::<T>::get(region_id).is_none(),
+                RegionOwnerProposalId::<T>::get(region_id).is_none(),
                 Error::<T>::ProposalAlreadyOngoing
             );
             let deposit_amount = T::RegionOwnerDisputeDeposit::get();
@@ -1250,6 +1267,7 @@ pub mod pallet {
                 &signer,
                 deposit_amount,
             )?;
+            let proposal_id = ProposalCounter::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(T::RegionOperatorVotingTime::get());
@@ -1268,10 +1286,16 @@ pub mod pallet {
                 yes_voting_power: Zero::zero(),
                 no_voting_power: Zero::zero(),
             };
-            RegionOwnerProposals::<T>::insert(region_id, proposal);
-            OngoingRegionOwnerProposalVotes::<T>::insert(region_id, vote_stats);
+            RegionOwnerProposalId::<T>::insert(region_id, proposal_id);
+            RegionOwnerProposals::<T>::insert(proposal_id, proposal);
+            OngoingRegionOwnerProposalVotes::<T>::insert(proposal_id, vote_stats);
+            let next_proposal_id = proposal_id
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ProposalCounter::<T>::put(next_proposal_id);
             Self::deposit_event(Event::<T>::RemoveRegionOwnerProposed {
                 region_id,
+                proposal_id,
                 proposer: signer,
                 proposal_expiry: expiry_block,
             });
@@ -1285,31 +1309,30 @@ pub mod pallet {
         /// Parameters:
         /// - `region_id`: The region where the region owner should be removed.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount that the caller is using for voting.
         ///
-        /// Emits `VotedOnRegionOwnerProposal` event when succesfful.
-        #[pallet::call_index(8)]
+        /// Emits `VotedOnRegionOwnerProposal` event when successful.
+        #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_remove_owner_proposal())]
         pub fn vote_on_remove_owner_proposal(
             origin: OriginFor<T>,
             region_id: RegionId,
             vote: Vote,
-            amount: T::Balance,
+            #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-
+            let proposal_id =
+                RegionOwnerProposalId::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
             let free_balance = T::NativeCurrency::balance(&signer);
             let held_balance = T::NativeCurrency::balance_on_hold(
                 &HoldReason::RegionOperatorRemovalVoting.into(),
                 &signer,
             );
             let total_available = free_balance.saturating_add(held_balance);
-            ensure!(
-                total_available >= amount,
-                Error::<T>::NotEnoughTokenToVote
-            );
+            ensure!(total_available >= amount, Error::<T>::NotEnoughTokenToVote);
             ensure!(
                 amount >= T::MinimumVotingAmount::get(),
                 Error::<T>::BelowMinimumVotingAmount
@@ -1318,9 +1341,9 @@ pub mod pallet {
             let mut new_yes_power = Default::default();
             let mut new_no_power = Default::default();
 
-            OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
+            OngoingRegionOwnerProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserRegionOwnerVote::<T>::try_mutate(region_id, &signer, |maybe_vote_record| {
+                UserRegionOwnerVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
                     if let Some(previous_vote) = maybe_vote_record.take() {
                         T::NativeCurrency::release(
                             &HoldReason::RegionOperatorRemovalVoting.into(),
@@ -1375,6 +1398,7 @@ pub mod pallet {
             })?;
             Self::deposit_event(Event::VotedOnRegionOwnerProposal {
                 region_id,
+                proposal_id,
                 voter: signer,
                 vote,
                 voting_power: amount,
@@ -1384,17 +1408,25 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(28)]
+        /// Lets a voter unlock his locked token after voting on removal of a regional operator.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the region proposal.
+        ///
+        /// Emits `TokenUnlocked` event when successful.
+        #[pallet::call_index(10)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn unfreeze_region_onwer_removal_voting_token(
+        pub fn unlock_region_onwer_removal_voting_token(
             origin: OriginFor<T>,
-            region_id: RegionId,
+            proposal_id: ProposalId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
-            let vote_record =
-                UserRegionOwnerVote::<T>::get(region_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+            let vote_record = UserRegionOwnerVote::<T>::get(proposal_id, &signer)
+                .ok_or(Error::<T>::NoFrozenAmount)?;
 
-            if let Some(proposal) = RegionOwnerProposals::<T>::get(region_id) {
+            if let Some(proposal) = RegionOwnerProposals::<T>::get(proposal_id) {
                 let current_block_number = frame_system::Pallet::<T>::block_number();
                 ensure!(
                     proposal.proposal_expiry <= current_block_number,
@@ -1409,10 +1441,11 @@ pub mod pallet {
                 Precision::Exact,
             )?;
 
-            UserRegionOwnerVote::<T>::remove(region_id, &signer);
+            UserRegionOwnerVote::<T>::remove(proposal_id, &signer);
 
-            Self::deposit_event(Event::TokenUnfrozen {
-                region_id,
+            Self::deposit_event(Event::TokenUnlocked {
+                region_id: vote_record.region_id,
+                proposal_id,
                 voter: signer,
                 amount: vote_record.power,
             });
@@ -1427,13 +1460,13 @@ pub mod pallet {
         /// - `region_id`: The region where the region owner should be removed.
         /// - `amount`: The amount that the caller is willing to bid and to have locked.
         ///
-        /// Emits `ReplacementBidSuccessfullyPlaced` event when succesfful.
-        #[pallet::call_index(9)]
+        /// Emits `ReplacementBidSuccessfullyPlaced` event when successful.
+        #[pallet::call_index(11)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_region_replacement())]
         pub fn bid_on_region_replacement(
             origin: OriginFor<T>,
             region_id: RegionId,
-            amount: T::Balance,
+            #[pallet::compact] amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
@@ -1534,8 +1567,8 @@ pub mod pallet {
         /// Parameters:
         /// - `region_id`: The region where the region wants to resign.
         ///
-        /// Emits `RegionOwnerResignationInitiated` event when succesfful.
-        #[pallet::call_index(10)]
+        /// Emits `RegionOwnerResignationInitiated` event when successful.
+        #[pallet::call_index(12)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::initiate_region_owner_resignation())]
         pub fn initiate_region_owner_resignation(
             origin: OriginFor<T>,
@@ -1576,7 +1609,7 @@ pub mod pallet {
         /// Parameters:
         /// - `lawyer`: The lawyer that should be registered.
         ///
-        /// Emits `LawyerRegistered` event when succesfful.
+        /// Emits `LawyerRegistered` event when successful.
         #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::register_lawyer())]
         pub fn register_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
@@ -1619,7 +1652,7 @@ pub mod pallet {
         /// Parameters:
         /// - `lawyer`: The lawyer that should be runegistered.
         ///
-        /// Emits `LawyerUnregistered` event when succesfful.
+        /// Emits `LawyerUnregistered` event when successful.
         #[pallet::call_index(14)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unregister_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
@@ -1668,21 +1701,24 @@ pub mod pallet {
             region_id: RegionId,
             current_block_number: BlockNumberFor<T>,
         ) -> Result<bool, DispatchError> {
-            let proposal_id = RegionProposalId::<T>::take(region_id)
-                .ok_or(Error::<T>::NotOngoing)?;
+            let proposal_id =
+                RegionProposalId::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
             let voting_results =
                 OngoingRegionProposalVotes::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let proposal = RegionProposals::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
-            let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results
                 .yes_voting_power
                 .checked_add(&voting_results.no_voting_power)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
-            let yes_votes_percentage =
-                Percent::from_rational(voting_results.yes_voting_power, total_voting_amount);
+
+            let threshold_percent: T::Balance = T::RegionThreshold::get().deconstruct().into();
+
+            let meets_threshold = !total_voting_amount.is_zero()
+                && voting_results.yes_voting_power.saturating_mul(100u32.into()) >= total_voting_amount.saturating_mul(threshold_percent);
+
             let auction_expiry_block =
                 current_block_number.saturating_add(T::RegionAuctionTime::get());
-            if yes_votes_percentage > required_threshold {
+            if meets_threshold {
                 T::NativeCurrency::release(
                     &HoldReason::RegionProposalReserve.into(),
                     &proposal.proposer,
@@ -1726,23 +1762,24 @@ pub mod pallet {
 
         /// Processes a proposal for removing a regional operator.
         fn finish_region_owner_proposal(region_id: RegionId) -> DispatchResult {
+            let proposal_id =
+                RegionOwnerProposalId::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
             let proposal =
-                RegionOwnerProposals::<T>::take(region_id).ok_or(Error::<T>::ProposalNotFound)?;
-            let voting_result = OngoingRegionOwnerProposalVotes::<T>::take(region_id)
+                RegionOwnerProposals::<T>::take(proposal_id).ok_or(Error::<T>::ProposalNotFound)?;
+            let voting_result = OngoingRegionOwnerProposalVotes::<T>::take(proposal_id)
                 .ok_or(Error::<T>::ProposalNotFound)?;
 
-            let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_result
                 .yes_voting_power
                 .checked_add(&voting_result.no_voting_power)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
-            let yes_votes_percentage = if total_voting_amount.is_zero() {
-                Percent::from_percent(0)
-            } else {
-                Percent::from_rational(voting_result.yes_voting_power, total_voting_amount)
-            };
 
-            if yes_votes_percentage > required_threshold {
+            let threshold_percent: T::Balance = T::RegionThreshold::get().deconstruct().into();
+
+            let meets_threshold = !total_voting_amount.is_zero()
+                && voting_result.yes_voting_power.saturating_mul(100u32.into()) >= total_voting_amount.saturating_mul(threshold_percent);
+
+            if meets_threshold {
                 let updated_strikes = Self::slash_region_owner(region_id)?;
                 if updated_strikes >= 3 {
                     Self::enable_region_owner_change(region_id)?;

@@ -113,7 +113,7 @@ pub mod pallet {
         /// Parameters:
         /// - `user`: The address of the accounts that is added as an admin.
         ///
-        /// Emits `RoleAssigned` event when succesfful
+        /// Emits `RoleAssigned` event when successful
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn add_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
@@ -134,7 +134,7 @@ pub mod pallet {
         /// Parameters:
         /// - `user`: The address of the accounts that is added as an admin.
         ///
-        /// Emits `RoleAssigned` event when succesfful
+        /// Emits `RoleAssigned` event when successful
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
@@ -156,7 +156,7 @@ pub mod pallet {
         /// - `user`: The address of the accounts that gets a new role.
         /// - `role`: The role that is getting assigned to the user.
         ///
-        /// Emits `RoleAssigned` event when succesfful
+        /// Emits `RoleAssigned` event when successful
         #[pallet::call_index(2)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn assign_role(
@@ -186,7 +186,7 @@ pub mod pallet {
         /// - `user`: The address of the accounts that gets a role removed.
         /// - `role`: The role that is getting removed from the user.
         ///
-        /// Emits `UserRemoved` event when succesfful
+        /// Emits `UserRemoved` event when successful
         #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_role(

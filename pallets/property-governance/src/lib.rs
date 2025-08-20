@@ -745,7 +745,7 @@ pub mod pallet {
         /// - `amount`: The amount the letting agent is asking for.
         /// - `data`: The data regarding this proposal.
         ///
-        /// Emits `Proposed` event when succesfful.
+        /// Emits `Proposed` event when successful.
         #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::propose())]
         pub fn propose(
@@ -818,7 +818,7 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id`: The asset id of the property.
         ///
-        /// Emits `Challenge` event when succesfful.
+        /// Emits `Challenge` event when successful.
         #[pallet::call_index(1)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::challenge_against_letting_agent())]
         pub fn challenge_against_letting_agent(
@@ -880,7 +880,7 @@ pub mod pallet {
         /// - `proposal_id`: The index of the proposal.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
-        /// Emits `VotedOnProposal` event when succesfful.
+        /// Emits `VotedOnProposal` event when successful.
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_proposal())]
         pub fn vote_on_proposal(
@@ -1004,7 +1004,7 @@ pub mod pallet {
         /// - `asset_id: u32`: The index of the challenge.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
-        /// Emits `VotedOnChallenge` event when succesfful.
+        /// Emits `VotedOnChallenge` event when successful.
         #[pallet::call_index(3)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent_challenge())]
         pub fn vote_on_letting_agent_challenge(
@@ -1128,7 +1128,7 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id`: The asset id of the property.
         ///
-        /// Emits `PropertySaleProposed` event when succesfful.
+        /// Emits `PropertySaleProposed` event when successful.
         #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_property_sale())]
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
@@ -1188,7 +1188,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
-        /// Emits `VotedOnPropertySaleProposal` event when succesfful.
+        /// Emits `VotedOnPropertySaleProposal` event when successful.
         #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_property_sale())]
         pub fn vote_on_property_sale(
@@ -1314,7 +1314,7 @@ pub mod pallet {
         /// - `price`: Price that the buyer wants to pay.
         /// - `payment_asset`: Asset in which the caller wants to pay.
         ///
-        /// Emits `BidSuccessfullyPlaced` event when succesfful.
+        /// Emits `BidSuccessfullyPlaced` event when successful.
         #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_sale())]
         pub fn bid_on_sale(
@@ -1380,7 +1380,7 @@ pub mod pallet {
         /// - `legal_side`: The side that the lawyer wants to represent.
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
-        /// Emits `SalesLawyerSet` event when succesfful.
+        /// Emits `SalesLawyerSet` event when successful.
         #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_sale())]
         pub fn lawyer_claim_sale(
@@ -1594,7 +1594,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         /// - `payment_asset`: Asset in which the lawyer wants to pay.
         ///
-        /// Emits `SaleFinalized` event when succesfful.
+        /// Emits `SaleFinalized` event when successful.
         #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_sale())]
         pub fn finalize_sale(
@@ -1711,7 +1711,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         /// - `payment_asset`: Asset id the caller wants to withdraw funds in.
         ///
-        /// Emits `SaleFundsClaimed` event when succesfful.
+        /// Emits `SaleFundsClaimed` event when successful.
         #[pallet::call_index(10)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_sale_funds())]
         pub fn claim_sale_funds(

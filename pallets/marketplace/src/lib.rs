@@ -627,7 +627,7 @@ pub mod pallet {
         /// - `data`: The Metadata of the nft.
         /// - `tax_paid_by_developer`: Bool if the tax is paid by the real estate developer or not.
         ///
-        /// Emits `ObjectListed` event when succesfful
+        /// Emits `ObjectListed` event when successful
         #[pallet::call_index(0)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object(
             <T as pallet_nfts::Config>::StringLimit::get()
@@ -750,7 +750,7 @@ pub mod pallet {
         /// - `amount`: The amount of token that the investor wants to buy.
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
-        /// Emits `PropertyTokenBought` event when succesfful.
+        /// Emits `PropertyTokenBought` event when successful.
         #[pallet::call_index(1)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_property_token_all_token(
             <T as pallet::Config>::MaxPropertyToken::get(),
@@ -934,7 +934,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to claim token from.
         ///
-        /// Emits `PropertyTokenClaimed` event when succesfful.
+        /// Emits `PropertyTokenClaimed` event when successful.
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_property_token())]
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1065,7 +1065,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the spv has been created for.
         ///
-        /// Emits `SpvCreated` event when succesfful.
+        /// Emits `SpvCreated` event when successful.
         #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1099,7 +1099,7 @@ pub mod pallet {
         /// - `token_price`: The price of a single token.
         /// - `amount`: The amount of token of the real estate object that should be listed.
         ///
-        /// Emits `TokenRelisted` event when succesfful
+        /// Emits `TokenRelisted` event when successful
         #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
         pub fn relist_token(
@@ -1158,7 +1158,7 @@ pub mod pallet {
         /// - `amount`: The amount of token the investor wants to buy.
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
-        /// Emits `RelistedTokenBought` event when succesfful.
+        /// Emits `RelistedTokenBought` event when successful.
         #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
         pub fn buy_relisted_token(
@@ -1205,7 +1205,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
-        /// Emits `InvestmentCancelled` event when succesfful.
+        /// Emits `InvestmentCancelled` event when successful.
         #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_property_purchase())]
         pub fn cancel_property_purchase(
@@ -1271,7 +1271,7 @@ pub mod pallet {
         /// - `amount`: The amount of token that the investor wants to buy.
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
-        /// Emits `OfferCreated` event when succesfful.
+        /// Emits `OfferCreated` event when successful.
         #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
         pub fn make_offer(
@@ -1336,8 +1336,8 @@ pub mod pallet {
         /// - `offeror`: AccountId of the person that the seller wants to handle the offer from.
         /// - `offer`: Enum for offer which is either Accept or Reject.
         ///
-        /// Emits `OfferAccepted` event when offer gets accepted succesffully.
-        /// Emits `OfferRejected` event when offer gets rejected succesffully.
+        /// Emits `OfferAccepted` event when offer gets accepted successfully.
+        /// Emits `OfferRejected` event when offer gets rejected successfully.
         #[pallet::call_index(8)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
         pub fn handle_offer(
@@ -1404,7 +1404,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
-        /// Emits `OfferCancelled` event when succesfful.
+        /// Emits `OfferCancelled` event when successful.
         #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1436,7 +1436,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to withdraw from.
         ///
-        /// Emits `RejectedFundsWithdrawn` event when succesfful.
+        /// Emits `RejectedFundsWithdrawn` event when successful.
         #[pallet::call_index(10)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_rejected())]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1512,7 +1512,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to withdraw from.
         ///
-        /// Emits `ExpiredFundsWithdrawn` event when succesfful.
+        /// Emits `ExpiredFundsWithdrawn` event when successful.
         #[pallet::call_index(11)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_legal_process_expired(
@@ -1625,7 +1625,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
-        /// Emits `ExpiredFundsWithdrawn` event when succesfful.
+        /// Emits `ExpiredFundsWithdrawn` event when successful.
         #[pallet::call_index(12)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_expired())]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1698,7 +1698,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
         ///
-        /// Emits `DeveloperDepositReturned` event when succesfful.
+        /// Emits `DeveloperDepositReturned` event when successful.
         #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_deposit_unsold())]
         pub fn withdraw_deposit_unsold(
@@ -1766,7 +1766,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the seller wants to update.
         /// - `new_price`: The new price of the object.
         ///
-        /// Emits `ObjectUpdated` event when succesfful.
+        /// Emits `ObjectUpdated` event when successful.
         #[pallet::call_index(14)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
         pub fn upgrade_object(
@@ -1816,7 +1816,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing that the seller wants to delist.
         ///
-        /// Emits `ListingDelisted` event when succesfful.
+        /// Emits `ListingDelisted` event when successful.
         #[pallet::call_index(15)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -1851,7 +1851,7 @@ pub mod pallet {
         /// - `legal_side`: The side that the lawyer wants to represent.
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
-        /// Emits `DeveloperLawyerProposed` event or `SpvLawyerProposed` event when succesfful.
+        /// Emits `DeveloperLawyerProposed` event or `SpvLawyerProposed` event when successful.
         #[pallet::call_index(16)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_property())]
         pub fn lawyer_claim_property(
@@ -1989,7 +1989,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
         ///
-        /// Emits `VotedOnLawyer` event when succesfful.
+        /// Emits `VotedOnLawyer` event when successful.
         #[pallet::call_index(17)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_spv_lawyer())]
         pub fn vote_on_spv_lawyer(
@@ -2098,7 +2098,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         /// - `approve`: Approves or rejects the lawyer.
         ///
-        /// Emits `RealEstateLawyerProposalFinalized` event when succesfful.
+        /// Emits `RealEstateLawyerProposalFinalized` event when successful.
         #[pallet::call_index(18)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_developer_lawyer())]
         pub fn approve_developer_lawyer(
@@ -2175,7 +2175,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing from the property.
         ///
-        /// Emits `SpvLawyerVoteFinalized` event when succesfful.
+        /// Emits `SpvLawyerVoteFinalized` event when successful.
         #[pallet::call_index(19)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_spv_lawyer())]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -2311,7 +2311,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing from the property.
         ///
-        /// Emits `LawyerRemovedFromCase` event when succesfful.
+        /// Emits `LawyerRemovedFromCase` event when successful.
         #[pallet::call_index(20)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
@@ -2361,7 +2361,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         /// - `approve`: Approves or Rejects the case.
         ///
-        /// Emits `DocumentsConfirmed` event when succesfful.
+        /// Emits `DocumentsConfirmed` event when successful.
         #[pallet::call_index(21)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents(
             <T as pallet::Config>::MaxPropertyToken::get(),
@@ -2470,7 +2470,7 @@ pub mod pallet {
         /// - `receiver`: AccountId of the person that the seller wants to handle the offer from.
         /// - `token_amount`: The amount of token the sender wants to send.
         ///
-        /// Emits `DocumentsConfirmed` event when succesfful.
+        /// Emits `DocumentsConfirmed` event when successful.
         #[pallet::call_index(22)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::send_property_token())]
         pub fn send_property_token(
