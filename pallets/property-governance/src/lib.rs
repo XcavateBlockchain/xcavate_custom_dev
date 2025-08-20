@@ -879,6 +879,7 @@ pub mod pallet {
         /// Parameters:
         /// - `proposal_id`: The index of the proposal.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount of property token that the caller is using for voting.
         ///
         /// Emits `VotedOnProposal` event when successful.
         #[pallet::call_index(2)]
@@ -963,7 +964,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(27)]
+        /// Lets a voter unlock his locked token after voting on a proposal.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the proposal.
+        ///
+        /// Emits `TokenUnfrozen` event when successful.
+        #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_proposal_token(
             origin: OriginFor<T>,
@@ -1003,9 +1012,10 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id: u32`: The index of the challenge.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount of property token that the caller is using for voting.
         ///
         /// Emits `VotedOnChallenge` event when successful.
-        #[pallet::call_index(3)]
+        #[pallet::call_index(4)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_letting_agent_challenge())]
         pub fn vote_on_letting_agent_challenge(
             origin: OriginFor<T>,
@@ -1087,7 +1097,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(28)]
+        /// Lets a voter unlock his locked token after voting on a letting agent challenge.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the letting agent challenge.
+        ///
+        /// Emits `TokenUnfrozen` event when successful.
+        #[pallet::call_index(5)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_challenge_token(
             origin: OriginFor<T>,
@@ -1129,7 +1147,7 @@ pub mod pallet {
         /// - `asset_id`: The asset id of the property.
         ///
         /// Emits `PropertySaleProposed` event when successful.
-        #[pallet::call_index(4)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::propose_property_sale())]
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1187,9 +1205,10 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id`: The asset id of the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount of property token that the caller is using for voting.
         ///
         /// Emits `VotedOnPropertySaleProposal` event when successful.
-        #[pallet::call_index(5)]
+        #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_property_sale())]
         pub fn vote_on_property_sale(
             origin: OriginFor<T>,
@@ -1272,7 +1291,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(29)]
+        /// Lets a voter unlock his locked token after voting on a sale proposal.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the sale proposal.
+        ///
+        /// Emits `TokenUnfrozen` event when successful.
+        #[pallet::call_index(8)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_sale_proposal_token(
             origin: OriginFor<T>,
@@ -1315,7 +1342,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the caller wants to pay.
         ///
         /// Emits `BidSuccessfullyPlaced` event when successful.
-        #[pallet::call_index(6)]
+        #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::bid_on_sale())]
         pub fn bid_on_sale(
             origin: OriginFor<T>,
@@ -1381,7 +1408,7 @@ pub mod pallet {
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
         /// Emits `SalesLawyerSet` event when successful.
-        #[pallet::call_index(7)]
+        #[pallet::call_index(10)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_sale())]
         pub fn lawyer_claim_sale(
             origin: OriginFor<T>,
@@ -1457,7 +1484,7 @@ pub mod pallet {
         ///
         /// Emits `LawyerApprovesSale` event when approved successfully.
         /// Emits `LawyerRejectsSale` event when rejected successfully.
-        #[pallet::call_index(8)]
+        #[pallet::call_index(11)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_sale())]
         pub fn lawyer_confirm_sale(
             origin: OriginFor<T>,
@@ -1595,7 +1622,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the lawyer wants to pay.
         ///
         /// Emits `SaleFinalized` event when successful.
-        #[pallet::call_index(9)]
+        #[pallet::call_index(12)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_sale())]
         pub fn finalize_sale(
             origin: OriginFor<T>,
@@ -1712,7 +1739,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset id the caller wants to withdraw funds in.
         ///
         /// Emits `SaleFundsClaimed` event when successful.
-        #[pallet::call_index(10)]
+        #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_sale_funds())]
         pub fn claim_sale_funds(
             origin: OriginFor<T>,

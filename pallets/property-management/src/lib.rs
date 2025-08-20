@@ -584,6 +584,7 @@ pub mod pallet {
         /// Parameters:
         /// - `asset_id`: The asset id of the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount of property token that the investor is using for voting.
         ///
         /// Emits `VotedOnLettingAgent` event when successful.
         #[pallet::call_index(3)]
@@ -758,7 +759,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(27)]
+        /// Lets a voter unlock his locked token after voting on a letting agent.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the letting agent proposal.
+        ///
+        /// Emits `TokenUnfrozen` event when successful.
+        #[pallet::call_index(5)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_letting_voting_token(
             origin: OriginFor<T>,
@@ -803,7 +812,7 @@ pub mod pallet {
         /// - `amount`: The amount of funds that should be distributed.
         ///
         /// Emits `IncomeDistributed` event when successful.
-        #[pallet::call_index(5)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::distribute_income())]
         pub fn distribute_income(
             origin: OriginFor<T>,
@@ -865,7 +874,7 @@ pub mod pallet {
         /// The origin must be Signed and the sender must have sufficient funds free.
         ///
         /// Emits `WithdrawFunds` event when successful.
-        #[pallet::call_index(6)]
+        #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
         pub fn claim_income(
             origin: OriginFor<T>,

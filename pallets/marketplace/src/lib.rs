@@ -1988,6 +1988,7 @@ pub mod pallet {
         /// Parameters:
         /// - `listing_id`: The listing from the property.
         /// - `vote`: Must be either a Yes vote or a No vote.
+        /// - `amount`: The amount of property token that the investor is using for voting.
         ///
         /// Emits `VotedOnLawyer` event when successful.
         #[pallet::call_index(17)]
@@ -2268,7 +2269,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(27)]
+        /// Lets a voter unlock his locked token after voting on a spv lawyer.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `proposal_id`: Id of the spv lawyer proposal.
+        ///
+        /// Emits `TokenUnfrozen` event when successful.
+        #[pallet::call_index(20)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_spv_lawyer_token(
             origin: OriginFor<T>,
@@ -2312,7 +2321,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         ///
         /// Emits `LawyerRemovedFromCase` event when successful.
-        #[pallet::call_index(20)]
+        #[pallet::call_index(21)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -2362,7 +2371,7 @@ pub mod pallet {
         /// - `approve`: Approves or Rejects the case.
         ///
         /// Emits `DocumentsConfirmed` event when successful.
-        #[pallet::call_index(21)]
+        #[pallet::call_index(22)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents(
             <T as pallet::Config>::MaxPropertyToken::get(),
         ))]
@@ -2471,7 +2480,7 @@ pub mod pallet {
         /// - `token_amount`: The amount of token the sender wants to send.
         ///
         /// Emits `DocumentsConfirmed` event when successful.
-        #[pallet::call_index(22)]
+        #[pallet::call_index(23)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::send_property_token())]
         pub fn send_property_token(
             origin: OriginFor<T>,
