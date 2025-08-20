@@ -51,7 +51,8 @@ fn new_region_helper() {
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([8; 32].into()),
         3,
-        pallet_regions::Vote::Yes
+        pallet_regions::Vote::Yes,
+        10_000
     ));
     run_to_block(31);
     assert_ok!(Regions::bid_on_region(
@@ -1661,7 +1662,8 @@ fn claim_property_fails() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             2,
-            pallet_regions::Vote::Yes
+            pallet_regions::Vote::Yes,
+            10_000
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
@@ -3403,7 +3405,8 @@ fn finalize_property_deal_3() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             3,
-            pallet_regions::Vote::Yes
+            pallet_regions::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -3622,7 +3625,8 @@ fn finalize_property_deal_4() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             3,
-            pallet_regions::Vote::Yes
+            pallet_regions::Vote::Yes,
+            10_000
         ));
         run_to_block(31);
         assert_ok!(Regions::bid_on_region(
@@ -7341,7 +7345,8 @@ fn listing_objects_in_different_regions() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             2,
-            pallet_regions::Vote::Yes
+            pallet_regions::Vote::Yes,
+            10_000
         ));
         run_to_block(91);
         assert_ok!(Regions::bid_on_region(
@@ -7363,7 +7368,8 @@ fn listing_objects_in_different_regions() {
         assert_ok!(Regions::vote_on_region_proposal(
             RuntimeOrigin::signed([8; 32].into()),
             4,
-            pallet_regions::Vote::Yes
+            pallet_regions::Vote::Yes,
+            10_000
         ));
         run_to_block(151);
         assert_ok!(Regions::bid_on_region(

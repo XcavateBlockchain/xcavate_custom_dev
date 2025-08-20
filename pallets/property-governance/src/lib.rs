@@ -1882,28 +1882,35 @@ pub mod pallet {
                         let total_supply = asset_details.token_amount;
                         ensure!(total_supply > 0, Error::<T>::ZeroTokenAmount);
 
-                        let total_votes = voting_result.yes_voting_power
+                        let total_votes = voting_result
+                            .yes_voting_power
                             .saturating_add(voting_result.no_voting_power);
 
                         ensure!(total_supply > Zero::zero(), Error::<T>::NoObjectFound);
 
-                        let quorum_percent: u32 = <T as pallet::Config>::MinVotingQuorum::get().deconstruct().into();
+                        let quorum_percent: u32 = <T as pallet::Config>::MinVotingQuorum::get()
+                            .deconstruct()
+                            .into();
 
-                        let meets_quorum = total_votes.saturating_mul(100u32) > 
-                            total_supply.saturating_mul(quorum_percent);
+                        let meets_quorum = total_votes.saturating_mul(100u32)
+                            > total_supply.saturating_mul(quorum_percent);
 
                         let mut meets_threshold = true;
                         if proposal.amount >= <T as Config>::HighProposal::get() {
-                            let high_threshold_percent: u32 = <T as Config>::HighThreshold::get().deconstruct().into();
+                            let high_threshold_percent: u32 =
+                                <T as Config>::HighThreshold::get().deconstruct().into();
                             meets_threshold = voting_result.yes_voting_power.saturating_mul(100u32)
                                 >= total_supply.saturating_mul(high_threshold_percent);
                         }
 
                         if voting_result.yes_voting_power > voting_result.no_voting_power
-                            && meets_threshold && meets_quorum
+                            && meets_threshold
+                            && meets_quorum
                         {
                             let _ = Self::execute_proposal(asset_id, proposal);
-                        } else if voting_result.yes_voting_power <= voting_result.no_voting_power || !meets_quorum{
+                        } else if voting_result.yes_voting_power <= voting_result.no_voting_power
+                            || !meets_quorum
+                        {
                             Self::deposit_event(Event::ProposalRejected { proposal_id });
                         } else {
                             Self::deposit_event(Event::ProposalThresHoldNotReached {
@@ -1928,15 +1935,16 @@ pub mod pallet {
                 if let Some(asset_details) = asset_details {
                     let total_supply = asset_details.token_amount;
                     ensure!(total_supply > 0, Error::<T>::ZeroTokenAmount);
-                
+
                     let yes_votes = voting_result.yes_voting_power;
-                    let total_votes = yes_votes
-                        .saturating_add(voting_result.no_voting_power);
+                    let total_votes = yes_votes.saturating_add(voting_result.no_voting_power);
 
-                    let quorum_percent: u32 = <T as pallet::Config>::MinPropertySaleQuorum::get().deconstruct().into();
+                    let quorum_percent: u32 = <T as pallet::Config>::MinPropertySaleQuorum::get()
+                        .deconstruct()
+                        .into();
 
-                    let meets_quorum = total_votes.saturating_mul(100u32) > 
-                        total_supply.saturating_mul(quorum_percent);
+                    let meets_quorum = total_votes.saturating_mul(100u32)
+                        > total_supply.saturating_mul(quorum_percent);
 
                     let threshold_percent: u32 =
                         T::SaleApprovalYesThreshold::get().deconstruct().into();
@@ -1988,17 +1996,18 @@ pub mod pallet {
             let total_supply = asset_details.token_amount;
             ensure!(total_supply > 0, Error::<T>::ZeroTokenAmount);
 
-            let total_votes = voting_result.yes_voting_power
+            let total_votes = voting_result
+                .yes_voting_power
                 .saturating_add(voting_result.no_voting_power);
 
-            let quorum_percent: u32 = <T as pallet::Config>::MinVotingQuorum::get().deconstruct().into();
+            let quorum_percent: u32 = <T as pallet::Config>::MinVotingQuorum::get()
+                .deconstruct()
+                .into();
 
-            let meets_quorum = total_votes.saturating_mul(100u32) > 
-                total_supply.saturating_mul(quorum_percent);
+            let meets_quorum =
+                total_votes.saturating_mul(100u32) > total_supply.saturating_mul(quorum_percent);
 
-            if voting_result.yes_voting_power > voting_result.no_voting_power
-                && meets_quorum
-            {
+            if voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum {
                 let letting_agent = pallet_property_management::LettingStorage::<T>::get(asset_id)
                     .ok_or(Error::<T>::NoLettingAgentFound)?;
                 let mut letting_info =

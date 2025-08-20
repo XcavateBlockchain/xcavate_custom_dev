@@ -32,7 +32,7 @@ use frame_support::{
 
 use frame_support::sp_runtime::{
     traits::{AccountIdConversion, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Zero},
-    Permill, Saturating, Percent,
+    Percent, Permill, Saturating,
 };
 
 use codec::Codec;
@@ -2200,9 +2200,12 @@ pub mod pallet {
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-            let asset_details =
-                    <T as pallet::Config>::PropertyToken::get_property_asset_info(property_details.asset_id).ok_or(Error::<T>::NoObjectFound)?;
-            let total_votes = voting_result.yes_voting_power
+            let asset_details = <T as pallet::Config>::PropertyToken::get_property_asset_info(
+                property_details.asset_id,
+            )
+            .ok_or(Error::<T>::NoObjectFound)?;
+            let total_votes = voting_result
+                .yes_voting_power
                 .saturating_add(voting_result.no_voting_power);
             let total_supply = asset_details.token_amount;
 
@@ -2210,9 +2213,10 @@ pub mod pallet {
 
             let quorum_percent: u32 = T::MinVotingQuorum::get().deconstruct().into();
 
-            let meets_quorum = total_votes.saturating_mul(100u32) > 
-                total_supply.saturating_mul(quorum_percent);
-            let is_approved = voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum;
+            let meets_quorum =
+                total_votes.saturating_mul(100u32) > total_supply.saturating_mul(quorum_percent);
+            let is_approved =
+                voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum;
             if is_approved {
                 property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();

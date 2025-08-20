@@ -52,7 +52,8 @@ fn new_region_helper() {
     assert_ok!(Regions::vote_on_region_proposal(
         RuntimeOrigin::signed([6; 32].into()),
         3,
-        pallet_regions::Vote::Yes
+        pallet_regions::Vote::Yes,
+        10_000
     ));
     run_to_block(31);
     assert_ok!(Regions::bid_on_region(

@@ -19,7 +19,7 @@ use frame_support::{
     pallet_prelude::*,
     sp_runtime::{traits::Zero, Percent, Saturating},
     traits::{
-        fungible::{BalancedHold, Credit, Inspect, Mutate, MutateHold, InspectHold},
+        fungible::{BalancedHold, Credit, Inspect, InspectHold, Mutate, MutateHold},
         nonfungibles_v2::{Create, Transfer},
         tokens::{
             fungible, imbalance::OnUnbalanced, nonfungibles_v2, Balance, Precision, Preservation,
@@ -88,6 +88,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct RemoveRegionOwnerProposal<T: Config> {
         pub proposer: T::AccountId,
+        pub proposal_expiry: BlockNumberFor<T>,
         pub deposit: T::Balance,
     }
 
@@ -96,6 +97,7 @@ pub mod pallet {
     #[scale_info(skip_type_params(T))]
     pub struct VoteRecord<T: Config> {
         pub vote: Vote,
+        pub region_id: RegionId,
         pub power: T::Balance,
     }
 
@@ -302,6 +304,7 @@ pub mod pallet {
     pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
     pub type RegionId = u16;
+    pub type ProposalId = u64;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -319,19 +322,19 @@ pub mod pallet {
     /// Active region proposals by region ID.
     #[pallet::storage]
     pub(super) type RegionProposals<T: Config> =
-        StorageMap<_, Blake2_128Concat, RegionId, RegionProposal<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, RegionProposal<T>, OptionQuery>;
 
     /// Voting statistics for ongoing proposals by region ID.
     #[pallet::storage]
     pub(super) type OngoingRegionProposalVotes<T: Config> =
-        StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
+        StorageMap<_, Blake2_128Concat, ProposalId, VoteStats<T>, OptionQuery>;
 
     /// User votes on region proposals.
     #[pallet::storage]
     pub(super) type UserRegionVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
-        RegionId,
+        ProposalId,
         Blake2_128Concat,
         T::AccountId,
         VoteRecord<T>,
@@ -375,11 +378,13 @@ pub mod pallet {
         StorageMap<_, Blake2_128Concat, RegionId, VoteStats<T>, OptionQuery>;
 
     #[pallet::storage]
-    pub(super) type UserRegionOwnerVote<T: Config> = StorageMap<
+    pub(super) type UserRegionOwnerVote<T: Config> = StorageDoubleMap<
         _,
         Blake2_128Concat,
         RegionId,
-        BoundedBTreeMap<T::AccountId, VoteRecord<T>, <T as pallet::Config>::MaxRegionVoters>,
+        Blake2_128Concat,
+        T::AccountId,
+        VoteRecord<T>,
         OptionQuery,
     >;
 
@@ -408,6 +413,18 @@ pub mod pallet {
     #[pallet::storage]
     pub type RealEstateLawyer<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, LawyerInfo<T>, OptionQuery>;
+
+    /// Counter of proposal ids.
+    #[pallet::storage]
+    pub type ProposalCounter<T: Config> = StorageValue<_, ProposalId, ValueQuery>;
+
+    #[pallet::storage]
+    pub type RegionProposalId<T: Config> =
+        StorageMap<_, Blake2_128Concat, RegionId, ProposalId, OptionQuery>;
+    
+    #[pallet::storage]
+    pub type RegionOwnerProposalId<T: Config> =
+        StorageMap<_, Blake2_128Concat, RegionId, ProposalId, OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -534,7 +551,7 @@ pub mod pallet {
         LawyerRegistered {
             lawyer: T::AccountId,
             region_id: RegionId,
-            deposit: T::Balance
+            deposit: T::Balance,
         },
         /// Lawyer has been unregistered.
         LawyerUnregistered {
@@ -642,7 +659,6 @@ pub mod pallet {
             // checks if there is a voting for an proposal ending in this block.
             ended_region_owner_votings.iter().for_each(|item| {
                 weight = weight.saturating_add(T::DbWeight::get().reads_writes(6, 6));
-                UserRegionOwnerVote::<T>::remove(item);
                 if let Err(e) = Self::finish_region_owner_proposal(*item) {
                     Self::deposit_event(Event::RegionOwnerProposalFailed {
                         region_id: *item,
@@ -697,6 +713,7 @@ pub mod pallet {
                 Error::<T>::RegionAlreadyCreated
             );
 
+            let proposal_id = ProposalCounter::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             if let Some(last_proposal_block) = LastRegionProposalBlock::<T>::get() {
                 let cooldown = T::RegionProposalCooldown::get();
@@ -723,10 +740,15 @@ pub mod pallet {
                 yes_voting_power: Zero::zero(),
                 no_voting_power: Zero::zero(),
             };
+            RegionProposalId::<T>::insert(region_id, proposal_id);
             ProposedRegionIds::<T>::insert(region_id, ());
-            RegionProposals::<T>::insert(region_id, proposal);
-            OngoingRegionProposalVotes::<T>::insert(region_id, vote_stats);
+            RegionProposals::<T>::insert(proposal_id, proposal);
+            OngoingRegionProposalVotes::<T>::insert(proposal_id, vote_stats);
             LastRegionProposalBlock::<T>::put(current_block_number);
+            let next_proposal_id = proposal_id
+                .checked_add(1)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ProposalCounter::<T>::put(next_proposal_id);
             Self::deposit_event(Event::RegionProposed {
                 region_id,
                 proposer: signer,
@@ -755,8 +777,10 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let proposal_id = RegionProposalId::<T>::get(region_id)
+                .ok_or(Error::<T>::NotOngoing)?;
             let region_proposal =
-                RegionProposals::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
+                RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 region_proposal.proposal_expiry > current_block_number,
@@ -768,10 +792,7 @@ pub mod pallet {
                 &signer,
             );
             let total_available = free_balance.saturating_add(held_balance);
-            ensure!(
-                total_available >= amount,
-                Error::<T>::NotEnoughTokenToVote
-            );
+            ensure!(total_available >= amount, Error::<T>::NotEnoughTokenToVote);
             ensure!(
                 amount >= T::MinimumVotingAmount::get(),
                 Error::<T>::BelowMinimumVotingAmount
@@ -780,9 +801,9 @@ pub mod pallet {
             let mut new_yes_power = Default::default();
             let mut new_no_power = Default::default();
 
-            OngoingRegionProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
+            OngoingRegionProposalVotes::<T>::try_mutate(proposal_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserRegionVote::<T>::try_mutate(region_id, &signer, |maybe_vote_record| {
+                UserRegionVote::<T>::try_mutate(proposal_id, &signer, |maybe_vote_record| {
                     if let Some(previous_vote) = maybe_vote_record.take() {
                         T::NativeCurrency::release(
                             &HoldReason::RegionVotingReserve.into(),
@@ -827,6 +848,7 @@ pub mod pallet {
 
                     *maybe_vote_record = Some(VoteRecord {
                         vote: vote.clone(),
+                        region_id,
                         power: amount,
                     });
                     Ok::<(), DispatchError>(())
@@ -848,13 +870,13 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_region_voting_token(
             origin: OriginFor<T>,
-            region_id: RegionId,
+            proposal_id: ProposalId,
         ) -> DispatchResult {
             let signer = ensure_signed(origin)?;
             let vote_record =
-                UserRegionVote::<T>::get(region_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+                UserRegionVote::<T>::get(proposal_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
 
-            if let Some(proposal) = RegionProposals::<T>::get(region_id) {
+            if let Some(proposal) = RegionProposals::<T>::get(proposal_id) {
                 let current_block_number = frame_system::Pallet::<T>::block_number();
                 ensure!(
                     proposal.proposal_expiry <= current_block_number,
@@ -869,10 +891,10 @@ pub mod pallet {
                 Precision::Exact,
             )?;
 
-            UserRegionVote::<T>::remove(region_id, &signer);
+            UserRegionVote::<T>::remove(proposal_id, &signer);
 
             Self::deposit_event(Event::TokenUnfrozen {
-                region_id,
+                region_id: vote_record.region_id,
                 voter: signer,
                 amount: vote_record.power,
             });
@@ -900,7 +922,8 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RegionalOperator,
             )?;
 
-            if let Some(region_proposal) = RegionProposals::<T>::get(region_id) {
+            if let Some(proposal_id) = RegionProposalId::<T>::get(region_id) {
+                let region_proposal = RegionProposals::<T>::get(proposal_id).ok_or(Error::<T>::NotOngoing)?;
                 let current_block_number = <frame_system::Pallet<T>>::block_number();
                 ensure!(
                     region_proposal.proposal_expiry <= current_block_number,
@@ -1232,6 +1255,7 @@ pub mod pallet {
                 current_block_number.saturating_add(T::RegionOperatorVotingTime::get());
             let proposal = RemoveRegionOwnerProposal {
                 proposer: signer.clone(),
+                proposal_expiry: expiry_block,
                 deposit: deposit_amount,
             };
 
@@ -1269,15 +1293,26 @@ pub mod pallet {
             origin: OriginFor<T>,
             region_id: RegionId,
             vote: Vote,
+            amount: T::Balance,
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
-            let voting_power = T::NativeCurrency::balance(&signer);
+
+            let free_balance = T::NativeCurrency::balance(&signer);
+            let held_balance = T::NativeCurrency::balance_on_hold(
+                &HoldReason::RegionOperatorRemovalVoting.into(),
+                &signer,
+            );
+            let total_available = free_balance.saturating_add(held_balance);
             ensure!(
-                voting_power >= T::MinimumVotingAmount::get(),
+                total_available >= amount,
                 Error::<T>::NotEnoughTokenToVote
+            );
+            ensure!(
+                amount >= T::MinimumVotingAmount::get(),
+                Error::<T>::BelowMinimumVotingAmount
             );
 
             let mut new_yes_power = Default::default();
@@ -1285,9 +1320,15 @@ pub mod pallet {
 
             OngoingRegionOwnerProposalVotes::<T>::try_mutate(region_id, |maybe_current_vote| {
                 let current_vote = maybe_current_vote.as_mut().ok_or(Error::<T>::NotOngoing)?;
-                UserRegionOwnerVote::<T>::try_mutate(region_id, |maybe_map| {
-                    let map = maybe_map.get_or_insert_with(BoundedBTreeMap::new);
-                    if let Some(previous_vote) = map.get(&signer) {
+                UserRegionOwnerVote::<T>::try_mutate(region_id, &signer, |maybe_vote_record| {
+                    if let Some(previous_vote) = maybe_vote_record.take() {
+                        T::NativeCurrency::release(
+                            &HoldReason::RegionOperatorRemovalVoting.into(),
+                            &signer,
+                            previous_vote.power,
+                            Precision::Exact,
+                        )?;
+
                         match previous_vote.vote {
                             Vote::Yes => {
                                 current_vote.yes_voting_power = current_vote
@@ -1302,26 +1343,31 @@ pub mod pallet {
                         }
                     }
 
+                    T::NativeCurrency::hold(
+                        &HoldReason::RegionOperatorRemovalVoting.into(),
+                        &signer,
+                        amount,
+                    )?;
+
                     match vote {
                         Vote::Yes => {
                             current_vote.yes_voting_power =
-                                current_vote.yes_voting_power.saturating_add(voting_power)
+                                current_vote.yes_voting_power.saturating_add(amount)
                         }
                         Vote::No => {
                             current_vote.no_voting_power =
-                                current_vote.no_voting_power.saturating_add(voting_power)
+                                current_vote.no_voting_power.saturating_add(amount)
                         }
                     }
-                    let vote_record = VoteRecord {
-                        vote: vote.clone(),
-                        power: voting_power,
-                    };
-
-                    map.try_insert(signer.clone(), vote_record)
-                        .map_err(|_| Error::<T>::TooManyVoters)?;
 
                     new_yes_power = current_vote.yes_voting_power;
                     new_no_power = current_vote.no_voting_power;
+
+                    *maybe_vote_record = Some(VoteRecord {
+                        vote: vote.clone(),
+                        region_id,
+                        power: amount,
+                    });
 
                     Ok::<(), DispatchError>(())
                 })?;
@@ -1331,9 +1377,44 @@ pub mod pallet {
                 region_id,
                 voter: signer,
                 vote,
-                voting_power,
+                voting_power: amount,
                 new_yes_power,
                 new_no_power,
+            });
+            Ok(())
+        }
+
+        #[pallet::call_index(28)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn unfreeze_region_onwer_removal_voting_token(
+            origin: OriginFor<T>,
+            region_id: RegionId,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            let vote_record =
+                UserRegionOwnerVote::<T>::get(region_id, &signer).ok_or(Error::<T>::NoFrozenAmount)?;
+
+            if let Some(proposal) = RegionOwnerProposals::<T>::get(region_id) {
+                let current_block_number = frame_system::Pallet::<T>::block_number();
+                ensure!(
+                    proposal.proposal_expiry <= current_block_number,
+                    Error::<T>::VotingStillOngoing
+                );
+            }
+
+            T::NativeCurrency::release(
+                &HoldReason::RegionOperatorRemovalVoting.into(),
+                &signer,
+                vote_record.power,
+                Precision::Exact,
+            )?;
+
+            UserRegionOwnerVote::<T>::remove(region_id, &signer);
+
+            Self::deposit_event(Event::TokenUnfrozen {
+                region_id,
+                voter: signer,
+                amount: vote_record.power,
             });
             Ok(())
         }
@@ -1587,9 +1668,11 @@ pub mod pallet {
             region_id: RegionId,
             current_block_number: BlockNumberFor<T>,
         ) -> Result<bool, DispatchError> {
+            let proposal_id = RegionProposalId::<T>::take(region_id)
+                .ok_or(Error::<T>::NotOngoing)?;
             let voting_results =
-                OngoingRegionProposalVotes::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
-            let proposal = RegionProposals::<T>::take(region_id).ok_or(Error::<T>::NotOngoing)?;
+                OngoingRegionProposalVotes::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
+            let proposal = RegionProposals::<T>::take(proposal_id).ok_or(Error::<T>::NotOngoing)?;
             let required_threshold = T::RegionThreshold::get();
             let total_voting_amount = voting_results
                 .yes_voting_power
