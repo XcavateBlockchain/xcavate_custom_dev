@@ -643,7 +643,7 @@ impl pallet_marketplace::Config for Runtime {
     type LawyerVotingTime = LawyerVotingDuration;
     type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
 }
 
@@ -659,12 +659,12 @@ impl pallet_xcavate_whitelist::Config for Runtime {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
-use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+use pallet_xcavate_whitelist::{self as whitelist, RolePermission};
 
-pub struct EnsurePermission<T>(core::marker::PhantomData<T>);
+pub struct EnsureHasRole<T>(core::marker::PhantomData<T>);
 
 impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
-    for EnsurePermission<T>
+    for EnsureHasRole<T>
 {
     type Success = T::AccountId;
 
@@ -676,6 +676,34 @@ impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role
             return Err(origin);
         };
         if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
+            Ok(who)
+        } else {
+            Err(origin)
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn try_successful_origin(_role: &whitelist::Role) -> Result<T::RuntimeOrigin, ()> {
+        let account = frame_benchmarking::whitelisted_caller();
+        Ok(frame_system::RawOrigin::Signed(account).into())
+    }
+}
+
+pub struct EnsureCompliant<T>(core::marker::PhantomData<T>);
+
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
+    for EnsureCompliant<T>
+{
+    type Success = T::AccountId;
+
+    fn try_origin(
+        origin: T::RuntimeOrigin,
+        role: &whitelist::Role,
+    ) -> Result<Self::Success, T::RuntimeOrigin> {
+        let Some(who) = origin.clone().into_signer() else {
+            return Err(origin);
+        };
+        if whitelist::Pallet::<T>::is_compliant(&who, role.clone()) {
             Ok(who)
         } else {
             Err(origin)
@@ -715,7 +743,7 @@ impl pallet_property_management::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
 }
 
@@ -757,7 +785,7 @@ impl pallet_property_governance::Config for Runtime {
     type AcceptedAssets = AcceptedPaymentAssets;
     type TreasuryId = TreasuryPalletId;
     type PropertyToken = RealEstateAsset;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
     type MinPropertySaleQuorum = MinimumPropertySaleQuorum;
 }
@@ -813,7 +841,7 @@ impl pallet_regions::Config for Runtime {
     type RegionProposalDeposit = RegionProposalDepositAmount;
     type MinimumVotingAmount = MinimumVotingPower;
     type MaxRegionVoters = MaximumRegionVoters;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type LawyerDeposit = LawyerDepositAmount;
 }
 

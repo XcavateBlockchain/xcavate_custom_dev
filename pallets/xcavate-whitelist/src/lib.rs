@@ -46,6 +46,24 @@ pub mod pallet {
         SpvConfirmation,
     }
 
+    /// Access permission enum.
+    #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(
+        Encode,
+        Decode,
+        DecodeWithMemTracking,
+        Clone,
+        PartialEq,
+        Eq,
+        MaxEncodedLen,
+        RuntimeDebug,
+        TypeInfo,
+    )]
+    pub enum AccessPermission {
+        Revoked,
+        Compliant
+    }
+
     /// Configure the pallet by specifying the parameters and types on which it depends.
     #[pallet::config]
     pub trait Config: frame_system::Config {
@@ -74,7 +92,7 @@ pub mod pallet {
         AccountIdOf<T>,
         Blake2_128Concat,
         Role,
-        (),
+        AccessPermission,
         OptionQuery,
     >;
 
@@ -173,7 +191,7 @@ pub mod pallet {
                 !AccountRoles::<T>::contains_key(&user, &role),
                 Error::<T>::RoleAlreadyAssigned
             );
-            AccountRoles::<T>::insert(&user, role.clone(), ());
+            AccountRoles::<T>::insert(&user, role.clone(), AccessPermission::Compliant);
             Self::deposit_event(Event::<T>::RoleAssigned { user, role });
             Ok(())
         }
@@ -210,12 +228,19 @@ pub mod pallet {
     }
 }
 
-pub trait HasRole<AccountId> {
+pub trait RolePermission<AccountId> {
     fn has_role(account: &AccountId, role: Role) -> bool;
+
+    fn is_compliant(account: &AccountId, role: Role) -> bool;
 }
 
-impl<T: Config> HasRole<T::AccountId> for Pallet<T> {
+impl<T: Config> RolePermission<T::AccountId> for Pallet<T> {
     fn has_role(account: &T::AccountId, role: Role) -> bool {
         AccountRoles::<T>::contains_key(account, role)
+    }
+
+    fn is_compliant(account: &T::AccountId, role: Role) -> bool {
+        AccountRoles::<T>::get(account, role)
+            .map_or(false, |access| access == AccessPermission::Compliant)
     }
 }

@@ -243,7 +243,7 @@ impl pallet_xcavate_whitelist::Config for Test {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
-use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+use pallet_xcavate_whitelist::{self as whitelist, RolePermission};
 
 pub struct EnsurePermission<T> {
     _phantom: core::marker::PhantomData<T>,

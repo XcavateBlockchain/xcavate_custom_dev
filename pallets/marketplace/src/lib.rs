@@ -45,7 +45,7 @@ use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
 };
 
-use pallet_xcavate_whitelist::HasRole;
+use pallet_xcavate_whitelist::RolePermission;
 
 use pallet_regions::{LawyerManagement, Pallet as PalletRegions};
 
@@ -191,7 +191,7 @@ pub mod pallet {
         #[pallet::constant]
         type LegalProcessTime: Get<BlockNumberFor<Self>>;
 
-        type Whitelist: pallet_xcavate_whitelist::HasRole<Self::AccountId>;
+        type Whitelist: pallet_xcavate_whitelist::RolePermission<Self::AccountId>;
 
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
