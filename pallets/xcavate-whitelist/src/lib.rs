@@ -132,14 +132,14 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Adds an whitelisst admin.
+        /// Add a new whitelist admin.
         ///
         /// The origin must be the sudo.
         ///
         /// Parameters:
         /// - `user`: The address of the accounts that is added as an admin.
         ///
-        /// Emits `RoleAssigned` event when successful
+        /// Emits `RoleAssigned` event when successful.
         #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn add_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
@@ -153,14 +153,14 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Adds an whitelisst admin.
+        /// Remove an existing whitelist admin.
         ///
         /// The origin must be the sudo.
         ///
         /// Parameters:
         /// - `user`: The address of the accounts that is added as an admin.
         ///
-        /// Emits `RoleAssigned` event when successful
+        /// Emits `RoleAssigned` event when successful.
         #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_admin(origin: OriginFor<T>, admin: AccountIdOf<T>) -> DispatchResult {
@@ -174,15 +174,15 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Adds a role to a user.
+        /// Assign a role to a user with default 'Compliant' permission.
         ///
-        /// The origin must be the sudo.
+        /// The origin must be an admin.
         ///
         /// Parameters:
-        /// - `user`: The address of the accounts that gets a new role.
+        /// - `user`: The address of the account that gets a new role.
         /// - `role`: The role that is getting assigned to the user.
         ///
-        /// Emits `RoleAssigned` event when successful
+        /// Emits `RoleAssigned` event when successful.
         #[pallet::call_index(2)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn assign_role(
@@ -204,15 +204,15 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Removes a role from a user.
+        /// Remove a role from a user.
         ///
-        /// The origin must be the sudo.
+        /// The origin must be an admin.
         ///
         /// Parameters:
-        /// - `user`: The address of the accounts that gets a role removed.
+        /// - `user`: The address of the account that gets a role removed.
         /// - `role`: The role that is getting removed from the user.
         ///
-        /// Emits `UserRemoved` event when successful
+        /// Emits `RoleRemoved` event when successful.
         #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn remove_role(
@@ -234,6 +234,16 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Update a user's permission for a role.
+        ///
+        /// The origin must be an admin.
+        ///
+        /// Parameters:
+        /// - `user`: The address of the account that gets the permission updated.
+        /// - `role`: The role that is getting the permission updated.
+        /// - `permission`: The new permission state.
+        ///
+        /// Emits `PermissionUpdated` event when successful.
         #[pallet::call_index(4)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn set_permission(
