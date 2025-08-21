@@ -199,6 +199,12 @@ pub mod pallet {
             Success = Self::AccountId,
         >;
 
+        type CompliantOrigin: EnsureOriginWithArg<
+            Self::RuntimeOrigin,
+            pallet_xcavate_whitelist::Role,
+            Success = Self::AccountId,
+        >;
+
         #[pallet::constant]
         type MinVotingQuorum: Get<Percent>;
     }
@@ -762,7 +768,7 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+            let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
@@ -1167,7 +1173,7 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let buyer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+            let buyer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
@@ -1281,7 +1287,7 @@ pub mod pallet {
             amount: u32,
             payment_asset: u32,
         ) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+            let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;

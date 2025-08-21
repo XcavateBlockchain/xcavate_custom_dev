@@ -61,7 +61,7 @@ pub mod pallet {
     )]
     pub enum AccessPermission {
         Revoked,
-        Compliant
+        Compliant,
     }
 
     /// Configure the pallet by specifying the parameters and types on which it depends.
@@ -107,6 +107,12 @@ pub mod pallet {
         AdminRegistered { admin: T::AccountId },
         /// An admin has been removed.
         AdminRemoved { admin: T::AccountId },
+        /// The permission of an account has been updated.
+        PermissionUpdated {
+            user: T::AccountId,
+            role: Role,
+            permission: AccessPermission,
+        },
     }
 
     // Errors inform users that something went wrong.
@@ -120,6 +126,8 @@ pub mod pallet {
         AlreadyAdmin,
         /// The acount is not registered as an admin.
         AccountNotAdmin,
+        /// This permission has already been set.
+        PermissionAlreadySet,
     }
 
     #[pallet::call]
@@ -223,6 +231,32 @@ pub mod pallet {
             );
             AccountRoles::<T>::remove(&user, role.clone());
             Self::deposit_event(Event::<T>::RoleRemoved { user, role });
+            Ok(())
+        }
+
+        #[pallet::call_index(4)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn set_permission(
+            origin: OriginFor<T>,
+            user: AccountIdOf<T>,
+            role: Role,
+            permission: AccessPermission,
+        ) -> DispatchResult {
+            let signer = ensure_signed(origin)?;
+            ensure!(
+                AdminAccounts::<T>::contains_key(&signer),
+                Error::<T>::AccountNotAdmin
+            );
+            let current_role =
+                AccountRoles::<T>::get(&user, &role).ok_or(Error::<T>::RoleNotAssigned)?;
+            ensure!(current_role != permission, Error::<T>::PermissionAlreadySet);
+
+            AccountRoles::<T>::insert(&user, role.clone(), permission.clone());
+            Self::deposit_event(Event::<T>::PermissionUpdated {
+                user,
+                role,
+                permission,
+            });
             Ok(())
         }
     }

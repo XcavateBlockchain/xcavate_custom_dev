@@ -242,14 +242,12 @@ impl pallet_xcavate_whitelist::Config for Test {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
-use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+use pallet_xcavate_whitelist::{self as whitelist, RolePermission};
 
-pub struct EnsurePermission<T> {
-    _phantom: core::marker::PhantomData<T>,
-}
+pub struct EnsureHasRole<T>(core::marker::PhantomData<T>);
 
 impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
-    for EnsurePermission<T>
+    for EnsureHasRole<T>
 {
     type Success = T::AccountId;
 
@@ -261,6 +259,34 @@ impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role
             return Err(origin);
         };
         if whitelist::Pallet::<T>::has_role(&who, role.clone()) {
+            Ok(who)
+        } else {
+            Err(origin)
+        }
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn try_successful_origin(_role: &whitelist::Role) -> Result<T::RuntimeOrigin, ()> {
+        let account = frame_benchmarking::whitelisted_caller();
+        Ok(frame_system::RawOrigin::Signed(account).into())
+    }
+}
+
+pub struct EnsureCompliant<T>(core::marker::PhantomData<T>);
+
+impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
+    for EnsureCompliant<T>
+{
+    type Success = T::AccountId;
+
+    fn try_origin(
+        origin: T::RuntimeOrigin,
+        role: &whitelist::Role,
+    ) -> Result<Self::Success, T::RuntimeOrigin> {
+        let Some(who) = origin.clone().into_signer() else {
+            return Err(origin);
+        };
+        if whitelist::Pallet::<T>::is_compliant(&who, role.clone()) {
             Ok(who)
         } else {
             Err(origin)
@@ -315,7 +341,7 @@ impl pallet_regions::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type LawyerDeposit = ConstU128<10_000>;
 }
 
@@ -371,7 +397,8 @@ impl pallet_marketplace::Config for Test {
     type LawyerVotingTime = LawyerVotingDuration;
     type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
+    type CompliantOrigin = EnsureCompliant<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
 }
 
@@ -400,7 +427,7 @@ impl pallet_property_management::Config for Test {
     type AcceptedAssets = AcceptedPaymentAssets;
     type PropertyToken = RealEstateAsset;
     type LettingAgentVotingTime = LettingAgentVotingDuration;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
 }
 

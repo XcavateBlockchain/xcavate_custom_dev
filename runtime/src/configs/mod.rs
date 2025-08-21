@@ -644,6 +644,7 @@ impl pallet_marketplace::Config for Runtime {
     type LegalProcessTime = LegalProcessDuration;
     type Whitelist = XcavateWhitelist;
     type PermissionOrigin = EnsureHasRole<Self>;
+    type CompliantOrigin = EnsureCompliant<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
 }
 

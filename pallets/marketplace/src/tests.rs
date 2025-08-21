@@ -536,6 +536,22 @@ fn buy_property_token_doesnt_work_2() {
             Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1985),
             Error::<Test>::PaymentAssetNotSupported
         );
+        assert_ok!(XcavateWhitelist::set_permission(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            pallet_xcavate_whitelist::AccessPermission::Revoked,
+        ));
+        assert_noop!(
+            Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 40, 1984),
+            BadOrigin
+        );
+        assert_ok!(XcavateWhitelist::set_permission(
+            RuntimeOrigin::signed([20; 32].into()),
+            [1; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            pallet_xcavate_whitelist::AccessPermission::Compliant,
+        ));
         run_to_block(92);
         assert_noop!(
             Marketplace::buy_property_token(RuntimeOrigin::signed([1; 32].into()), 0, 30, 1984),
@@ -5563,6 +5579,16 @@ fn buy_relisted_token_fails() {
             Marketplace::buy_relisted_token(RuntimeOrigin::signed([3; 32].into()), 1, 1, 1983),
             Error::<Test>::PaymentAssetNotSupported
         );
+        assert_ok!(XcavateWhitelist::set_permission(
+            RuntimeOrigin::signed([20; 32].into()),
+            [3; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            pallet_xcavate_whitelist::AccessPermission::Revoked,
+        ));
+        assert_noop!(
+            Marketplace::buy_relisted_token(RuntimeOrigin::signed([3; 32].into()), 1, 1, 1984),
+            BadOrigin
+        );
     })
 }
 
@@ -5874,6 +5900,25 @@ fn make_offer_fails() {
             Marketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 0, 1, 1984),
             Error::<Test>::InvalidTokenPrice
         );
+        assert_ok!(XcavateWhitelist::set_permission(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            pallet_xcavate_whitelist::AccessPermission::Revoked,
+        ));
+        assert_noop!(Marketplace::make_offer(
+            RuntimeOrigin::signed([2; 32].into()),
+            1,
+            200,
+            1,
+            1984
+        ), BadOrigin);
+        assert_ok!(XcavateWhitelist::set_permission(
+            RuntimeOrigin::signed([20; 32].into()),
+            [2; 32].into(),
+            pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            pallet_xcavate_whitelist::AccessPermission::Compliant,
+        ));
         assert_ok!(Marketplace::make_offer(
             RuntimeOrigin::signed([2; 32].into()),
             1,

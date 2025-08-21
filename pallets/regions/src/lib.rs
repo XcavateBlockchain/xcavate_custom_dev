@@ -1714,7 +1714,10 @@ pub mod pallet {
             let threshold_percent: T::Balance = T::RegionThreshold::get().deconstruct().into();
 
             let meets_threshold = !total_voting_amount.is_zero()
-                && voting_results.yes_voting_power.saturating_mul(100u32.into()) >= total_voting_amount.saturating_mul(threshold_percent);
+                && voting_results
+                    .yes_voting_power
+                    .saturating_mul(100u32.into())
+                    >= total_voting_amount.saturating_mul(threshold_percent);
 
             let auction_expiry_block =
                 current_block_number.saturating_add(T::RegionAuctionTime::get());
@@ -1777,7 +1780,8 @@ pub mod pallet {
             let threshold_percent: T::Balance = T::RegionThreshold::get().deconstruct().into();
 
             let meets_threshold = !total_voting_amount.is_zero()
-                && voting_result.yes_voting_power.saturating_mul(100u32.into()) >= total_voting_amount.saturating_mul(threshold_percent);
+                && voting_result.yes_voting_power.saturating_mul(100u32.into())
+                    >= total_voting_amount.saturating_mul(threshold_percent);
 
             if meets_threshold {
                 let updated_strikes = Self::slash_region_owner(region_id)?;

@@ -149,14 +149,12 @@ impl pallet_xcavate_whitelist::Config for Test {
     type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
-use pallet_xcavate_whitelist::{self as whitelist, HasRole};
+use pallet_xcavate_whitelist::{self as whitelist, RolePermission};
 
-pub struct EnsurePermission<T> {
-    _phantom: core::marker::PhantomData<T>,
-}
+pub struct EnsureHasRole<T>(core::marker::PhantomData<T>);
 
 impl<T: whitelist::Config> EnsureOriginWithArg<T::RuntimeOrigin, whitelist::Role>
-    for EnsurePermission<T>
+    for EnsureHasRole<T>
 {
     type Success = T::AccountId;
 
@@ -225,7 +223,7 @@ impl crate::Config for Test {
     type RegionProposalDeposit = ConstU128<5_000>;
     type MinimumVotingAmount = ConstU128<100>;
     type MaxRegionVoters = ConstU32<250>;
-    type PermissionOrigin = EnsurePermission<Self>;
+    type PermissionOrigin = EnsureHasRole<Self>;
     type LawyerDeposit = ConstU128<10_000>;
 }
 
