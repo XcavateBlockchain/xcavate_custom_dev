@@ -2570,33 +2570,16 @@ pub mod pallet {
             PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
             PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
 
-            let mut developer_payout = Payout {
-                amount_in_usdc: 0u128.into(),
-                amount_in_usdt: 0u128.into(),
-            };
-            let mut spv_lawyer_payout = Payout {
-                amount_in_usdc: 0u128.into(),
-                amount_in_usdt: 0u128.into(),
-            };
-            let mut treasury_payout = Payout {
-                amount_in_usdc: 0u128.into(),
-                amount_in_usdt: 0u128.into(),
-            };
-            let mut region_owner_payout = Payout {
-                amount_in_usdc: 0u128.into(),
-                amount_in_usdt: 0u128.into(),
-            };
+            let mut developer_payout = Payout::default();
+            let mut spv_lawyer_payout = Payout::default();
+            let mut treasury_payout = Payout::default();
+            let mut region_owner_payout = Payout::default();
 
             // Distribute funds from property account for each asset
             for &asset in T::AcceptedAssets::get().iter() {
                 // Get total collected amounts and lawyer costs
                 let total_collected_funds = property_details
                     .collected_funds
-                    .get(&asset)
-                    .copied()
-                    .ok_or(Error::<T>::AssetNotSupported)?;
-                let real_estate_developer_lawyer_costs = property_lawyer_details
-                    .real_estate_developer_lawyer_costs
                     .get(&asset)
                     .copied()
                     .ok_or(Error::<T>::AssetNotSupported)?;
@@ -2632,26 +2615,30 @@ pub mod pallet {
                     .ok_or(Error::<T>::MultiplyError)?
                     .checked_div(&(100u128.into()))
                     .ok_or(Error::<T>::DivisionError)?;
-                if property_details.tax_paid_by_developer {
+
+                let (developer_lawyer_tax, spv_lawyer_tax) = if property_details.tax_paid_by_developer {
                     developer_amount = developer_amount
                         .checked_sub(&tax)
                         .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                }
-                let real_estate_developer_amount = tax
-                    .checked_add(&real_estate_developer_lawyer_costs)
+                    (tax, Zero::zero())
+                } else {
+                    (Zero::zero(), tax)
+                };
+
+                let spv_lawyer_amount = spv_lawyer_costs
+                    .checked_add(&spv_lawyer_tax)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
+
                 let protocol_fees = total_collected_funds
                     .checked_div(&(100u128.into()))
                     .ok_or(Error::<T>::DivisionError)?
                     .checked_add(&collected_fees)
                     .ok_or(Error::<T>::ArithmeticOverflow)?
-                    .saturating_sub(real_estate_developer_lawyer_costs)
                     .saturating_sub(spv_lawyer_costs);
 
                 let region_owner_amount = protocol_fees
                     .checked_div(&(2u128.into()))
                     .ok_or(Error::<T>::DivisionError)?;
-
                 let treasury_amount = protocol_fees.saturating_sub(region_owner_amount);
 
                 // Transfer funds from property account
@@ -2661,13 +2648,15 @@ pub mod pallet {
                     developer_amount,
                     asset,
                 )?;
-                Self::transfer_funds(
-                    &property_account,
-                    &real_estate_developer_lawyer_id,
-                    real_estate_developer_amount,
-                    asset,
-                )?;
-                Self::transfer_funds(&property_account, &spv_lawyer_id, spv_lawyer_costs, asset)?;
+                if !developer_lawyer_tax.is_zero() {
+                    Self::transfer_funds(
+                        &property_account,
+                        &real_estate_developer_lawyer_id,
+                        developer_lawyer_tax,
+                        asset,
+                    )?;
+                }
+                Self::transfer_funds(&property_account, &spv_lawyer_id, spv_lawyer_amount, asset)?;
                 Self::transfer_funds(&property_account, &treasury_id, treasury_amount, asset)?;
                 Self::transfer_funds(&property_account, &region.owner, region_owner_amount, asset)?;
 

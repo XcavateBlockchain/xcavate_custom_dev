@@ -3219,20 +3219,20 @@ fn finalize_property_deal() {
         assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_396_000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            2_000
+            4_000
         );
-        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 2_000);
+        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 4_000);
         assert_eq!(
             ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
             4_000
         );
         assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 4_000);
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 876_000);
-        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 22_000);
-        assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
+        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 0);
+        assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 22_000);
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_084_000);
-        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 12_000);
-        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
+        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 0);
+        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 12_000);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(
@@ -3381,15 +3381,15 @@ fn finalize_property_deal_2() {
         );
         assert_eq!(
             ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
-            6000
+            8000
         );
-        assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 6000);
+        assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 8000);
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 1_500_000);
         assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 0);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 0);
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 460_000);
-        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 34_000);
-        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 4_000);
+        assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 0);
+        assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 34_000);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_eq!(OngoingObjectListing::<Test>::get(0), None);
         assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 100);
@@ -3592,16 +3592,16 @@ fn finalize_property_deal_3() {
         assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_383_000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            2_000
+            4_000
         );
-        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 2_000);
+        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 4_000);
         assert_eq!(
             ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
             4_000
         );
         assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 4_000);
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 894_000);
-        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 23_500);
+        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 19_500);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_096_000);
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 13_000);
@@ -3823,16 +3823,16 @@ fn finalize_property_deal_4() {
         assert_eq!(ForeignAssets::balance(1337, &[0; 32].into()), 20_383_000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            2_000
+            4_000
         );
-        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 2_000);
+        assert_eq!(ForeignAssets::balance(1984, &[8; 32].into()), 4_000);
         assert_eq!(
             ForeignAssets::balance(1337, &Marketplace::treasury_account_id()),
             4_000
         );
         assert_eq!(ForeignAssets::balance(1337, &[8; 32].into()), 4_000);
         assert_eq!(ForeignAssets::balance(1984, &[1; 32].into()), 894_000);
-        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 23_500);
+        assert_eq!(ForeignAssets::balance(1984, &[10; 32].into()), 19_500);
         assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
         assert_eq!(ForeignAssets::balance(1337, &[1; 32].into()), 1_096_000);
         assert_eq!(ForeignAssets::balance(1337, &[10; 32].into()), 13_000);
@@ -5378,9 +5378,9 @@ fn buy_relisted_token_works() {
         assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 20990000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            6000
+            8000
         );
-        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 6000);
+        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 8000);
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 1_468_800);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_ok!(Marketplace::relist_token(
@@ -5560,9 +5560,9 @@ fn buy_relisted_token_fails() {
         assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 20990000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            6_000
+            8_000
         );
-        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 6_000);
+        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 8_000);
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 460_000);
         assert_eq!(PropertyAssetInfo::<Test>::get(0).unwrap().spv_created, true);
         assert_noop!(
@@ -6843,9 +6843,9 @@ fn upgrade_object_and_distribute_works() {
         assert_eq!(ForeignAssets::balance(1984, &([0; 32].into())), 21485000);
         assert_eq!(
             ForeignAssets::balance(1984, &Marketplace::treasury_account_id()),
-            11000
+            13000
         );
-        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 11000);
+        assert_eq!(ForeignAssets::balance(1984, &([8; 32].into())), 13000);
         assert_eq!(ForeignAssets::balance(1984, &([1; 32].into())), 980_000);
         assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 110_000);
 

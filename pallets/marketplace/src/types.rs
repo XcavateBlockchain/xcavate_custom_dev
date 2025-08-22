@@ -224,6 +224,15 @@ pub struct Payout<T: Config> {
     pub amount_in_usdt: <T as pallet::Config>::Balance,
 }
 
+impl<T: Config> Default for Payout<T> {
+    fn default() -> Self {
+        Self {
+            amount_in_usdc: Zero::zero(),
+            amount_in_usdt: Zero::zero()
+        }
+    }
+}
+
 /// A struct containing all payouts for the final settlement of a primary sale.
 #[derive(
     Encode,
