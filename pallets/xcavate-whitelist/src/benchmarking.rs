@@ -25,7 +25,10 @@ mod benchmarks {
     fn remove_admin() {
         let user: T::AccountId = account("admin", 0, 0);
 
-        assert_ok!(Whitelist::<T>::add_admin(RawOrigin::Root.into(), user.clone()));
+        assert_ok!(Whitelist::<T>::add_admin(
+            RawOrigin::Root.into(),
+            user.clone()
+        ));
 
         assert!(AdminAccounts::<T>::contains_key(&user));
 
@@ -40,11 +43,21 @@ mod benchmarks {
         let admin: T::AccountId = account("admin", 0, 0);
         let user: T::AccountId = account("user", 0, 0);
 
-        assert_ok!(Whitelist::<T>::add_admin(RawOrigin::Root.into(), admin.clone()));
+        assert_ok!(Whitelist::<T>::add_admin(
+            RawOrigin::Root.into(),
+            admin.clone()
+        ));
         #[extrinsic_call]
-        assign_role(RawOrigin::Signed(admin.clone()), user.clone(), Role::LettingAgent);
+        assign_role(
+            RawOrigin::Signed(admin.clone()),
+            user.clone(),
+            Role::LettingAgent,
+        );
 
-        assert_eq!(AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(), AccessPermission::Compliant);
+        assert_eq!(
+            AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(),
+            AccessPermission::Compliant
+        );
     }
 
     #[benchmark]
@@ -52,13 +65,24 @@ mod benchmarks {
         let admin: T::AccountId = account("admin", 0, 0);
         let user: T::AccountId = account("user", 0, 0);
 
-        assert_ok!(Whitelist::<T>::add_admin(RawOrigin::Root.into(), admin.clone()));
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin.clone()).into(), user.clone(), Role::LettingAgent));
+        assert_ok!(Whitelist::<T>::add_admin(
+            RawOrigin::Root.into(),
+            admin.clone()
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            user.clone(),
+            Role::LettingAgent
+        ));
 
         assert!(AccountRoles::<T>::contains_key(&user, Role::LettingAgent));
 
         #[extrinsic_call]
-        remove_role(RawOrigin::Signed(admin.clone()), user.clone(), Role::LettingAgent);
+        remove_role(
+            RawOrigin::Signed(admin.clone()),
+            user.clone(),
+            Role::LettingAgent,
+        );
 
         assert!(!AccountRoles::<T>::contains_key(&user, Role::LettingAgent));
     }
@@ -68,15 +92,33 @@ mod benchmarks {
         let admin: T::AccountId = account("admin", 0, 0);
         let user: T::AccountId = account("user", 0, 0);
 
-        assert_ok!(Whitelist::<T>::add_admin(RawOrigin::Root.into(), admin.clone()));
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin.clone()).into(), user.clone(), Role::LettingAgent));
+        assert_ok!(Whitelist::<T>::add_admin(
+            RawOrigin::Root.into(),
+            admin.clone()
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            user.clone(),
+            Role::LettingAgent
+        ));
 
-        assert_eq!(AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(), AccessPermission::Compliant);
+        assert_eq!(
+            AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(),
+            AccessPermission::Compliant
+        );
 
         #[extrinsic_call]
-        set_permission(RawOrigin::Signed(admin.clone()), user.clone(), Role::LettingAgent, AccessPermission::Revoked);
+        set_permission(
+            RawOrigin::Signed(admin.clone()),
+            user.clone(),
+            Role::LettingAgent,
+            AccessPermission::Revoked,
+        );
 
-        assert_eq!(AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(), AccessPermission::Revoked);
+        assert_eq!(
+            AccountRoles::<T>::get(&user, Role::LettingAgent).unwrap(),
+            AccessPermission::Revoked
+        );
     }
 
     impl_benchmark_test_suite!(Whitelist, crate::mock::new_test_ext(), crate::mock::Test);

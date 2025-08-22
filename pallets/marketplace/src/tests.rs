@@ -5906,13 +5906,10 @@ fn make_offer_fails() {
             pallet_xcavate_whitelist::Role::RealEstateInvestor,
             pallet_xcavate_whitelist::AccessPermission::Revoked,
         ));
-        assert_noop!(Marketplace::make_offer(
-            RuntimeOrigin::signed([2; 32].into()),
-            1,
-            200,
-            1,
-            1984
-        ), BadOrigin);
+        assert_noop!(
+            Marketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 200, 1, 1984),
+            BadOrigin
+        );
         assert_ok!(XcavateWhitelist::set_permission(
             RuntimeOrigin::signed([20; 32].into()),
             [2; 32].into(),

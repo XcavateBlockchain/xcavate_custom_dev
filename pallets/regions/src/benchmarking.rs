@@ -8,9 +8,9 @@ use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
 use pallet_xcavate_whitelist::Pallet as Whitelist;
+use pallet_xcavate_whitelist::Role;
 use scale_info::prelude::vec;
 use sp_runtime::Permill;
-use pallet_xcavate_whitelist::Role;
 
 pub trait Config: pallet_xcavate_whitelist::Config + crate::Config {}
 
@@ -23,8 +23,15 @@ mod benchmarks {
     fn create_whitelisted_user<T: Config>() -> (T::AccountId, T::AccountId) {
         let admin: T::AccountId = account("admin", 0, 0);
         let signer: T::AccountId = account("signer", 0, 0);
-        assert_ok!(Whitelist::<T>::add_admin(RawOrigin::Root.into(), admin.clone()));
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin.clone()).into(), signer.clone(), Role::RealEstateInvestor));
+        assert_ok!(Whitelist::<T>::add_admin(
+            RawOrigin::Root.into(),
+            admin.clone()
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            signer.clone(),
+            Role::RealEstateInvestor
+        ));
         (signer, admin)
     }
 
@@ -37,7 +44,11 @@ mod benchmarks {
 
         LastRegionProposalBlock::<T>::kill();
         let admin: T::AccountId = account("admin", 0, 0);
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), signer.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -90,7 +101,11 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
 
         LastRegionProposalBlock::<T>::kill();
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), signer.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
 
         #[extrinsic_call]
         propose_new_region(RawOrigin::Signed(signer.clone()), region.clone());
@@ -121,7 +136,11 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
 
         LastRegionProposalBlock::<T>::kill();
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), signer.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -135,7 +154,12 @@ mod benchmarks {
         ));
 
         #[extrinsic_call]
-        vote_on_region_proposal(RawOrigin::Signed(signer.clone()), region_id, Vote::Yes, deposit);
+        vote_on_region_proposal(
+            RawOrigin::Signed(signer.clone()),
+            region_id,
+            Vote::Yes,
+            deposit,
+        );
 
         let proposal_id = RegionProposalId::<T>::get(region_id).unwrap();
 
@@ -146,11 +170,57 @@ mod benchmarks {
             deposit
         );
         assert_eq!(
-            UserRegionVote::<T>::get(proposal_id, &signer)
-                .unwrap()
-                .vote,
+            UserRegionVote::<T>::get(proposal_id, &signer).unwrap().vote,
             Vote::Yes
         );
+    }
+
+    #[benchmark]
+    fn unlock_region_voting_token() {
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+
+        let region = RegionIdentifier::France;
+        let region_id = region.clone().into_u16();
+
+        let deposit = T::RegionProposalDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&signer, deposit * 10u32.into());
+
+        LastRegionProposalBlock::<T>::kill();
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
+        assert_ok!(Regions::<T>::propose_new_region(
+            RawOrigin::Signed(signer.clone()).into(),
+            region.clone()
+        ));
+
+        let voter: T::AccountId = account("voter", 0, 0);
+        let _ = T::NativeCurrency::mint_into(&voter, deposit * 10u32.into());
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            voter.clone(),
+            Role::RealEstateInvestor
+        ));
+
+        assert_ok!(Regions::<T>::vote_on_region_proposal(
+            RawOrigin::Signed(voter.clone()).into(),
+            region_id,
+            Vote::Yes,
+            deposit * 2u32.into()
+        ));
+
+        let proposal_id = RegionProposalId::<T>::get(region_id).unwrap();
+        let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+        assert_eq!(T::NativeCurrency::balance(&voter), deposit * 8u32.into());
+
+        #[extrinsic_call]
+        unlock_region_voting_token(RawOrigin::Signed(voter.clone()), proposal_id);
+
+        assert_eq!(T::NativeCurrency::balance(&voter), deposit * 10u32.into());
+        assert!(UserRegionVote::<T>::get(proposal_id, &voter).is_none());
     }
 
     #[benchmark]
@@ -164,7 +234,11 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 1000u32.into());
 
         LastRegionProposalBlock::<T>::kill();
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin.clone()).into(), signer.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -179,7 +253,11 @@ mod benchmarks {
         for i in 1..T::MaxRegionVoters::get() {
             let voter: T::AccountId = account("voter", i, i);
             let _ = T::NativeCurrency::mint_into(&voter, deposit * 1000u32.into());
-            assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin.clone()).into(), voter.clone(), Role::RealEstateInvestor));
+            assert_ok!(Whitelist::<T>::assign_role(
+                RawOrigin::Signed(admin.clone()).into(),
+                voter.clone(),
+                Role::RealEstateInvestor
+            ));
             assert_ok!(Regions::<T>::vote_on_region_proposal(
                 RawOrigin::Signed(voter.clone()).into(),
                 region_id,
@@ -201,7 +279,11 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&first_bidder, auction_amount * 100u32.into());
 
         let first_bid_amount = auction_amount.saturating_mul(9u32.into());
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), first_bidder.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            first_bidder.clone(),
+            Role::RegionalOperator
+        ));
         /*         assert_ok!(Regions::<T>::bid_on_region(
             RawOrigin::Signed(first_bidder).into(),
             region_id,
@@ -228,7 +310,11 @@ mod benchmarks {
         let _ = T::NativeCurrency::mint_into(&signer, deposit * 1000u32.into());
 
         LastRegionProposalBlock::<T>::kill();
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), signer.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            signer.clone(),
+            Role::RegionalOperator
+        ));
         assert_ok!(Regions::<T>::propose_new_region(
             RawOrigin::Signed(signer.clone()).into(),
             region.clone()
@@ -290,7 +376,7 @@ mod benchmarks {
 
     #[benchmark]
     fn adjust_region_tax() {
-        let (signer, _): (T::AccountId, T::AccountId)  = create_whitelisted_user::<T>();
+        let (signer, _): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
         let new_tax = Permill::from_percent(99);
 
@@ -302,7 +388,7 @@ mod benchmarks {
 
     #[benchmark]
     fn create_new_location() {
-        let (signer, _): (T::AccountId, T::AccountId)  = create_whitelisted_user::<T>();
+        let (signer, _): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
         let location = BoundedVec::try_from("SG23 5TH".as_bytes().to_vec()).unwrap();
 
@@ -322,11 +408,15 @@ mod benchmarks {
 
     #[benchmark]
     fn propose_remove_regional_operator() {
-        let (signer, admin): (T::AccountId, T::AccountId)  = create_whitelisted_user::<T>();
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
 
         let proposer: T::AccountId = account("proposer", 0, 0);
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), proposer.clone(), Role::RealEstateInvestor));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            proposer.clone(),
+            Role::RealEstateInvestor
+        ));
 
         let deposit = T::RegionProposalDeposit::get();
         let _ = T::NativeCurrency::mint_into(&proposer, deposit * 10u32.into());
@@ -349,17 +439,25 @@ mod benchmarks {
             proposal_id
         ));
     }
-/*
+
     #[benchmark]
     fn vote_on_remove_owner_proposal() {
-        let signer: T::AccountId = create_whitelisted_user::<T>();
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
 
         let proposer: T::AccountId = account("proposer", 0, 0);
-        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), proposer.clone()).unwrap();
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            proposer.clone(),
+            Role::RealEstateInvestor
+        ));
 
         let voter: T::AccountId = account("voter", 0, 0);
-        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), voter.clone()).unwrap();
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            voter.clone(),
+            Role::RealEstateInvestor
+        ));
 
         let deposit = T::RegionProposalDeposit::get() * 100u32.into();
         let _ = T::NativeCurrency::mint_into(&proposer, deposit);
@@ -374,22 +472,80 @@ mod benchmarks {
         assert_ok!(Regions::<T>::vote_on_remove_owner_proposal(
             RawOrigin::Signed(voter.clone()).into(),
             region_id,
-            Vote::No
+            Vote::No,
+            vote_power / 10u32.into()
         ));
 
         #[extrinsic_call]
-        vote_on_remove_owner_proposal(RawOrigin::Signed(voter.clone()), region_id, Vote::Yes);
+        vote_on_remove_owner_proposal(
+            RawOrigin::Signed(voter.clone()),
+            region_id,
+            Vote::Yes,
+            vote_power / 5u32.into(),
+        );
 
+        let proposal_id = RegionOwnerProposalId::<T>::get(region_id).unwrap();
         assert_eq!(
-            OngoingRegionOwnerProposalVotes::<T>::get(region_id)
+            OngoingRegionOwnerProposalVotes::<T>::get(proposal_id)
                 .unwrap()
                 .yes_voting_power,
-            vote_power
+            vote_power / 5u32.into()
         );
-        assert!(UserRegionOwnerVote::<T>::get(region_id)
-            .unwrap()
-            .get(&voter)
-            .is_some());
+        assert!(UserRegionOwnerVote::<T>::get(proposal_id, &voter).is_some());
+    }
+
+    #[benchmark]
+    fn unlock_region_onwer_removal_voting_token() {
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+        let region_id = create_a_new_region::<T>(signer.clone());
+
+        let proposer: T::AccountId = account("proposer", 0, 0);
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            proposer.clone(),
+            Role::RealEstateInvestor
+        ));
+
+        let voter: T::AccountId = account("voter", 0, 0);
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            voter.clone(),
+            Role::RealEstateInvestor
+        ));
+
+        let deposit = T::RegionProposalDeposit::get() * 100u32.into();
+        let _ = T::NativeCurrency::mint_into(&proposer, deposit);
+
+        let vote_power = T::MinimumVotingAmount::get() * 100u32.into();
+        let _ = T::NativeCurrency::mint_into(&voter, vote_power);
+        assert_ok!(Regions::<T>::propose_remove_regional_operator(
+            RawOrigin::Signed(proposer.clone()).into(),
+            region_id
+        ));
+
+        assert_ok!(Regions::<T>::vote_on_remove_owner_proposal(
+            RawOrigin::Signed(voter.clone()).into(),
+            region_id,
+            Vote::No,
+            vote_power / 10u32.into()
+        ));
+
+        let expiry = frame_system::Pallet::<T>::block_number() + T::RegionVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_eq!(
+            T::NativeCurrency::balance(&voter),
+            vote_power / 10u32.into() * 9u32.into()
+        );
+
+        let proposal_id = RegionOwnerProposalId::<T>::get(region_id).unwrap();
+
+        #[extrinsic_call]
+        unlock_region_onwer_removal_voting_token(RawOrigin::Signed(voter.clone()), proposal_id);
+
+        let proposal_id = RegionOwnerProposalId::<T>::get(region_id).unwrap();
+        assert!(UserRegionOwnerVote::<T>::get(proposal_id, &voter).is_none());
+        assert_eq!(T::NativeCurrency::balance(&voter), vote_power);
     }
 
     #[benchmark]
@@ -399,10 +555,16 @@ mod benchmarks {
 
         let bidder_1: T::AccountId = account("bidder1", 0, 0);
         let bidder_2: T::AccountId = account("bidder2", 0, 0);
-        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), bidder_1.clone()).unwrap();
-        Whitelist::<T>::add_to_whitelist(RawOrigin::Root.into(), bidder_2.clone()).unwrap();
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), bidder_1.clone(), Role::RegionalOperator));
-        assert_ok!(Whitelist::<T>::assign_role(RawOrigin::Signed(admin).into(), bidder_2.clone(), Role::RegionalOperator));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            bidder_1.clone(),
+            Role::RegionalOperator
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            bidder_2.clone(),
+            Role::RegionalOperator
+        ));
 
         let expiry = frame_system::Pallet::<T>::block_number()
             + T::RegionOwnerChangePeriod::get()
@@ -434,7 +596,7 @@ mod benchmarks {
 
     #[benchmark]
     fn initiate_region_owner_resignation() {
-        let signer: T::AccountId = create_whitelisted_user::<T>();
+        let (signer, _): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
 
         let initial_block = frame_system::Pallet::<T>::block_number();
@@ -456,16 +618,66 @@ mod benchmarks {
 
     #[benchmark]
     fn register_lawyer() {
-        let signer: T::AccountId = create_whitelisted_user::<T>();
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let region_id = create_a_new_region::<T>(signer.clone());
 
         let lawyer: T::AccountId = account("lawyer", 0, 0);
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            lawyer.clone(),
+            Role::Lawyer
+        ));
+
+        let laywer_deposit = T::LawyerDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
 
         #[extrinsic_call]
-        register_lawyer(RawOrigin::Signed(signer.clone()), region_id, lawyer.clone());
+        register_lawyer(RawOrigin::Signed(lawyer.clone()), region_id);
 
-        assert_eq!(RealEstateLawyer::<T>::get(lawyer), Some(region_id));
-    } */
+        assert_eq!(
+            RealEstateLawyer::<T>::get(&lawyer).unwrap().region,
+            region_id
+        );
+        assert_eq!(
+            RealEstateLawyer::<T>::get(&lawyer).unwrap().deposit,
+            laywer_deposit
+        );
+    }
+
+    #[benchmark]
+    fn unregister_lawyer() {
+        let (signer, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+        let region_id = create_a_new_region::<T>(signer.clone());
+
+        let lawyer: T::AccountId = account("lawyer", 0, 0);
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin).into(),
+            lawyer.clone(),
+            Role::Lawyer
+        ));
+
+        let laywer_deposit = T::LawyerDeposit::get();
+        let _ = T::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
+
+        assert_ok!(Regions::<T>::register_lawyer(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            region_id
+        ));
+
+        assert_eq!(
+            T::NativeCurrency::balance(&lawyer),
+            laywer_deposit * 9u32.into()
+        );
+
+        #[extrinsic_call]
+        unregister_lawyer(RawOrigin::Signed(lawyer.clone()), region_id);
+
+        assert_eq!(
+            T::NativeCurrency::balance(&lawyer),
+            laywer_deposit * 10u32.into()
+        );
+        assert!(RealEstateLawyer::<T>::get(&lawyer).is_none());
+    }
 
     impl_benchmark_test_suite!(Regions, crate::mock::new_test_ext(), crate::mock::Test);
 }

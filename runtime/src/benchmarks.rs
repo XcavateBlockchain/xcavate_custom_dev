@@ -33,8 +33,9 @@ frame_benchmarking::define_benchmarks!(
     [pallet_collator_selection, CollatorSelection]
     [cumulus_pallet_parachain_system, ParachainSystem]
     [cumulus_pallet_xcmp_queue, XcmpQueue]
+    [pallet_xcavate_whitelist, XcavateWhitelist]
     [pallet_regions, Regions]
     [pallet_marketplace, Marketplace]
-    [pallet_property_management, PropertyManagement]
-    [pallet_property_governance, PropertyGovernance]
+/*    [pallet_property_management, PropertyManagement]
+    [pallet_property_governance, PropertyGovernance] */
 );

@@ -882,7 +882,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnlocked` event when successful.
         #[pallet::call_index(2)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unlock_region_voting_token())]
         pub fn unlock_region_voting_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
