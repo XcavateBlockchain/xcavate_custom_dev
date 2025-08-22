@@ -276,6 +276,8 @@ pub trait RolePermission<AccountId> {
     fn has_role(account: &AccountId, role: Role) -> bool;
 
     fn is_compliant(account: &AccountId, role: Role) -> bool;
+
+    fn is_admin(account: &AccountId) -> bool;
 }
 
 impl<T: Config> RolePermission<T::AccountId> for Pallet<T> {
@@ -286,5 +288,9 @@ impl<T: Config> RolePermission<T::AccountId> for Pallet<T> {
     fn is_compliant(account: &T::AccountId, role: Role) -> bool {
         AccountRoles::<T>::get(account, role)
             .map_or(false, |access| access == AccessPermission::Compliant)
+    }
+
+    fn is_admin(account: &T::AccountId) -> bool {
+        AdminAccounts::<T>::contains_key(&account)
     }
 }

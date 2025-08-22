@@ -62,6 +62,9 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
         TokenOwnerFunds<T>,
         <T as pallet::Config>::MaxPropertyToken,
     >,
+    pub buyers: BoundedBTreeSet<AccountIdOf<T>, <T as pallet::Config>::MaxPropertyToken>,
+    pub claim_expiry: Option<BlockNumberFor<T>>,
+    pub relist_count: u8,
 }
 
 /// Infos regarding the listing of a token.

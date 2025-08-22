@@ -617,6 +617,8 @@ parameter_types! {
     pub const LawyerVotingDuration: BlockNumber = 20;
     pub const LegalProcessDuration: BlockNumber = 30;
     pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
+    pub const ClaimWindowTime: BlockNumber = 100;
+    pub const MaximumRelistAttempts: u8 = 3;
 }
 
 /// Configure the pallet-marketplace in pallets/marketplace.
@@ -646,6 +648,8 @@ impl pallet_marketplace::Config for Runtime {
     type PermissionOrigin = EnsureHasRole<Self>;
     type CompliantOrigin = EnsureCompliant<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
+    type ClaimWindow = ClaimWindowTime;
+    type MaxRelistAttempts = MaximumRelistAttempts;
 }
 
 parameter_types! {

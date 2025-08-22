@@ -207,6 +207,11 @@ pub mod pallet {
 
         #[pallet::constant]
         type MinVotingQuorum: Get<Percent>;
+
+        #[pallet::constant]
+        type ClaimWindow: Get<BlockNumberFor<Self>>;
+        #[pallet::constant]
+        type MaxRelistAttempts: Get<u8>;
     }
 
     pub type RegionId = u16;
@@ -510,6 +515,12 @@ pub mod pallet {
         PrimarySaleSoldOut {
             listing_id: ListingId,
             asset_id: u32,
+            claim_deadline: BlockNumberFor<T>,
+        },
+        /// All token of a property have been claimed.
+        AllPropertyTokenClaimed {
+            listing_id: ListingId,
+            asset_id: u32,
             legal_process_expiry_block: BlockNumberFor<T>,
         },
         /// A user has unfrozen his token.
@@ -525,6 +536,11 @@ pub mod pallet {
             lawyer_type: LegalProperty,
             cost_in_usdc: <T as pallet::Config>::Balance,
             cost_in_usdt: <T as pallet::Config>::Balance,
+        },
+        UnclaimedRelisted {
+            listing_id: ListingId,
+            amount: u32,
+            relist_count: u8,
         },
     }
 
@@ -616,6 +632,9 @@ pub mod pallet {
         LegalProcessOngoing,
         /// The user has no token amount frozen.
         NoFrozenAmount,
+        NoClaimWindow,
+        ClaimWindowExpired,
+        ClaimWindowNotExpired,
     }
 
     #[pallet::call]
@@ -716,6 +735,9 @@ pub mod pallet {
                 tax: region_info.tax,
                 listing_expiry,
                 investor_funds: Default::default(),
+                buyers: Default::default(),
+                claim_expiry: None,
+                relist_count: Zero::zero(),
             };
             OngoingObjectListing::<T>::insert(listing_id, property_details);
 
@@ -871,40 +893,27 @@ pub mod pallet {
 
                 Ok::<(), DispatchError>(())
             })?;
-
-            Self::update_map(
-                &mut property_details.collected_funds,
-                payment_asset,
-                transfer_price,
-            )?;
-            Self::update_map(&mut property_details.collected_tax, payment_asset, tax)?;
-            Self::update_map(&mut property_details.collected_fees, payment_asset, fee)?;
-
+            if !property_details.buyers.contains(&signer) {
+                property_details
+                    .buyers
+                    .try_insert(signer.clone())
+                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
+            }
+            
             let asset_id = property_details.asset_id;
             let tax_paid_by_developer = property_details.tax_paid_by_developer;
             let listed_token = property_details.listed_token_amount;
-            OngoingObjectListing::<T>::insert(listing_id, &property_details);
             if listed_token == 0 {
-                let initial_funds = Self::create_initial_funds()?;
                 let current_block_number = <frame_system::Pallet<T>>::block_number();
-                let expiry_block = current_block_number.saturating_add(T::LegalProcessTime::get());
-                let property_lawyer_details = PropertyLawyerDetails {
-                    real_estate_developer_lawyer: None,
-                    spv_lawyer: None,
-                    real_estate_developer_status: DocumentStatus::Pending,
-                    spv_status: DocumentStatus::Pending,
-                    real_estate_developer_lawyer_costs: initial_funds.clone(),
-                    spv_lawyer_costs: initial_funds,
-                    legal_process_expiry: expiry_block,
-                    second_attempt: false,
-                };
-                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+                let expiry_block = current_block_number.saturating_add(T::ClaimWindow::get());
+                property_details.claim_expiry = Some(expiry_block);
                 Self::deposit_event(Event::<T>::PrimarySaleSoldOut {
                     listing_id,
                     asset_id,
-                    legal_process_expiry_block: expiry_block,
+                    claim_deadline: expiry_block,
                 });
             }
+            OngoingObjectListing::<T>::insert(listing_id, &property_details);
             let new_total_funds_for_asset = *property_details
                 .collected_funds
                 .get(&payment_asset)
@@ -954,6 +963,11 @@ pub mod pallet {
                 PropertyLawyer::<T>::get(listing_id).is_some(),
                 Error::<T>::PropertyHasNotBeenSoldYet
             );
+            let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
+            ensure!(
+                <frame_system::Pallet<T>>::block_number() < claim_expiry,
+                Error::<T>::ClaimWindowExpired
+            );
             let token_details =
                 TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
@@ -981,6 +995,16 @@ pub mod pallet {
                     .ok_or(Error::<T>::MultiplyError)?
                     .checked_div(&100u128.into())
                     .ok_or(Error::<T>::DivisionError)?;
+
+                Self::update_map(
+                    &mut property_details.collected_funds,
+                    *asset,
+                    *paid_funds,
+                )?;
+                Self::update_map(&mut property_details.collected_fees, *asset, investor_fee)?;
+                if !property_details.tax_paid_by_developer {
+                    Self::update_map(&mut property_details.collected_tax, *asset, paid_tax)?;
+                }
 
                 // Total amount to unfreeze (paid_funds + fee + tax)
                 let total_investor_amount = paid_funds
@@ -1054,6 +1078,32 @@ pub mod pallet {
             let asset_id = property_details.asset_id;
 
             T::PropertyToken::distribute_property_token_to_owner(asset_id, &signer, token_amount)?;
+            property_details.buyers.remove(&signer);
+
+            if property_details.buyers.is_empty() {
+                ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::LegalProcessOngoing);
+                let initial_funds = Self::create_initial_funds()?;
+                let current_block_number = <frame_system::Pallet<T>>::block_number();
+                let expiry_block = current_block_number.saturating_add(T::LegalProcessTime::get());
+                let property_lawyer_details = PropertyLawyerDetails {
+                    real_estate_developer_lawyer: None,
+                    spv_lawyer: None,
+                    real_estate_developer_status: DocumentStatus::Pending,
+                    spv_status: DocumentStatus::Pending,
+                    real_estate_developer_lawyer_costs: initial_funds.clone(),
+                    spv_lawyer_costs: initial_funds,
+                    legal_process_expiry: expiry_block,
+                    second_attempt: false,
+                };
+                property_details.claim_expiry = None;
+                PropertyLawyer::<T>::insert(listing_id, property_lawyer_details);
+                Self::deposit_event(Event::<T>::AllPropertyTokenClaimed {
+                    listing_id,
+                    asset_id,
+                    legal_process_expiry_block: expiry_block,
+                });
+            }
+
             OngoingObjectListing::<T>::insert(listing_id, property_details);
             Self::deposit_event(Event::<T>::PropertyTokenClaimed {
                 listing_id,
@@ -1061,6 +1111,53 @@ pub mod pallet {
                 owner: signer,
                 amount: token_amount,
             });
+            Ok(())
+        }
+
+        #[pallet::call_index(30)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn finalize_claim_window(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+            let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
+            let mut property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::NoObjectFound)?;
+            let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
+            let current_block = <frame_system::Pallet<T>>::block_number();
+            ensure!(current_block > claim_expiry, Error::<T>::ClaimWindowNotExpired);
+            
+            let mut unclaimed_amount: u32 = 0;
+            for buyer in property_details.buyers.clone() {
+                if let Some(buyer_details) = TokenOwner::<T>::take(&buyer, listing_id) {
+                    unclaimed_amount = unclaimed_amount.checked_add(property_details.token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;                
+                }
+            }
+
+            if unclaimed_amount == 0 {
+                ensure!(
+                    PropertyLawyer::<T>::get(listing_id).is_some(),
+                    Error::<T>::TokenNotForSale
+                );
+                property_details.claim_expiry = None;
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
+            } else {
+                property_details.listed_token_amount = property_details
+                    .listed_token_amount
+                    .checked_add(unclaimed_amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                property_details.relist_count = property_details
+                    .relist_count
+                    .checked_add(1)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                property_details.claim_expiry = None;
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
+                Self::deposit_event(Event::<T>::UnclaimedRelisted {
+                    listing_id,
+                    amount: unclaimed_amount,
+                    relist_count: property_details.relist_count,
+                });
+            }
             Ok(())
         }
 

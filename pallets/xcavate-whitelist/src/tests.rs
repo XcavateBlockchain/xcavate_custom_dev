@@ -8,6 +8,7 @@ fn add_admin_works() {
         System::set_block_number(1);
         assert_ok!(Whitelist::add_admin(RuntimeOrigin::root(), 1));
         assert_eq!(AdminAccounts::<Test>::get(&1).unwrap(), ());
+        assert!(Whitelist::is_admin(&1));
     });
 }
 
@@ -32,6 +33,7 @@ fn remove_admin_works() {
         assert_eq!(AdminAccounts::<Test>::get(&1).unwrap(), ());
         assert_ok!(Whitelist::remove_admin(RuntimeOrigin::root(), 1));
         assert_eq!(AdminAccounts::<Test>::get(&1), None);
+        assert!(!Whitelist::is_admin(&1));
     });
 }
 
