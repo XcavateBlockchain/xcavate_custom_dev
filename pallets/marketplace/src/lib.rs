@@ -635,6 +635,8 @@ pub mod pallet {
         NoClaimWindow,
         ClaimWindowExpired,
         ClaimWindowNotExpired,
+        StillHasUnclaimedToken,
+        NoValidTokenToClaim,
     }
 
     #[pallet::call]
@@ -738,6 +740,7 @@ pub mod pallet {
                 buyers: Default::default(),
                 claim_expiry: None,
                 relist_count: Zero::zero(),
+                unclaimed_token_amount: Zero::zero(),
             };
             OngoingObjectListing::<T>::insert(listing_id, property_details);
 
@@ -861,7 +864,10 @@ pub mod pallet {
                 .listed_token_amount
                 .checked_sub(amount)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
-
+            property_details.unclaimed_token_amount = property_details
+                .unclaimed_token_amount
+                .checked_add(amount)
+                .ok_or(Error::<T>::ArithmeticUnderflow)?;
             TokenOwner::<T>::try_mutate_exists(&signer, listing_id, |maybe_token_owner_details| {
                 if maybe_token_owner_details.is_none() {
                     let initial_funds = Self::create_initial_funds()?;
@@ -869,12 +875,14 @@ pub mod pallet {
                         token_amount: 0,
                         paid_funds: initial_funds.clone(),
                         paid_tax: initial_funds,
+                        relist_count: property_details.relist_count,
                     });
                 }
 
                 let token_owner_details = maybe_token_owner_details
                     .as_mut()
                     .ok_or(Error::<T>::TokenOwnerNotFound)?;
+                ensure!(token_owner_details.relist_count == property_details.relist_count, Error::<T>::StillHasUnclaimedToken);
 
                 token_owner_details.token_amount = token_owner_details
                     .token_amount
@@ -970,6 +978,7 @@ pub mod pallet {
             );
             let token_details =
                 TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
+            ensure!(token_details.relist_count == property_details.relist_count, Error::<T>::NoValidTokenToClaim);
             let property_account = Self::property_account_id(property_details.asset_id);
             let fee_percent = T::MarketplaceFeePercentage::get();
             ensure!(
@@ -1079,6 +1088,10 @@ pub mod pallet {
 
             T::PropertyToken::distribute_property_token_to_owner(asset_id, &signer, token_amount)?;
             property_details.buyers.remove(&signer);
+            property_details.unclaimed_token_amount = property_details
+                .unclaimed_token_amount
+                .checked_sub(token_amount)
+                .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
             if property_details.buyers.is_empty() {
                 ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::LegalProcessOngoing);
@@ -1127,13 +1140,7 @@ pub mod pallet {
             let current_block = <frame_system::Pallet<T>>::block_number();
             ensure!(current_block > claim_expiry, Error::<T>::ClaimWindowNotExpired);
             
-            let mut unclaimed_amount: u32 = 0;
-            for buyer in property_details.buyers.clone() {
-                if let Some(buyer_details) = TokenOwner::<T>::take(&buyer, listing_id) {
-                    unclaimed_amount = unclaimed_amount.checked_add(property_details.token_amount).ok_or(Error::<T>::ArithmeticOverflow)?;                
-                }
-            }
-
+            let unclaimed_amount = property_details.unclaimed_token_amount;
             if unclaimed_amount == 0 {
                 ensure!(
                     PropertyLawyer::<T>::get(listing_id).is_some(),
@@ -1142,21 +1149,27 @@ pub mod pallet {
                 property_details.claim_expiry = None;
                 OngoingObjectListing::<T>::insert(listing_id, &property_details);
             } else {
-                property_details.listed_token_amount = property_details
-                    .listed_token_amount
-                    .checked_add(unclaimed_amount)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
-                property_details.relist_count = property_details
-                    .relist_count
-                    .checked_add(1)
-                    .ok_or(Error::<T>::ArithmeticOverflow)?;
-                property_details.claim_expiry = None;
-                OngoingObjectListing::<T>::insert(listing_id, &property_details);
-                Self::deposit_event(Event::<T>::UnclaimedRelisted {
-                    listing_id,
-                    amount: unclaimed_amount,
-                    relist_count: property_details.relist_count,
-                });
+                if property_details.relist_count >= T::MaxRelistAttempts::get() {
+                
+                } else {
+                    property_details.listed_token_amount = property_details
+                        .listed_token_amount
+                        .checked_add(unclaimed_amount)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
+                    property_details.relist_count = property_details
+                        .relist_count
+                        .checked_add(1)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
+                    property_details.unclaimed_token_amount = 0;
+                    property_details.buyers.clear();
+                    property_details.claim_expiry = None;
+                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
+                    Self::deposit_event(Event::<T>::UnclaimedRelisted {
+                        listing_id,
+                        amount: unclaimed_amount,
+                        relist_count: property_details.relist_count,
+                    });
+                }
             }
             Ok(())
         }

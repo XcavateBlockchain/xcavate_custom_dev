@@ -65,6 +65,7 @@ pub struct PropertyListingDetails<NftId, NftCollectionId, T: Config> {
     pub buyers: BoundedBTreeSet<AccountIdOf<T>, <T as pallet::Config>::MaxPropertyToken>,
     pub claim_expiry: Option<BlockNumberFor<T>>,
     pub relist_count: u8,
+    pub unclaimed_token_amount: u32,
 }
 
 /// Infos regarding the listing of a token.
@@ -137,6 +138,7 @@ pub struct TokenOwnerDetails<T: Config> {
         <T as pallet::Config>::Balance,
         <T as pallet::Config>::MaxAcceptedAssets,
     >,
+    pub relist_count: u8,
 }
 
 #[derive(
