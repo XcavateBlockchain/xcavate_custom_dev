@@ -291,6 +291,6 @@ impl<T: Config> RolePermission<T::AccountId> for Pallet<T> {
     }
 
     fn is_admin(account: &T::AccountId) -> bool {
-        AdminAccounts::<T>::contains_key(&account)
+        AdminAccounts::<T>::contains_key(account)
     }
 }

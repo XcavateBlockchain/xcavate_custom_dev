@@ -365,6 +365,8 @@ parameter_types! {
     pub const LawyerVotingDuration: BlockNumber = 30;
     pub const LegalProcessDuration: BlockNumber = 100;
     pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
+    pub const ClaimWindowTime: BlockNumber = 100;
+    pub const MaximumRelistAttempts: u8 = 3;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -394,6 +396,8 @@ impl pallet_marketplace::Config for Test {
     type PermissionOrigin = EnsureHasRole<Self>;
     type CompliantOrigin = EnsureCompliant<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
+    type ClaimWindow = ClaimWindowTime;
+    type MaxRelistAttempts = MaximumRelistAttempts;
 }
 
 // Build genesis storage according to the mock runtime.

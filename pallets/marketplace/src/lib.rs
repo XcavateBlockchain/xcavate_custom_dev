@@ -279,6 +279,11 @@ pub mod pallet {
     #[pallet::storage]
     pub type RefundToken<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, RefundInfos<T>, OptionQuery>;
+    
+    /// Stores required infos in case of a refund.
+    #[pallet::storage]
+    pub type RefundClaimedToken<T: Config> =
+        StorageMap<_, Blake2_128Concat, ListingId, u32, OptionQuery>;
 
     /// Stores required infos in case of a refund is a legal process expired.
     #[pallet::storage]
@@ -367,8 +372,6 @@ pub mod pallet {
             tax_paid: <T as pallet::Config>::Balance,
             payment_asset: u32,
             new_tokens_remaining: u32,
-            new_total_funds_for_asset: <T as pallet::Config>::Balance,
-            new_total_tax_for_asset: <T as pallet::Config>::Balance,
         },
         /// Token have been listed.
         TokenRelisted {
@@ -637,6 +640,8 @@ pub mod pallet {
         ClaimWindowNotExpired,
         StillHasUnclaimedToken,
         NoValidTokenToClaim,
+        /// The refund process has already started.
+        TokenGettingRefunded,
     }
 
     #[pallet::call]
@@ -922,15 +927,6 @@ pub mod pallet {
                 });
             }
             OngoingObjectListing::<T>::insert(listing_id, &property_details);
-            let new_total_funds_for_asset = *property_details
-                .collected_funds
-                .get(&payment_asset)
-                .unwrap_or(&0u128.into());
-
-            let new_total_tax_for_asset = *property_details
-                .collected_tax
-                .get(&payment_asset)
-                .unwrap_or(&0u128.into());
             Self::deposit_event(Event::<T>::PropertyTokenBought {
                 listing_index: listing_id,
                 asset_id,
@@ -944,8 +940,6 @@ pub mod pallet {
                 },
                 payment_asset,
                 new_tokens_remaining: listed_token,
-                new_total_funds_for_asset,
-                new_total_tax_for_asset,
             });
             Ok(())
         }
@@ -967,10 +961,6 @@ pub mod pallet {
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
-            ensure!(
-                PropertyLawyer::<T>::get(listing_id).is_some(),
-                Error::<T>::PropertyHasNotBeenSoldYet
-            );
             let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
             ensure!(
                 <frame_system::Pallet<T>>::block_number() < claim_expiry,
@@ -1013,6 +1003,14 @@ pub mod pallet {
                 Self::update_map(&mut property_details.collected_fees, *asset, investor_fee)?;
                 if !property_details.tax_paid_by_developer {
                     Self::update_map(&mut property_details.collected_tax, *asset, paid_tax)?;
+                } else {
+                    let asset_details =
+                        T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
+                    let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region)
+                        .ok_or(Error::<T>::RegionUnknown)?;
+                    let tax_percent = region_info.tax;
+                    let tax = tax_percent.mul_floor(*paid_funds);
+                    Self::update_map(&mut property_details.collected_tax, *asset, tax)?;
                 }
 
                 // Total amount to unfreeze (paid_funds + fee + tax)
@@ -1136,6 +1134,7 @@ pub mod pallet {
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::NoObjectFound)?;
+            ensure!(!RefundClaimedToken::<T>::contains_key(listing_id), Error::<T>::TokenGettingRefunded);
             let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
             let current_block = <frame_system::Pallet<T>>::block_number();
             ensure!(current_block > claim_expiry, Error::<T>::ClaimWindowNotExpired);
@@ -1148,28 +1147,34 @@ pub mod pallet {
                 );
                 property_details.claim_expiry = None;
                 OngoingObjectListing::<T>::insert(listing_id, &property_details);
+            } else if property_details.relist_count >= T::MaxRelistAttempts::get() {
+                property_details.relist_count = property_details
+                    .relist_count
+                    .checked_add(1)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                RefundClaimedToken::<T>::insert(listing_id, property_details.token_amount.saturating_sub(unclaimed_amount));
             } else {
-                if property_details.relist_count >= T::MaxRelistAttempts::get() {
-                
-                } else {
-                    property_details.listed_token_amount = property_details
-                        .listed_token_amount
-                        .checked_add(unclaimed_amount)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-                    property_details.relist_count = property_details
-                        .relist_count
-                        .checked_add(1)
-                        .ok_or(Error::<T>::ArithmeticOverflow)?;
-                    property_details.unclaimed_token_amount = 0;
-                    property_details.buyers.clear();
-                    property_details.claim_expiry = None;
-                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
-                    Self::deposit_event(Event::<T>::UnclaimedRelisted {
-                        listing_id,
-                        amount: unclaimed_amount,
-                        relist_count: property_details.relist_count,
-                    });
+                property_details.listed_token_amount = property_details
+                    .listed_token_amount
+                    .checked_add(unclaimed_amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                property_details.relist_count = property_details
+                    .relist_count
+                    .checked_add(1)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                property_details.unclaimed_token_amount = 0;
+                property_details.buyers.clear();
+                property_details.claim_expiry = None;
+                let possible_listing_expiry = current_block.saturating_add(T::ClaimWindow::get());
+                if property_details.listing_expiry < possible_listing_expiry {
+                    property_details.listing_expiry = possible_listing_expiry;
                 }
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
+                Self::deposit_event(Event::<T>::UnclaimedRelisted {
+                    listing_id,
+                    amount: unclaimed_amount,
+                    relist_count: property_details.relist_count,
+                });
             }
             Ok(())
         }
@@ -1339,7 +1344,7 @@ pub mod pallet {
                 Error::<T>::ListingExpired
             );
             ensure!(
-                PropertyLawyer::<T>::get(listing_id).is_none(),
+                !property_details.listed_token_amount.is_zero(),
                 Error::<T>::PropertyAlreadySold
             );
 
@@ -1356,7 +1361,7 @@ pub mod pallet {
                 tax_refunded_usdc,
                 principal_refunded_usdt,
                 tax_refunded_usdt,
-            ) = Self::unfreeze_token_with_refunds(&mut property_details, &token_details, &signer)?;
+            ) = Self::unfreeze_token_with_refunds(&token_details, &signer)?;
             property_details.listed_token_amount = property_details
                 .listed_token_amount
                 .checked_add(token_details.token_amount)
@@ -1757,7 +1762,7 @@ pub mod pallet {
             );
 
             ensure!(
-                PropertyLawyer::<T>::get(listing_id).is_none(),
+                !property_details.listed_token_amount.is_zero(),
                 Error::<T>::PropertyAlreadySold
             );
 
@@ -1769,7 +1774,7 @@ pub mod pallet {
             );
 
             // Process refunds for supported assets (USDT and USDC)
-            Self::unfreeze_token(&mut property_details, &token_details, &signer)?;
+            Self::unfreeze_token(&token_details, &signer)?;
 
             property_details.listed_token_amount = property_details
                 .listed_token_amount
@@ -1835,9 +1840,8 @@ pub mod pallet {
                 property_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingNotExpired
             );
-
             ensure!(
-                PropertyLawyer::<T>::get(listing_id).is_none(),
+                !property_details.listed_token_amount.is_zero(),
                 Error::<T>::PropertyAlreadySold
             );
             // Check if all tokens are returned
@@ -1871,6 +1875,80 @@ pub mod pallet {
                 developer: signer,
                 amount: deposit_amount,
             });
+            Ok(())
+        }
+
+        #[pallet::call_index(31)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn withdraw_claiming_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
+            let property_details =
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let property_account = Self::property_account_id(property_details.asset_id);
+            let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
+                property_details.asset_id,
+                &signer,
+            );
+            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
+            let mut refund_amount =
+                RefundClaimedToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
+            refund_amount = refund_amount
+                .checked_sub(token_amount)
+                .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+
+            if let Some(investor_funds) = property_details.investor_funds.get(&signer) {
+                for (asset, paid_funds) in investor_funds.paid_funds.iter() {
+                    let paid_fees = investor_funds
+                        .paid_fee
+                        .get(asset)
+                        .copied()
+                        .unwrap_or_default();
+
+                    let transfer_amount = paid_funds
+                        .checked_add(&paid_fees)
+                        .ok_or(Error::<T>::ArithmeticOverflow)?;
+
+                    // Transfer funds to owner account
+                    Self::transfer_funds(&property_account, &signer, transfer_amount, *asset)?;
+                }
+            }
+            <T as pallet::Config>::LocalCurrency::transfer(
+                property_details.asset_id,
+                &signer,
+                &property_account,
+                token_amount.into(),
+                Preservation::Expendable,
+            )?;
+            if refund_amount == 0 {
+                T::PropertyToken::burn_property_token(property_details.asset_id)?;
+                T::PropertyToken::clear_token_owners(property_details.asset_id)?;
+                let (depositor, deposit_amount) =
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                <T as pallet::Config>::NativeCurrency::release(
+                    &HoldReason::ListingDepositReserve.into(),
+                    &depositor,
+                    deposit_amount,
+                    Precision::Exact,
+                )?;
+                let native_balance =
+                    <T as pallet::Config>::NativeCurrency::balance(&property_account);
+                if !native_balance.is_zero() {
+                    <T as pallet::Config>::NativeCurrency::transfer(
+                        &property_account,
+                        &property_details.real_estate_developer,
+                        native_balance,
+                        Preservation::Expendable,
+                    )?;
+                }
+                OngoingObjectListing::<T>::remove(listing_id);
+            } else {
+                RefundClaimedToken::<T>::insert(listing_id, refund_amount);
+            }
+            T::PropertyToken::remove_property_token_ownership(property_details.asset_id, &signer)?;
+            Self::deposit_event(Event::<T>::RejectedFundsWithdrawn { signer, listing_id });
             Ok(())
         }
 
@@ -2922,7 +3000,6 @@ pub mod pallet {
         }
 
         fn unfreeze_token(
-            property_details: &mut PropertyListingDetailsType<T>,
             token_details: &TokenOwnerDetails<T>,
             signer: &AccountIdOf<T>,
         ) -> DispatchResult {
@@ -2958,28 +3035,12 @@ pub mod pallet {
                         total_investor_amount,
                         Precision::Exact,
                     )?;
-                    if let Some(funds) = property_details.collected_funds.get_mut(asset) {
-                        *funds = funds
-                            .checked_sub(&paid_funds)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
-                    if let Some(tax) = property_details.collected_tax.get_mut(asset) {
-                        *tax = tax
-                            .checked_sub(&paid_tax)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
-                    if let Some(fee) = property_details.collected_fees.get_mut(asset) {
-                        *fee = fee
-                            .checked_sub(&investor_fee)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
                 }
             }
             Ok(())
         }
 
         fn unfreeze_token_with_refunds(
-            property_details: &mut PropertyListingDetailsType<T>,
             token_details: &TokenOwnerDetails<T>,
             signer: &AccountIdOf<T>,
         ) -> Result<
@@ -3028,21 +3089,6 @@ pub mod pallet {
                         total_investor_amount,
                         Precision::Exact,
                     )?;
-                    if let Some(funds) = property_details.collected_funds.get_mut(asset) {
-                        *funds = funds
-                            .checked_sub(&paid_funds)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
-                    if let Some(tax) = property_details.collected_tax.get_mut(asset) {
-                        *tax = tax
-                            .checked_sub(&paid_tax)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
-                    if let Some(fee) = property_details.collected_fees.get_mut(asset) {
-                        *fee = fee
-                            .checked_sub(&investor_fee)
-                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    }
 
                     if *asset == 1337u32 {
                         principal_usdc = paid_funds;
