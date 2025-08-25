@@ -366,7 +366,7 @@ parameter_types! {
     pub const LegalProcessDuration: BlockNumber = 100;
     pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
     pub const ClaimWindowTime: BlockNumber = 100;
-    pub const MaximumRelistAttempts: u8 = 3;
+    pub const MaximumRelistAttempts: u8 = 1;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.

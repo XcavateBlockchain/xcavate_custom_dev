@@ -545,6 +545,14 @@ pub mod pallet {
             amount: u32,
             relist_count: u8,
         },
+        UnclaimedTokenWithdrawn {
+            listing_id: ListingId,
+            investor: AccountIdOf<T>,
+            principal_refunded_usdc: <T as pallet::Config>::Balance,
+            tax_refunded_usdc: <T as pallet::Config>::Balance,
+            principal_refunded_usdt: <T as pallet::Config>::Balance,
+            tax_refunded_usdt: <T as pallet::Config>::Balance,
+        },
     }
 
     // Errors inform users that something went wrong.
@@ -1152,6 +1160,8 @@ pub mod pallet {
                     .relist_count
                     .checked_add(1)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
+                property_details.claim_expiry = None;
+                OngoingObjectListing::<T>::insert(listing_id, &property_details);
                 RefundClaimedToken::<T>::insert(listing_id, property_details.token_amount.saturating_sub(unclaimed_amount));
             } else {
                 property_details.listed_token_amount = property_details
@@ -1949,6 +1959,44 @@ pub mod pallet {
             }
             T::PropertyToken::remove_property_token_ownership(property_details.asset_id, &signer)?;
             Self::deposit_event(Event::<T>::RejectedFundsWithdrawn { signer, listing_id });
+            Ok(())
+        }
+
+        #[pallet::call_index(32)]
+        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        pub fn withdraw_unclaimed(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+        ) -> DispatchResult {
+            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+                origin,
+                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+            )?;
+            let token_details: TokenOwnerDetails<T> =
+                TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
+            if let Some(property_details) = OngoingObjectListing::<T>::get(listing_id) {
+                ensure!(property_details.relist_count > token_details.relist_count, Error::<T>::NoPermission);
+            }
+            ensure!(
+                !token_details.token_amount.is_zero(),
+                Error::<T>::NoTokenBought
+            );
+
+            let (
+                principal_refunded_usdc,
+                tax_refunded_usdc,
+                principal_refunded_usdt,
+                tax_refunded_usdt,
+            ) = Self::unfreeze_token_with_refunds(&token_details, &signer)?;
+
+            Self::deposit_event(Event::<T>::UnclaimedTokenWithdrawn {
+                listing_id,
+                investor: signer,
+                principal_refunded_usdc,
+                tax_refunded_usdc,
+                principal_refunded_usdt,
+                tax_refunded_usdt,
+            });
             Ok(())
         }
 
