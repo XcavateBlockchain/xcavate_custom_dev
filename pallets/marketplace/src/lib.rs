@@ -845,7 +845,7 @@ pub mod pallet {
             );
             let total_supply = property_details.token_amount;
             let max_tokens = total_supply
-                .checked_mul(49)
+                .checked_mul(50)
                 .ok_or(Error::<T>::MultiplyError)?
                 .checked_div(100)
                 .ok_or(Error::<T>::DivisionError)?;
@@ -915,7 +915,7 @@ pub mod pallet {
                     .checked_add(claimed_token_amount)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 ensure!(
-                    total_investor_token_amount <= max_tokens,
+                    total_investor_token_amount < max_tokens,
                     Error::<T>::ExceedsMaxOwnership
                 );
                 token_owner_details.token_amount = new_token_amount;
@@ -3303,7 +3303,7 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoObjectFound)?;
             let max_tokens = property_info
                 .token_amount
-                .checked_mul(49)
+                .checked_mul(50)
                 .ok_or(Error::<T>::MultiplyError)?
                 .checked_div(100)
                 .ok_or(Error::<T>::DivisionError)?;
@@ -3315,7 +3315,7 @@ pub mod pallet {
                 .checked_add(amount)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
             ensure!(
-                new_token_amount <= max_tokens,
+                new_token_amount < max_tokens,
                 Error::<T>::ExceedsMaxOwnership
             );
             Ok(())
