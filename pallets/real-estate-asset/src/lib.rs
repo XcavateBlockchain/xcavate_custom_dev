@@ -449,12 +449,17 @@ pub mod pallet {
                 Preservation::Expendable,
             )?;
             PropertyOwner::<T>::try_mutate(asset_id, |keys| {
-                keys.try_push(investor.clone())
-                    .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+                if !keys.contains(investor) {
+                    keys.try_push(investor.clone())
+                        .map_err(|_| Error::<T>::TooManyTokenBuyer)?;
+                }
                 Ok::<(), DispatchError>(())
             })?;
-            PropertyOwnerToken::<T>::insert(asset_id, investor, token_amount);
-
+            let old_amount = PropertyOwnerToken::<T>::get(asset_id, investor);
+            let new_amount = old_amount
+                .checked_add(token_amount)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            PropertyOwnerToken::<T>::insert(asset_id, investor, new_amount);
             Ok(())
         }
 

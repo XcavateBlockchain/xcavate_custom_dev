@@ -650,6 +650,7 @@ pub mod pallet {
         NoValidTokenToClaim,
         /// The refund process has already started.
         TokenGettingRefunded,
+        ExceedsMaxOwnership,
     }
 
     #[pallet::call]
@@ -842,6 +843,12 @@ pub mod pallet {
                 tax_percent < Permill::from_percent(100),
                 Error::<T>::InvalidTaxPercentage
             );
+            let total_supply = property_details.token_amount;
+            let max_tokens = total_supply
+                .checked_mul(49)
+                .ok_or(Error::<T>::MultiplyError)?
+                .checked_div(100)
+                .ok_or(Error::<T>::DivisionError)?;
 
             let transfer_price = property_details
                 .token_price
@@ -896,11 +903,22 @@ pub mod pallet {
                     .as_mut()
                     .ok_or(Error::<T>::TokenOwnerNotFound)?;
                 ensure!(token_owner_details.relist_count == property_details.relist_count, Error::<T>::StillHasUnclaimedToken);
-
-                token_owner_details.token_amount = token_owner_details
+                let claimed_token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
+                    property_details.asset_id,
+                    &signer,
+                );
+                let new_token_amount = token_owner_details
                     .token_amount
                     .checked_add(amount)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
+                let total_investor_token_amount = new_token_amount
+                    .checked_add(claimed_token_amount)
+                    .ok_or(Error::<T>::ArithmeticOverflow)?;
+                ensure!(
+                    total_investor_token_amount <= max_tokens,
+                    Error::<T>::ExceedsMaxOwnership
+                );
+                token_owner_details.token_amount = new_token_amount;
 
                 Self::update_map(
                     &mut token_owner_details.paid_funds,
@@ -1091,7 +1109,7 @@ pub mod pallet {
             // Distribute property tokens
             let token_amount = token_details.token_amount;
             let asset_id = property_details.asset_id;
-
+            
             T::PropertyToken::distribute_property_token_to_owner(asset_id, &signer, token_amount)?;
             property_details.buyers.remove(&signer);
             property_details.unclaimed_token_amount = property_details
@@ -1313,6 +1331,7 @@ pub mod pallet {
                 listing_details.amount >= amount,
                 Error::<T>::NotEnoughTokenAvailable
             );
+            Self::restrict_ownership(listing_details.asset_id, &buyer, amount)?;
             let price = listing_details
                 .token_price
                 .checked_mul(&((amount as u128).into()))
@@ -1500,6 +1519,7 @@ pub mod pallet {
             )?;
             match offer {
                 Offer::Accept => {
+                    Self::restrict_ownership(listing_details.asset_id, &offeror, offer_details.amount)?;
                     Self::buying_token_process(
                         listing_id,
                         &offeror,
@@ -2741,6 +2761,7 @@ pub mod pallet {
                 ),
                 Error::<T>::UserNotWhitelisted
             );
+            Self::restrict_ownership(asset_id, &receiver, token_amount)?;
             T::PropertyToken::transfer_property_token(
                 asset_id,
                 &sender,
@@ -3275,6 +3296,29 @@ pub mod pallet {
                 usdc_cost = remaining_costs;
             }
             Ok((usdc_cost, usdt_cost))
+        }
+
+        fn restrict_ownership(asset_id: u32, account: &AccountIdOf<T>, amount: u32) -> DispatchResult {
+            let property_info = <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                .ok_or(Error::<T>::NoObjectFound)?;
+            let max_tokens = property_info
+                .token_amount
+                .checked_mul(49)
+                .ok_or(Error::<T>::MultiplyError)?
+                .checked_div(100)
+                .ok_or(Error::<T>::DivisionError)?;
+            let owned_token = <T as pallet::Config>::PropertyToken::get_token_balance(
+                asset_id,
+                account,
+            );
+            let new_token_amount = owned_token
+                .checked_add(amount)
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
+            ensure!(
+                new_token_amount <= max_tokens,
+                Error::<T>::ExceedsMaxOwnership
+            );
+            Ok(())
         }
     }
 }
