@@ -371,6 +371,8 @@ parameter_types! {
     pub const LawyerVotingDuration: BlockNumber = 30;
     pub const LegalProcessDuration: BlockNumber = 150;
     pub const MinimumVotingQuorum: Percent = Percent::from_percent(50);
+    pub const ClaimWindowTime: BlockNumber = 100;
+    pub const MaximumRelistAttempts: u8 = 1;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -400,6 +402,8 @@ impl pallet_marketplace::Config for Test {
     type PermissionOrigin = EnsureHasRole<Self>;
     type CompliantOrigin = EnsureCompliant<Self>;
     type MinVotingQuorum = MinimumVotingQuorum;
+    type ClaimWindow = ClaimWindowTime;
+    type MaxRelistAttempts = MaximumRelistAttempts;
 }
 
 parameter_types! {
@@ -447,6 +451,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             ([6; 32].into(), 200_000),
             ([10; 32].into(), 15_000),
             ([11; 32].into(), 15_000),
+            ([15; 32].into(), 5_000),
+            ([16; 32].into(), 5_000),
+            ([30; 32].into(), 5_000),
+            ([31; 32].into(), 5_000),
             ((Marketplace::account_id()), 20_000_000),
             ((PropertyManagement::property_account_id(0)), 5_000),
         ],
@@ -470,6 +478,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (1984, [3; 32].into(), 1_150_000),
             (1984, [4; 32].into(), 5_000),
             (1984, [5; 32].into(), 500),
+            (1984, [15; 32].into(), 20_000_000),
+            (1984, [16; 32].into(), 20_000_000),
+            (1984, [30; 32].into(), 1_200_000),
+            (1984, [31; 32].into(), 1_200_000),
         ], // Genesis accounts: id, account_id, balance
         next_asset_id: None,
     }
