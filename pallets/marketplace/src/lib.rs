@@ -651,6 +651,7 @@ pub mod pallet {
         /// The refund process has already started.
         TokenGettingRefunded,
         ExceedsMaxOwnership,
+        ListingNotFound,
     }
 
     #[pallet::call]
@@ -751,7 +752,6 @@ pub mod pallet {
                 tax: region_info.tax,
                 listing_expiry,
                 investor_funds: Default::default(),
-                buyers: Default::default(),
                 claim_expiry: None,
                 relist_count: Zero::zero(),
                 unclaimed_token_amount: Zero::zero(),
@@ -887,7 +887,7 @@ pub mod pallet {
             property_details.unclaimed_token_amount = property_details
                 .unclaimed_token_amount
                 .checked_add(amount)
-                .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                .ok_or(Error::<T>::ArithmeticOverflow)?;
             TokenOwner::<T>::try_mutate_exists(&signer, listing_id, |maybe_token_owner_details| {
                 if maybe_token_owner_details.is_none() {
                     let initial_funds = Self::create_initial_funds()?;
@@ -932,12 +932,6 @@ pub mod pallet {
 
                 Ok::<(), DispatchError>(())
             })?;
-            if !property_details.buyers.contains(&signer) {
-                property_details
-                    .buyers
-                    .try_insert(signer.clone())
-                    .map_err(|_| Error::<T>::ExceedsMaxEntries)?;
-            }
             
             let asset_id = property_details.asset_id;
             let tax_paid_by_developer = property_details.tax_paid_by_developer;
@@ -986,10 +980,11 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let mut property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
-                <frame_system::Pallet<T>>::block_number() < claim_expiry,
+                current_block_number < claim_expiry,
                 Error::<T>::ClaimWindowExpired
             );
             let token_details =
@@ -1001,6 +996,16 @@ pub mod pallet {
                 fee_percent < 100u128.into(),
                 Error::<T>::InvalidFeePercentage
             );
+
+            let tax_percent = if property_details.tax_paid_by_developer {
+                let asset_details =
+                    T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
+                let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region)
+                    .ok_or(Error::<T>::RegionUnknown)?;
+                region_info.tax
+            } else {
+                Permill::zero()
+            };
 
             // Process each payment asset
             for (asset, paid_funds) in token_details
@@ -1030,11 +1035,6 @@ pub mod pallet {
                 if !property_details.tax_paid_by_developer {
                     Self::update_map(&mut property_details.collected_tax, *asset, paid_tax)?;
                 } else {
-                    let asset_details =
-                        T::PropertyToken::get_if_spv_not_created(property_details.asset_id)?;
-                    let region_info = pallet_regions::RegionDetails::<T>::get(asset_details.region)
-                        .ok_or(Error::<T>::RegionUnknown)?;
-                    let tax_percent = region_info.tax;
                     let tax = tax_percent.mul_floor(*paid_funds);
                     Self::update_map(&mut property_details.collected_tax, *asset, tax)?;
                 }
@@ -1111,16 +1111,14 @@ pub mod pallet {
             let asset_id = property_details.asset_id;
             
             T::PropertyToken::distribute_property_token_to_owner(asset_id, &signer, token_amount)?;
-            property_details.buyers.remove(&signer);
             property_details.unclaimed_token_amount = property_details
                 .unclaimed_token_amount
                 .checked_sub(token_amount)
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
-            if property_details.buyers.is_empty() {
+            if property_details.unclaimed_token_amount.is_zero() {
                 ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::LegalProcessOngoing);
                 let initial_funds = Self::create_initial_funds()?;
-                let current_block_number = <frame_system::Pallet<T>>::block_number();
                 let expiry_block = current_block_number.saturating_add(T::LegalProcessTime::get());
                 let property_lawyer_details = PropertyLawyerDetails {
                     real_estate_developer_lawyer: None,
@@ -1151,7 +1149,15 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(30)]
+        /// Finalizes a claim period once it is over.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing that the investor wants to finalize the claim window from
+        ///
+        /// Emits `PropertyTokenClaimed` event when successful.
+        #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn finalize_claim_window(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1171,8 +1177,10 @@ pub mod pallet {
                     PropertyLawyer::<T>::get(listing_id).is_some(),
                     Error::<T>::TokenNotForSale
                 );
-                property_details.claim_expiry = None;
-                OngoingObjectListing::<T>::insert(listing_id, &property_details);
+                if property_details.claim_expiry.is_some() {
+                    property_details.claim_expiry = None;
+                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
+                }
             } else if property_details.relist_count >= T::MaxRelistAttempts::get() {
                 property_details.relist_count = property_details
                     .relist_count
@@ -1191,7 +1199,6 @@ pub mod pallet {
                     .checked_add(1)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 property_details.unclaimed_token_amount = 0;
-                property_details.buyers.clear();
                 property_details.claim_expiry = None;
                 let possible_listing_expiry = current_block.saturating_add(T::ClaimWindow::get());
                 if property_details.listing_expiry < possible_listing_expiry {
@@ -1215,7 +1222,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the spv has been created for.
         ///
         /// Emits `SpvCreated` event when successful.
-        #[pallet::call_index(3)]
+        #[pallet::call_index(4)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1249,7 +1256,7 @@ pub mod pallet {
         /// - `amount`: The amount of token of the real estate object that should be listed.
         ///
         /// Emits `TokenRelisted` event when successful
-        #[pallet::call_index(4)]
+        #[pallet::call_index(5)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::relist_token())]
         pub fn relist_token(
             origin: OriginFor<T>,
@@ -1308,7 +1315,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
         /// Emits `RelistedTokenBought` event when successful.
-        #[pallet::call_index(5)]
+        #[pallet::call_index(6)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::buy_relisted_token())]
         pub fn buy_relisted_token(
             origin: OriginFor<T>,
@@ -1356,7 +1363,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `InvestmentCancelled` event when successful.
-        #[pallet::call_index(6)]
+        #[pallet::call_index(7)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_property_purchase())]
         pub fn cancel_property_purchase(
             origin: OriginFor<T>,
@@ -1422,7 +1429,7 @@ pub mod pallet {
         /// - `payment_asset`: Asset in which the investor wants to pay.
         ///
         /// Emits `OfferCreated` event when successful.
-        #[pallet::call_index(7)]
+        #[pallet::call_index(8)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::make_offer())]
         pub fn make_offer(
             origin: OriginFor<T>,
@@ -1488,7 +1495,7 @@ pub mod pallet {
         ///
         /// Emits `OfferAccepted` event when offer gets accepted successfully.
         /// Emits `OfferRejected` event when offer gets rejected successfully.
-        #[pallet::call_index(8)]
+        #[pallet::call_index(9)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::handle_offer())]
         pub fn handle_offer(
             origin: OriginFor<T>,
@@ -1556,7 +1563,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `OfferCancelled` event when successful.
-        #[pallet::call_index(9)]
+        #[pallet::call_index(10)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::cancel_offer())]
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1588,7 +1595,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to withdraw from.
         ///
         /// Emits `RejectedFundsWithdrawn` event when successful.
-        #[pallet::call_index(10)]
+        #[pallet::call_index(11)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_rejected())]
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1664,7 +1671,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to withdraw from.
         ///
         /// Emits `ExpiredFundsWithdrawn` event when successful.
-        #[pallet::call_index(11)]
+        #[pallet::call_index(12)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_legal_process_expired(
             origin: OriginFor<T>,
@@ -1777,7 +1784,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the investor wants to buy from.
         ///
         /// Emits `ExpiredFundsWithdrawn` event when successful.
-        #[pallet::call_index(12)]
+        #[pallet::call_index(13)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_expired())]
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1850,7 +1857,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the caller wants to withdraw the deposit from.
         ///
         /// Emits `DeveloperDepositReturned` event when successful.
-        #[pallet::call_index(13)]
+        #[pallet::call_index(14)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_deposit_unsold())]
         pub fn withdraw_deposit_unsold(
             origin: OriginFor<T>,
@@ -1908,7 +1915,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(31)]
+        #[pallet::call_index(15)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_claiming_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -1982,7 +1989,7 @@ pub mod pallet {
             Ok(())
         }
 
-        #[pallet::call_index(32)]
+        #[pallet::call_index(16)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn withdraw_unclaimed(
             origin: OriginFor<T>,
@@ -2029,7 +2036,7 @@ pub mod pallet {
         /// - `new_price`: The new price of the object.
         ///
         /// Emits `ObjectUpdated` event when successful.
-        #[pallet::call_index(14)]
+        #[pallet::call_index(17)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::upgrade_object())]
         pub fn upgrade_object(
             origin: OriginFor<T>,
@@ -2079,7 +2086,7 @@ pub mod pallet {
         /// - `listing_id`: The listing that the seller wants to delist.
         ///
         /// Emits `ListingDelisted` event when successful.
-        #[pallet::call_index(15)]
+        #[pallet::call_index(18)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::delist_token())]
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -2114,7 +2121,7 @@ pub mod pallet {
         /// - `costs`: The costs thats the lawyer demands for his work.
         ///
         /// Emits `DeveloperLawyerProposed` event or `SpvLawyerProposed` event when successful.
-        #[pallet::call_index(16)]
+        #[pallet::call_index(19)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_claim_property())]
         pub fn lawyer_claim_property(
             origin: OriginFor<T>,
@@ -2253,7 +2260,7 @@ pub mod pallet {
         /// - `amount`: The amount of property token that the investor is using for voting.
         ///
         /// Emits `VotedOnLawyer` event when successful.
-        #[pallet::call_index(17)]
+        #[pallet::call_index(20)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::vote_on_spv_lawyer())]
         pub fn vote_on_spv_lawyer(
             origin: OriginFor<T>,
@@ -2362,7 +2369,7 @@ pub mod pallet {
         /// - `approve`: Approves or rejects the lawyer.
         ///
         /// Emits `RealEstateLawyerProposalFinalized` event when successful.
-        #[pallet::call_index(18)]
+        #[pallet::call_index(21)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::approve_developer_lawyer())]
         pub fn approve_developer_lawyer(
             origin: OriginFor<T>,
@@ -2439,7 +2446,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         ///
         /// Emits `SpvLawyerVoteFinalized` event when successful.
-        #[pallet::call_index(19)]
+        #[pallet::call_index(22)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_spv_lawyer())]
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -2539,7 +2546,7 @@ pub mod pallet {
         /// - `proposal_id`: Id of the spv lawyer proposal.
         ///
         /// Emits `TokenUnfrozen` event when successful.
-        #[pallet::call_index(20)]
+        #[pallet::call_index(23)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
         pub fn unfreeze_spv_lawyer_token(
             origin: OriginFor<T>,
@@ -2583,7 +2590,7 @@ pub mod pallet {
         /// - `listing_id`: The listing from the property.
         ///
         /// Emits `LawyerRemovedFromCase` event when successful.
-        #[pallet::call_index(21)]
+        #[pallet::call_index(24)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
@@ -2633,7 +2640,7 @@ pub mod pallet {
         /// - `approve`: Approves or Rejects the case.
         ///
         /// Emits `DocumentsConfirmed` event when successful.
-        #[pallet::call_index(22)]
+        #[pallet::call_index(25)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::lawyer_confirm_documents(
             <T as pallet::Config>::MaxPropertyToken::get(),
         ))]
@@ -2742,7 +2749,7 @@ pub mod pallet {
         /// - `token_amount`: The amount of token the sender wants to send.
         ///
         /// Emits `DocumentsConfirmed` event when successful.
-        #[pallet::call_index(23)]
+        #[pallet::call_index(26)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::send_property_token())]
         pub fn send_property_token(
             origin: OriginFor<T>,

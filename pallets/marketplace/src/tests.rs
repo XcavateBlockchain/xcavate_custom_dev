@@ -1491,7 +1491,7 @@ fn claim_property_token_fails() {
         ));
         assert_noop!(
             Marketplace::claim_property_token(RuntimeOrigin::signed([1; 32].into()), 0,),
-            Error::<Test>::TokenNotForSale
+            Error::<Test>::ListingNotFound
         );
         assert_ok!(Marketplace::list_property(
             RuntimeOrigin::signed([0; 32].into()),
@@ -1815,10 +1815,6 @@ fn finalize_claim_window_works() {
         );
         let expiry = frame_system::Pallet::<Test>::block_number() + ClaimWindowTime::get() + 1;
         run_to_block(expiry);
-        assert_eq!(
-            OngoingObjectListing::<Test>::get(0).unwrap().buyers.len(),
-            1
-        );
         assert_ok!(Marketplace::finalize_claim_window(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -1841,10 +1837,6 @@ fn finalize_claim_window_works() {
             OngoingObjectListing::<Test>::get(0)
                 .unwrap()
                 .unclaimed_token_amount,
-            0
-        );
-        assert_eq!(
-            OngoingObjectListing::<Test>::get(0).unwrap().buyers.len(),
             0
         );
         assert_ok!(Marketplace::buy_property_token(
