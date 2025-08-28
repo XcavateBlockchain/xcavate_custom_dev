@@ -1630,6 +1630,8 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let mut refund_infos =
+                RefundToken::<T>::get(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
@@ -1637,9 +1639,7 @@ pub mod pallet {
                 property_details.asset_id,
                 &signer,
             );
-            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);
-            let mut refund_infos =
-                RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
+            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);      
             refund_infos.refund_amount = refund_infos
                 .refund_amount
                 .checked_sub(token_amount)
@@ -1663,7 +1663,7 @@ pub mod pallet {
             )?;
             if refund_infos.refund_amount == 0 {
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
-                Self::refund_investors_with_fees(listing_id, refund_infos.property_lawyer_details)?;
+                Self::refund_investors_with_fees(&property_details, refund_infos.property_lawyer_details)?;
                 let (depositor, deposit_amount) =
                     ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
@@ -1683,6 +1683,7 @@ pub mod pallet {
                     )?;
                 }
                 OngoingObjectListing::<T>::remove(listing_id);
+                RefundToken::<T>::remove(listing_id);
             } else {
                 RefundToken::<T>::insert(listing_id, refund_infos);
             }
@@ -3047,11 +3048,9 @@ pub mod pallet {
         }
 
         fn refund_investors_with_fees(
-            listing_id: ListingId,
+            property_details: &PropertyListingDetailsType<T>,
             property_lawyer_details: PropertyLawyerDetails<T>,
         ) -> DispatchResult {
-            let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let treasury_id = Self::treasury_account_id();
             let spv_lawyer_id = property_lawyer_details
