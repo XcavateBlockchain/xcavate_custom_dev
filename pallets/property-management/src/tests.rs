@@ -73,7 +73,7 @@ fn new_region_helper() {
 fn lawyer_process_helper(
     real_estate_developer: AccountId,
     listing_id: u32,
-    accounts: Vec<(AccountId, u32)>
+    accounts: Vec<(AccountId, u32)>,
 ) {
     assert_ok!(XcavateWhitelist::assign_role(
         RuntimeOrigin::signed([20; 32].into()),
@@ -99,7 +99,7 @@ fn lawyer_process_helper(
 fn finalize_property_helper(
     real_estate_developer: AccountId,
     listing_id: u32,
-    accounts: Vec<(AccountId, u32)>
+    accounts: Vec<(AccountId, u32)>,
 ) {
     assert_ok!(Marketplace::lawyer_claim_property(
         RuntimeOrigin::signed([10; 32].into()),
@@ -635,7 +635,11 @@ fn letting_agent_propose_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_eq!(ProposalCounter::<Test>::get(), 0);
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
@@ -767,7 +771,11 @@ fn letting_agent_propose_fails() {
             PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([4; 32].into()), 0),
             RealEstateAssetError::<Test>::PropertyNotFinalized
         );
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_noop!(
             PropertyManagement::letting_agent_propose(RuntimeOrigin::signed([2; 32].into()), 0),
             BadOrigin
@@ -931,7 +939,11 @@ fn vote_on_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([2; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([2; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -1142,7 +1154,11 @@ fn vote_on_letting_agent_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -1375,7 +1391,11 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([2; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([2; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -1419,7 +1439,11 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             1,
         ));
-        finalize_property_helper([0; 32].into(), 1, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        finalize_property_helper(
+            [0; 32].into(),
+            1,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             1
@@ -1452,7 +1476,11 @@ fn finalize_letting_agent_works() {
             RuntimeOrigin::signed([5; 32].into()),
             2,
         ));
-        finalize_property_helper([0; 32].into(), 2, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        finalize_property_helper(
+            [0; 32].into(),
+            2,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([3; 32].into()),
             2
@@ -1624,7 +1652,11 @@ fn finalize_letting_agent_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([2; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([2; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -1852,7 +1884,11 @@ fn finalize_letting_agent_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([2; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([2; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -1925,7 +1961,11 @@ fn finalize_letting_agent_fails() {
                 RuntimeOrigin::signed([5; 32].into()),
                 x,
             ));
-            finalize_property_helper([0; 32].into(), x, vec![([0; 32].into(), 40), ([15; 32].into(), 30)]);
+            finalize_property_helper(
+                [0; 32].into(),
+                x,
+                vec![([0; 32].into(), 40), ([15; 32].into(), 30)],
+            );
             assert_ok!(PropertyManagement::letting_agent_propose(
                 RuntimeOrigin::signed([4; 32].into()),
                 x
@@ -2090,7 +2130,11 @@ fn unfreeze_letting_voting_token_works() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([2; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([2; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -2272,7 +2316,11 @@ fn unfreeze_letting_voting_token_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0
@@ -2637,7 +2685,11 @@ fn distribute_income_fails() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        lawyer_process_helper([0; 32].into(), 0, vec![([1; 32].into(), 40), ([30; 32].into(), 30)]);
+        lawyer_process_helper(
+            [0; 32].into(),
+            0,
+            vec![([1; 32].into(), 40), ([30; 32].into(), 30)],
+        );
         assert_ok!(PropertyManagement::letting_agent_propose(
             RuntimeOrigin::signed([4; 32].into()),
             0

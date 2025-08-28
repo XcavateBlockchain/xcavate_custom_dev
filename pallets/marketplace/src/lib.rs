@@ -279,7 +279,7 @@ pub mod pallet {
     #[pallet::storage]
     pub type RefundToken<T: Config> =
         StorageMap<_, Blake2_128Concat, ListingId, RefundInfos<T>, OptionQuery>;
-    
+
     /// Stores required infos in case of a refund.
     #[pallet::storage]
     pub type RefundClaimedToken<T: Config> =
@@ -553,6 +553,11 @@ pub mod pallet {
             principal_refunded_usdt: <T as pallet::Config>::Balance,
             tax_refunded_usdt: <T as pallet::Config>::Balance,
         },
+        /// A sale has been cancelled due to not all token have been claimed.
+        SaleCancelledUnclaimed {
+            listing_id: ListingId,
+            unclaimed_amount: u32,
+        },
     }
 
     // Errors inform users that something went wrong.
@@ -652,6 +657,10 @@ pub mod pallet {
         TokenGettingRefunded,
         ExceedsMaxOwnership,
         ListingNotFound,
+        AllTokensClaimed,
+        OfferNotFound,
+        NoTokensOwned,
+        InsufficientRefundableTokens,
     }
 
     #[pallet::call]
@@ -902,7 +911,10 @@ pub mod pallet {
                 let token_owner_details = maybe_token_owner_details
                     .as_mut()
                     .ok_or(Error::<T>::TokenOwnerNotFound)?;
-                ensure!(token_owner_details.relist_count == property_details.relist_count, Error::<T>::StillHasUnclaimedToken);
+                ensure!(
+                    token_owner_details.relist_count == property_details.relist_count,
+                    Error::<T>::StillHasUnclaimedToken
+                );
                 let claimed_token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
                     property_details.asset_id,
                     &signer,
@@ -932,7 +944,7 @@ pub mod pallet {
 
                 Ok::<(), DispatchError>(())
             })?;
-            
+
             let asset_id = property_details.asset_id;
             let tax_paid_by_developer = property_details.tax_paid_by_developer;
             let listed_token = property_details.listed_token_amount;
@@ -975,13 +987,15 @@ pub mod pallet {
         #[pallet::call_index(2)]
         #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_property_token())]
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
-            let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
+            let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
-            let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
+            let claim_expiry = property_details
+                .claim_expiry
+                .ok_or(Error::<T>::NoClaimWindow)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
                 current_block_number < claim_expiry,
@@ -989,7 +1003,10 @@ pub mod pallet {
             );
             let token_details =
                 TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
-            ensure!(token_details.relist_count == property_details.relist_count, Error::<T>::NoValidTokenToClaim);
+            ensure!(
+                token_details.relist_count == property_details.relist_count,
+                Error::<T>::NoValidTokenToClaim
+            );
             let property_account = Self::property_account_id(property_details.asset_id);
             let fee_percent = T::MarketplaceFeePercentage::get();
             ensure!(
@@ -1026,11 +1043,7 @@ pub mod pallet {
                     .checked_div(&100u128.into())
                     .ok_or(Error::<T>::DivisionError)?;
 
-                Self::update_map(
-                    &mut property_details.collected_funds,
-                    *asset,
-                    *paid_funds,
-                )?;
+                Self::update_map(&mut property_details.collected_funds, *asset, *paid_funds)?;
                 Self::update_map(&mut property_details.collected_fees, *asset, investor_fee)?;
                 if !property_details.tax_paid_by_developer {
                     Self::update_map(&mut property_details.collected_tax, *asset, paid_tax)?;
@@ -1109,7 +1122,7 @@ pub mod pallet {
             // Distribute property tokens
             let token_amount = token_details.token_amount;
             let asset_id = property_details.asset_id;
-            
+
             T::PropertyToken::distribute_property_token_to_owner(asset_id, &signer, token_amount)?;
             property_details.unclaimed_token_amount = property_details
                 .unclaimed_token_amount
@@ -1117,7 +1130,10 @@ pub mod pallet {
                 .ok_or(Error::<T>::ArithmeticUnderflow)?;
 
             if property_details.unclaimed_token_amount.is_zero() {
-                ensure!(PropertyLawyer::<T>::get(listing_id).is_none(), Error::<T>::LegalProcessOngoing);
+                ensure!(
+                    PropertyLawyer::<T>::get(listing_id).is_none(),
+                    Error::<T>::LegalProcessOngoing
+                );
                 let initial_funds = Self::create_initial_funds()?;
                 let expiry_block = current_block_number.saturating_add(T::LegalProcessTime::get());
                 let property_lawyer_details = PropertyLawyerDetails {
@@ -1159,36 +1175,44 @@ pub mod pallet {
         /// Emits `PropertyTokenClaimed` event when successful.
         #[pallet::call_index(3)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn finalize_claim_window(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+        pub fn finalize_claim_window(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+        ) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let mut property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::NoObjectFound)?;
-            ensure!(!RefundClaimedToken::<T>::contains_key(listing_id), Error::<T>::TokenGettingRefunded);
-            let claim_expiry = property_details.claim_expiry.ok_or(Error::<T>::NoClaimWindow)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
+            let claim_expiry = property_details
+                .claim_expiry
+                .ok_or(Error::<T>::NoClaimWindow)?;
             let current_block = <frame_system::Pallet<T>>::block_number();
-            ensure!(current_block > claim_expiry, Error::<T>::ClaimWindowNotExpired);
-            
+            ensure!(
+                current_block > claim_expiry,
+                Error::<T>::ClaimWindowNotExpired
+            );
+
             let unclaimed_amount = property_details.unclaimed_token_amount;
-            if unclaimed_amount == 0 {
-                ensure!(
-                    PropertyLawyer::<T>::get(listing_id).is_some(),
-                    Error::<T>::TokenNotForSale
-                );
-                if property_details.claim_expiry.is_some() {
-                    property_details.claim_expiry = None;
-                    OngoingObjectListing::<T>::insert(listing_id, &property_details);
-                }
-            } else if property_details.relist_count >= T::MaxRelistAttempts::get() {
+            ensure!(unclaimed_amount > 0, Error::<T>::AllTokensClaimed);
+            if property_details.relist_count >= T::MaxRelistAttempts::get() {
                 property_details.relist_count = property_details
                     .relist_count
                     .checked_add(1)
                     .ok_or(Error::<T>::ArithmeticOverflow)?;
                 property_details.claim_expiry = None;
                 OngoingObjectListing::<T>::insert(listing_id, &property_details);
-                RefundClaimedToken::<T>::insert(listing_id, property_details.token_amount.saturating_sub(unclaimed_amount));
+                RefundClaimedToken::<T>::insert(
+                    listing_id,
+                    property_details
+                        .token_amount
+                        .saturating_sub(unclaimed_amount),
+                );
+                Self::deposit_event(Event::<T>::SaleCancelledUnclaimed {
+                    listing_id,
+                    unclaimed_amount,
+                });
             } else {
                 property_details.listed_token_amount = property_details
                     .listed_token_amount
@@ -1374,7 +1398,7 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let mut property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             ensure!(
                 property_details.listing_expiry > <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingExpired
@@ -1511,7 +1535,7 @@ pub mod pallet {
                 TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
             ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
             let offer_details = OngoingOffers::<T>::take(listing_id, offeror.clone())
-                .ok_or(Error::<T>::InvalidIndex)?;
+                .ok_or(Error::<T>::OfferNotFound)?;
             ensure!(
                 listing_details.amount >= offer_details.amount,
                 Error::<T>::NotEnoughTokenAvailable
@@ -1526,7 +1550,11 @@ pub mod pallet {
             )?;
             match offer {
                 Offer::Accept => {
-                    Self::restrict_ownership(listing_details.asset_id, &offeror, offer_details.amount)?;
+                    Self::restrict_ownership(
+                        listing_details.asset_id,
+                        &offeror,
+                        offer_details.amount,
+                    )?;
                     Self::buying_token_process(
                         listing_id,
                         &offeror,
@@ -1571,7 +1599,7 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let offer_details =
-                OngoingOffers::<T>::take(listing_id, &signer).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingOffers::<T>::take(listing_id, &signer).ok_or(Error::<T>::OfferNotFound)?;
             let price = offer_details.get_total_amount()?;
             T::ForeignAssetsHolder::release(
                 offer_details.payment_assets,
@@ -1603,19 +1631,19 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
                 property_details.asset_id,
                 &signer,
             );
-            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
+            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);
             let mut refund_infos =
                 RefundToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
             refund_infos.refund_amount = refund_infos
                 .refund_amount
                 .checked_sub(token_amount)
-                .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+                .ok_or(Error::<T>::InsufficientRefundableTokens)?;
 
             for &asset in T::AcceptedAssets::get().iter() {
                 if let Some(investor_funds) = property_details.investor_funds.get(&signer).cloned()
@@ -1637,7 +1665,7 @@ pub mod pallet {
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 Self::refund_investors_with_fees(listing_id, refund_infos.property_lawyer_details)?;
                 let (depositor, deposit_amount) =
-                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
                     &HoldReason::ListingDepositReserve.into(),
                     &depositor,
@@ -1682,13 +1710,13 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
                 property_details.asset_id,
                 &signer,
             );
-            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
+            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);
 
             let mut refund_infos = match RefundLegalExpired::<T>::get(listing_id) {
                 Some(refund_infos) => refund_infos,
@@ -1716,7 +1744,7 @@ pub mod pallet {
 
             refund_infos = refund_infos
                 .checked_sub(token_amount)
-                .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+                .ok_or(Error::<T>::InsufficientRefundableTokens)?;
 
             for &asset in T::AcceptedAssets::get().iter() {
                 if let Some(investor_funds) = property_details.investor_funds.get(&signer).cloned()
@@ -1749,7 +1777,7 @@ pub mod pallet {
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 T::PropertyToken::clear_token_owners(property_details.asset_id)?;
                 let (depositor, deposit_amount) =
-                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
                     &HoldReason::ListingDepositReserve.into(),
                     &depositor,
@@ -1792,7 +1820,7 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let mut property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             ensure!(
                 property_details.listing_expiry < <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::ListingNotExpired
@@ -1823,7 +1851,7 @@ pub mod pallet {
                 // Listing is over, burn and clean everything
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 let (depositor, deposit_amount) =
-                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
                     &HoldReason::ListingDepositReserve.into(),
                     &depositor,
@@ -1868,7 +1896,7 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             ensure!(
                 property_details.real_estate_developer == signer,
                 Error::<T>::NoPermission
@@ -1889,7 +1917,7 @@ pub mod pallet {
             // Listing is over, burn and clean everything
             T::PropertyToken::burn_property_token(property_details.asset_id)?;
             let (depositor, deposit_amount) =
-                ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             <T as pallet::Config>::NativeCurrency::release(
                 &HoldReason::ListingDepositReserve.into(),
                 &depositor,
@@ -1915,26 +1943,37 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets the real estate investor withdraw his funds in case the sale is cancelled.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing that the caller wants to withdraw the funds from.
+        ///
+        /// Emits `RejectedFundsWithdrawn` event when successful.
         #[pallet::call_index(15)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn withdraw_claiming_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
+        pub fn withdraw_claiming_expired(
+            origin: OriginFor<T>,
+            listing_id: ListingId,
+        ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
             )?;
+            let mut refund_amount =
+                RefundClaimedToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let token_amount = <T as pallet::Config>::PropertyToken::get_token_balance(
                 property_details.asset_id,
                 &signer,
             );
-            ensure!(!token_amount.is_zero(), Error::<T>::NoPermission);
-            let mut refund_amount =
-                RefundClaimedToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
+            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);
             refund_amount = refund_amount
                 .checked_sub(token_amount)
-                .ok_or(Error::<T>::NotEnoughTokenAvailable)?;
+                .ok_or(Error::<T>::InsufficientRefundableTokens)?;
 
             if let Some(investor_funds) = property_details.investor_funds.get(&signer) {
                 for (asset, paid_funds) in investor_funds.paid_funds.iter() {
@@ -1963,7 +2002,7 @@ pub mod pallet {
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
                 T::PropertyToken::clear_token_owners(property_details.asset_id)?;
                 let (depositor, deposit_amount) =
-                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                    ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
                     &HoldReason::ListingDepositReserve.into(),
                     &depositor,
@@ -1989,12 +2028,17 @@ pub mod pallet {
             Ok(())
         }
 
+        /// Lets the real estate investor unfreeze his funds in case the claiming window expired.
+        ///
+        /// The origin must be Signed and the sender must have sufficient funds free.
+        ///
+        /// Parameters:
+        /// - `listing_id`: The listing that the caller wants to unfreeze the funds from.
+        ///
+        /// Emits `UnclaimedTokenWithdrawn` event when successful.
         #[pallet::call_index(16)]
         #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
-        pub fn withdraw_unclaimed(
-            origin: OriginFor<T>,
-            listing_id: ListingId,
-        ) -> DispatchResult {
+        pub fn withdraw_unclaimed(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
                 &pallet_xcavate_whitelist::Role::RealEstateInvestor,
@@ -2002,7 +2046,10 @@ pub mod pallet {
             let token_details: TokenOwnerDetails<T> =
                 TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
             if let Some(property_details) = OngoingObjectListing::<T>::get(listing_id) {
-                ensure!(property_details.relist_count > token_details.relist_count, Error::<T>::NoPermission);
+                ensure!(
+                    property_details.relist_count > token_details.relist_count,
+                    Error::<T>::NoPermission
+                );
             }
             ensure!(
                 !token_details.token_amount.is_zero(),
@@ -2138,7 +2185,7 @@ pub mod pallet {
             let property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let asset_details =
                 T::PropertyToken::get_property_asset_info(property_details.asset_id)
                     .ok_or(Error::<T>::NoObjectFound)?;
@@ -2381,7 +2428,7 @@ pub mod pallet {
                 &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
             )?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             ensure!(
                 signer == property_details.real_estate_developer,
                 Error::<T>::NoPermission
@@ -2467,7 +2514,7 @@ pub mod pallet {
             let voting_result =
                 OngoingLawyerVoting::<T>::get(proposal_id).ok_or(Error::<T>::NoLawyerProposed)?;
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let asset_details = <T as pallet::Config>::PropertyToken::get_property_asset_info(
@@ -2815,10 +2862,10 @@ pub mod pallet {
             property_lawyer_details: PropertyLawyerDetails<T>,
         ) -> DispatchResult {
             let property_details =
-                OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let asset_details =
                 T::PropertyToken::get_property_asset_info(property_details.asset_id)
-                    .ok_or(Error::<T>::InvalidIndex)?;
+                    .ok_or(Error::<T>::NoObjectFound)?;
             let treasury_id = Self::treasury_account_id();
             let property_account = Self::property_account_id(property_details.asset_id);
             let region = pallet_regions::RegionDetails::<T>::get(asset_details.region)
@@ -2880,14 +2927,15 @@ pub mod pallet {
                     .checked_div(&(100u128.into()))
                     .ok_or(Error::<T>::DivisionError)?;
 
-                let (developer_lawyer_tax, spv_lawyer_tax) = if property_details.tax_paid_by_developer {
-                    developer_amount = developer_amount
-                        .checked_sub(&tax)
-                        .ok_or(Error::<T>::ArithmeticUnderflow)?;
-                    (tax, Zero::zero())
-                } else {
-                    (Zero::zero(), tax)
-                };
+                let (developer_lawyer_tax, spv_lawyer_tax) =
+                    if property_details.tax_paid_by_developer {
+                        developer_amount = developer_amount
+                            .checked_sub(&tax)
+                            .ok_or(Error::<T>::ArithmeticUnderflow)?;
+                        (tax, Zero::zero())
+                    } else {
+                        (Zero::zero(), tax)
+                    };
 
                 let spv_lawyer_amount = spv_lawyer_costs
                     .checked_add(&spv_lawyer_tax)
@@ -2977,7 +3025,7 @@ pub mod pallet {
             property_lawyer_details: &PropertyLawyerDetails<T>,
         ) -> DispatchResult {
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let real_estate_developer_lawyer_id = property_lawyer_details
                 .real_estate_developer_lawyer
                 .clone()
@@ -3003,7 +3051,7 @@ pub mod pallet {
             property_lawyer_details: PropertyLawyerDetails<T>,
         ) -> DispatchResult {
             let property_details =
-                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+                OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let property_account = Self::property_account_id(property_details.asset_id);
             let treasury_id = Self::treasury_account_id();
             let spv_lawyer_id = property_lawyer_details
@@ -3305,19 +3353,22 @@ pub mod pallet {
             Ok((usdc_cost, usdt_cost))
         }
 
-        fn restrict_ownership(asset_id: u32, account: &AccountIdOf<T>, amount: u32) -> DispatchResult {
-            let property_info = <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
-                .ok_or(Error::<T>::NoObjectFound)?;
+        fn restrict_ownership(
+            asset_id: u32,
+            account: &AccountIdOf<T>,
+            amount: u32,
+        ) -> DispatchResult {
+            let property_info =
+                <T as pallet::Config>::PropertyToken::get_property_asset_info(asset_id)
+                    .ok_or(Error::<T>::NoObjectFound)?;
             let max_tokens = property_info
                 .token_amount
                 .checked_mul(50)
                 .ok_or(Error::<T>::MultiplyError)?
                 .checked_div(100)
                 .ok_or(Error::<T>::DivisionError)?;
-            let owned_token = <T as pallet::Config>::PropertyToken::get_token_balance(
-                asset_id,
-                account,
-            );
+            let owned_token =
+                <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, account);
             let new_token_amount = owned_token
                 .checked_add(amount)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
