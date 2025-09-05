@@ -1729,14 +1729,12 @@ pub mod pallet {
                         property_lawyer_details.legal_process_expiry < current_block_number,
                         Error::<T>::LegalProcessOngoing
                     );
-                    let real_estate_developer_lawyer_id = property_lawyer_details
-                        .real_estate_developer_lawyer
-                        .ok_or(Error::<T>::LawyerNotFound)?;
-                    let spv_lawyer_id = property_lawyer_details
-                        .spv_lawyer
-                        .ok_or(Error::<T>::LawyerNotFound)?;
-                    PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
-                    PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
+                    if let Some(real_estate_developer_lawyer_id) = property_lawyer_details.real_estate_developer_lawyer {
+                        PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
+                    }
+                    if let Some(spv_lawyer_id) = property_lawyer_details.spv_lawyer {
+                        PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
+                    }
                     PropertyLawyer::<T>::remove(listing_id);
                     RefundLegalExpired::<T>::insert(listing_id, property_details.token_amount);
                     property_details.token_amount
@@ -2185,6 +2183,11 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoPermission)?;
             let property_lawyer_details =
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            ensure!(
+                property_lawyer_details.legal_process_expiry >= current_block_number,
+                Error::<T>::LegalProcessFailed
+            );
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
             let asset_details =
@@ -2263,7 +2266,6 @@ pub mod pallet {
                         ensure!(lawyer_proposal.lawyer != signer, Error::<T>::NoPermission);
                     }
                     let proposal_id = ProposalCounter::<T>::get();
-                    let current_block_number = <frame_system::Pallet<T>>::block_number();
                     let expiry_block =
                         current_block_number.saturating_add(T::LawyerVotingTime::get());
                     ListingSpvProposal::<T>::insert(listing_id, proposal_id);
@@ -2439,8 +2441,10 @@ pub mod pallet {
                 PropertyLawyer::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
             let proposal =
                 ProposedLawyers::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            let expired = current_block_number > property_lawyer_details.legal_process_expiry;
 
-            if approve {
+            if approve && !expired {
                 property_lawyer_details.real_estate_developer_lawyer =
                     Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
@@ -2535,7 +2539,11 @@ pub mod pallet {
                 total_votes.saturating_mul(100u32) > total_supply.saturating_mul(quorum_percent);
             let is_approved =
                 voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum;
-            if is_approved {
+            
+            let current_block_number = <frame_system::Pallet<T>>::block_number();
+            let expired = current_block_number > property_lawyer_details.legal_process_expiry;
+
+            if is_approved && !expired {
                 property_lawyer_details.spv_lawyer = Some(proposal.lawyer.clone());
                 let [asset_id_usdc, asset_id_usdt] = T::AcceptedAssets::get();
 
