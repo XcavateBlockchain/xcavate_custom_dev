@@ -3069,18 +3069,24 @@ fn claim_property_works_fails_2() {
         ));
         let expiry = frame_system::Pallet::<Test>::block_number() + ClaimWindowTime::get() + 1;
         run_to_block(expiry);
-        assert_noop!(Marketplace::lawyer_claim_property(
-            RuntimeOrigin::signed([11; 32].into()),
-            0,
-            crate::LegalProperty::SpvSide,
-            16_000,
-        ), Error::<Test>::LegalProcessFailed);
-        assert_noop!(Marketplace::lawyer_claim_property(
-            RuntimeOrigin::signed([10; 32].into()),
-            0,
-            crate::LegalProperty::RealEstateDeveloperSide,
-            15_000,
-        ), Error::<Test>::LegalProcessFailed);
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([11; 32].into()),
+                0,
+                crate::LegalProperty::SpvSide,
+                16_000,
+            ),
+            Error::<Test>::LegalProcessFailed
+        );
+        assert_noop!(
+            Marketplace::lawyer_claim_property(
+                RuntimeOrigin::signed([10; 32].into()),
+                0,
+                crate::LegalProperty::RealEstateDeveloperSide,
+                15_000,
+            ),
+            Error::<Test>::LegalProcessFailed
+        );
     })
 }
 
@@ -6685,7 +6691,10 @@ fn withdraw_legal_process_expired_works_2() {
             RuntimeOrigin::signed([5; 32].into()),
             0,
         ));
-        assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().legal_process_expiry, 161);
+        assert_eq!(
+            PropertyLawyer::<Test>::get(0).unwrap().legal_process_expiry,
+            161
+        );
         run_to_block(162);
         assert_ok!(Marketplace::withdraw_legal_process_expired(
             RuntimeOrigin::signed([1; 32].into()),

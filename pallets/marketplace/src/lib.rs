@@ -1639,7 +1639,7 @@ pub mod pallet {
                 property_details.asset_id,
                 &signer,
             );
-            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);      
+            ensure!(!token_amount.is_zero(), Error::<T>::NoTokensOwned);
             refund_infos.refund_amount = refund_infos
                 .refund_amount
                 .checked_sub(token_amount)
@@ -1663,7 +1663,10 @@ pub mod pallet {
             )?;
             if refund_infos.refund_amount == 0 {
                 T::PropertyToken::burn_property_token(property_details.asset_id)?;
-                Self::refund_investors_with_fees(&property_details, refund_infos.property_lawyer_details)?;
+                Self::refund_investors_with_fees(
+                    &property_details,
+                    refund_infos.property_lawyer_details,
+                )?;
                 let (depositor, deposit_amount) =
                     ListingDeposits::<T>::take(listing_id).ok_or(Error::<T>::ListingNotFound)?;
                 <T as pallet::Config>::NativeCurrency::release(
@@ -1729,8 +1732,12 @@ pub mod pallet {
                         property_lawyer_details.legal_process_expiry < current_block_number,
                         Error::<T>::LegalProcessOngoing
                     );
-                    if let Some(real_estate_developer_lawyer_id) = property_lawyer_details.real_estate_developer_lawyer {
-                        PalletRegions::<T>::decrement_active_cases(&real_estate_developer_lawyer_id)?;
+                    if let Some(real_estate_developer_lawyer_id) =
+                        property_lawyer_details.real_estate_developer_lawyer
+                    {
+                        PalletRegions::<T>::decrement_active_cases(
+                            &real_estate_developer_lawyer_id,
+                        )?;
                     }
                     if let Some(spv_lawyer_id) = property_lawyer_details.spv_lawyer {
                         PalletRegions::<T>::decrement_active_cases(&spv_lawyer_id)?;
@@ -2539,7 +2546,7 @@ pub mod pallet {
                 total_votes.saturating_mul(100u32) > total_supply.saturating_mul(quorum_percent);
             let is_approved =
                 voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum;
-            
+
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expired = current_block_number > property_lawyer_details.legal_process_expiry;
 

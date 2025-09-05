@@ -103,6 +103,42 @@ fn create_a_new_region<T: Config>(
     (region_id, location)
 }
 
+// Helper function to list a property
+fn list_property_helper<T: Config>(
+    seller: T::AccountId,
+    region_id: u16,
+    location: LocationId<T>,
+    token_amount: u32,
+    token_price: <T as pallet::Config>::Balance,
+    tax_paid_by_developer: bool,
+) -> u32 {
+    let property_price = token_price.saturating_mul((token_amount as u128).into());
+    let deposit_amount = property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+    assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+        &seller,
+        deposit_amount.saturating_mul(20u32.into())
+    ));
+
+    let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
+        BoundedVec::truncate_from(vec![
+            42u8;
+            <T as pallet_nfts::Config>::StringLimit::get() as usize
+        ]);
+
+    assert_ok!(Marketplace::<T>::list_property(
+        RawOrigin::Signed(seller).into(),
+        region_id,
+        location,
+        token_price,
+        token_amount,
+        metadata,
+        tax_paid_by_developer,
+    ));
+    let listing_id = 0;
+    assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+    listing_id
+}
+
 fn list_and_sell_property<T: Config>(
     seller: T::AccountId,
     region_id: u16,
@@ -152,7 +188,12 @@ fn list_and_sell_property<T: Config>(
         buyer.clone(),
         Role::RealEstateInvestor
     ));
-    add_buyers_to_listing::<T>(token_amount - 1, payment_asset, property_price, admin.clone());
+    add_buyers_to_listing::<T>(
+        token_amount - 1,
+        payment_asset,
+        property_price,
+        admin.clone(),
+    );
 
     assert_ok!(Marketplace::<T>::buy_property_token(
         RawOrigin::Signed(buyer.clone()).into(),
@@ -184,7 +225,8 @@ fn create_registered_property<T: Config>(
     location: LocationId<T>,
     admin: T::AccountId,
 ) -> T::AccountId {
-    let token_owner = list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
+    let token_owner =
+        list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
     let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
     let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
     assert_ok!(Whitelist::<T>::assign_role(
@@ -193,7 +235,10 @@ fn create_registered_property<T: Config>(
         Role::Lawyer
     ));
     let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-    let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_1, laywer_deposit * 10u32.into());
+    let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+        &lawyer_1,
+        laywer_deposit * 10u32.into(),
+    );
     assert_ok!(Whitelist::<T>::assign_role(
         RawOrigin::Signed(admin).into(),
         lawyer_2.clone(),
@@ -204,7 +249,10 @@ fn create_registered_property<T: Config>(
         region_id,
     ));
     let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-    let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_2, laywer_deposit * 10u32.into());
+    let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+        &lawyer_2,
+        laywer_deposit * 10u32.into(),
+    );
     assert_ok!(Regions::<T>::register_lawyer(
         RawOrigin::Signed(lawyer_2.clone()).into(),
         region_id,
@@ -226,7 +274,7 @@ fn create_registered_property<T: Config>(
         crate::LegalProperty::SpvSide,
         400_u32.into()
     ));
-    for i in 1..=<T as pallet::Config>::MaxPropertyToken::get()-1 {
+    for i in 1..=<T as pallet::Config>::MaxPropertyToken::get() - 1 {
         let buyer: T::AccountId = account("buyer", i, i);
         assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
             RawOrigin::Signed(buyer).into(),
@@ -333,15 +381,9 @@ mod benchmarks {
         );
 
         let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
-        assert_eq!(
-            OngoingObjectListing::<T>::get(listing_id)
-                .unwrap()
-                .listed_token_amount,
-            token_amount
-        );
-        assert_eq!(ListingDeposits::<T>::get(listing_id).unwrap().0, signer);
         let listing = OngoingObjectListing::<T>::get(listing_id).unwrap();
+        assert_eq!(listing.listed_token_amount, token_amount);
+        assert_eq!(ListingDeposits::<T>::get(listing_id).unwrap().0, signer);
         assert_eq!(listing.token_price, token_price);
         assert_eq!(listing.tax_paid_by_developer, tax_paid_by_developer);
     }
@@ -355,32 +397,11 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         add_buyers_to_listing::<T>(b, payment_asset, property_price, admin.clone());
 
@@ -460,33 +481,12 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        assert!(OngoingObjectListing::<T>::contains_key(0));
         let payment_asset = T::AcceptedAssets::get()[0];
-        let listing_id = 0;
         add_buyers_to_listing::<T>(b - 1, payment_asset, property_price, admin.clone());
 
         let buyer: T::AccountId = account("buyer_final", 0, 0);
@@ -553,7 +553,12 @@ mod benchmarks {
         //assert!(TokenBuyer::<T>::get(listing_id).contains(&buyer));
         let token_owner = TokenOwner::<T>::get(&buyer, listing_id).unwrap();
         assert_eq!(token_owner.token_amount, buyer_amount);
-        assert_eq!(OngoingObjectListing::<T>::get(listing_id).unwrap().listed_token_amount, 0);
+        assert_eq!(
+            OngoingObjectListing::<T>::get(listing_id)
+                .unwrap()
+                .listed_token_amount,
+            0
+        );
     }
 
     #[benchmark]
@@ -563,32 +568,11 @@ mod benchmarks {
 
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -639,32 +623,11 @@ mod benchmarks {
 
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -691,7 +654,8 @@ mod benchmarks {
         ));
         claim_buyers_property_token::<T>(token_amount - 1, listing_id);
 
-        let expiry = frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
         frame_system::Pallet::<T>::set_block_number(expiry);
         assert_ok!(Marketplace::<T>::finalize_claim_window(
             RawOrigin::Signed(buyer.clone()).into(),
@@ -707,7 +671,8 @@ mod benchmarks {
             1,
             payment_asset,
         ));
-        let expiry = frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
         frame_system::Pallet::<T>::set_block_number(expiry);
 
         #[extrinsic_call]
@@ -719,7 +684,10 @@ mod benchmarks {
                 .claim_expiry,
             None
         );
-        assert_eq!(RefundClaimedToken::<T>::get(listing_id), Some(token_amount - 1));
+        assert_eq!(
+            RefundClaimedToken::<T>::get(listing_id),
+            Some(token_amount - 1)
+        );
     }
 
     #[benchmark]
@@ -729,32 +697,11 @@ mod benchmarks {
 
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -771,7 +718,12 @@ mod benchmarks {
             buyer.clone(),
             Role::RealEstateInvestor
         ));
-        add_buyers_to_listing::<T>(token_amount - 1, payment_asset, property_price, admin.clone());
+        add_buyers_to_listing::<T>(
+            token_amount - 1,
+            payment_asset,
+            property_price,
+            admin.clone(),
+        );
 
         assert_ok!(Marketplace::<T>::buy_property_token(
             RawOrigin::Signed(buyer.clone()).into(),
@@ -796,7 +748,9 @@ mod benchmarks {
         create_spv(RawOrigin::Signed(spv_admin.clone()), listing_id);
 
         assert!(
-            pallet_real_estate_asset::PropertyAssetInfo::<T>::get(0).unwrap().spv_created
+            pallet_real_estate_asset::PropertyAssetInfo::<T>::get(0)
+                .unwrap()
+                .spv_created
         );
     }
 
@@ -804,7 +758,8 @@ mod benchmarks {
     fn relist_token() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin);
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin);
 
         let asset_id = 0;
         let amount = 1;
@@ -829,7 +784,8 @@ mod benchmarks {
     fn buy_relisted_token() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
 
         let asset_id = 0;
         let amount = 1;
@@ -887,34 +843,18 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
-        add_buyers_to_listing::<T>(token_amount - 2, payment_asset, property_price, admin.clone());
+        add_buyers_to_listing::<T>(
+            token_amount - 2,
+            payment_asset,
+            property_price,
+            admin.clone(),
+        );
 
         let buyer: T::AccountId = account("buyer_final", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -964,7 +904,8 @@ mod benchmarks {
     fn make_offer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
 
         let asset_id = 0;
         let amount = 1;
@@ -1016,7 +957,8 @@ mod benchmarks {
     fn handle_offer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
 
         let asset_id = 0;
         let amount = 1;
@@ -1072,7 +1014,8 @@ mod benchmarks {
     fn cancel_offer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
 
         let asset_id = 0;
         let amount = 1;
@@ -1126,32 +1069,18 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id = list_property_helper::<T>(
+            seller.clone(),
+            region_id,
+            location,
+            token_amount,
+            token_price,
+            true,
+        );
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
 
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -1226,7 +1155,10 @@ mod benchmarks {
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_1, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_1,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_1.clone(),
@@ -1237,7 +1169,10 @@ mod benchmarks {
             region_id,
         ));
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_2, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_2,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin).into(),
             lawyer_2.clone(),
@@ -1309,7 +1244,7 @@ mod benchmarks {
             RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             listing_id,
         ));
-        
+
         assert!(RefundToken::<T>::get(listing_id).is_some());
 
         #[extrinsic_call]
@@ -1326,32 +1261,17 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id = list_property_helper::<T>(
+            seller.clone(),
+            region_id,
+            location,
+            token_amount,
+            token_price,
+            true,
+        );
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -1426,7 +1346,10 @@ mod benchmarks {
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_1, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_1,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_1.clone(),
@@ -1437,7 +1360,10 @@ mod benchmarks {
             region_id,
         ));
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_2, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_2,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin).into(),
             lawyer_2.clone(),
@@ -1490,33 +1416,26 @@ mod benchmarks {
             RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
             0,
         ));
-        assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
-            RawOrigin::Signed(lawyer_1).into(),
-            0,
-            false
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
-            RawOrigin::Signed(lawyer_2).into(),
-            0,
-            false
-        ));
 
-        assert_ok!(Marketplace::<T>::withdraw_rejected(
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_ok!(Marketplace::<T>::withdraw_legal_process_expired(
             RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
             listing_id,
         ));
-        assert_ok!(Marketplace::<T>::withdraw_rejected(
+        assert_ok!(Marketplace::<T>::withdraw_legal_process_expired(
             RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             listing_id,
         ));
-        
-        assert!(RefundToken::<T>::get(listing_id).is_some());
+
+        assert!(RefundLegalExpired::<T>::get(listing_id).is_some());
 
         #[extrinsic_call]
         withdraw_legal_process_expired(RawOrigin::Signed(buyer.clone()), listing_id);
 
-        //assert_eq!(TokenOwner::<T>::get(&buyer, listing_id).token_amount, 0);
-        assert!(RefundToken::<T>::get(listing_id).is_none());
+        assert!(RefundLegalExpired::<T>::get(listing_id).is_none());
         assert!(ListingDeposits::<T>::get(listing_id).is_none());
     }
 
@@ -1526,32 +1445,12 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
 
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -1594,32 +1493,14 @@ mod benchmarks {
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
-        let property_price = token_price.saturating_mul((token_amount as u128).into());
-        let deposit_amount =
-            property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
+        let listing_id = list_property_helper::<T>(
+            seller.clone(),
             region_id,
             location,
-            token_price,
             token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+            token_price,
+            true,
+        );
 
         let expiry =
             frame_system::Pallet::<T>::block_number() + T::MaxListingDuration::get() + 1u32.into();
@@ -1635,9 +1516,10 @@ mod benchmarks {
     }
 
     #[benchmark]
-    fn upgrade_object() {
+    fn withdraw_claiming_expired() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
+
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
         let property_price = token_price.saturating_mul((token_amount as u128).into());
@@ -1656,7 +1538,7 @@ mod benchmarks {
 
         let tax_paid_by_developer = true;
         assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
+            RawOrigin::Signed(seller).into(),
             region_id,
             location,
             token_price,
@@ -1666,6 +1548,113 @@ mod benchmarks {
         ));
         let listing_id = 0;
         assert!(OngoingObjectListing::<T>::contains_key(listing_id));
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let buyer: T::AccountId = account("buyer", 0, 0);
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            buyer.clone(),
+            Role::RealEstateInvestor
+        ));
+        let base = token_amount / 3;
+        let remainder = token_amount % 3;
+        for i in 1..=2 {
+            let buyer_helper: T::AccountId = account("buyer_helper", i, i);
+            assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+                &buyer_helper,
+                deposit_amount.saturating_mul(20u32.into())
+            ));
+            assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+                payment_asset,
+                &buyer_helper,
+                property_price.saturating_mul(100u32.into())
+            ));
+            assert_ok!(Whitelist::<T>::assign_role(
+                RawOrigin::Signed(admin.clone()).into(),
+                buyer_helper.clone(),
+                Role::RealEstateInvestor
+            ));
+            assert_ok!(Marketplace::<T>::buy_property_token(
+                RawOrigin::Signed(buyer_helper.clone()).into(),
+                listing_id,
+                base,
+                payment_asset,
+            ));
+        }
+        let buyer_amount = base + remainder;
+        assert_ok!(Marketplace::<T>::buy_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+            buyer_amount,
+            payment_asset,
+        ));
+
+        assert_ok!(Marketplace::<T>::claim_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+        ));
+
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_ok!(Marketplace::<T>::finalize_claim_window(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+        ));
+
+        for i in 1..=2 {
+            let buyer_helper: T::AccountId = account("buyer_helper", i, i);
+            assert_ok!(Marketplace::<T>::withdraw_unclaimed(
+                RawOrigin::Signed(buyer_helper.clone()).into(),
+                listing_id,
+            ));
+            assert_ok!(Marketplace::<T>::buy_property_token(
+                RawOrigin::Signed(buyer_helper.clone()).into(),
+                listing_id,
+                base,
+                payment_asset,
+            ));
+        }
+
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_ok!(Marketplace::<T>::finalize_claim_window(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+        ));
+
+        #[extrinsic_call]
+        withdraw_claiming_expired(RawOrigin::Signed(buyer.clone()), listing_id);
+
+        assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
+        assert!(pallet_real_estate_asset::PropertyAssetInfo::<T>::get(0).is_none());
+    }
+
+    #[benchmark]
+    fn upgrade_object() {
+        let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id = list_property_helper::<T>(
+            seller.clone(),
+            region_id,
+            location,
+            token_amount,
+            token_price,
+            true,
+        );
 
         let new_price = 2_000u32.into();
 
@@ -1684,7 +1673,8 @@ mod benchmarks {
     fn delist_token() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin);
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin);
 
         let asset_id = 0;
         let amount = 1;
@@ -1708,11 +1698,15 @@ mod benchmarks {
     fn lawyer_claim_property() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let _ = list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+        let _ =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
 
         let lawyer: T::AccountId = account("lawyer", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer.clone(),
@@ -1738,11 +1732,15 @@ mod benchmarks {
     fn vote_on_spv_lawyer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+        let token_holder =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
 
         let lawyer: T::AccountId = account("lawyer", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer.clone(),
@@ -1783,7 +1781,12 @@ mod benchmarks {
         );
 
         #[extrinsic_call]
-        vote_on_spv_lawyer(RawOrigin::Signed(token_holder.clone()), 0, types::Vote::Yes, 1);
+        vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()),
+            0,
+            types::Vote::Yes,
+            1,
+        );
 
         assert_eq!(SpvLawyerProposal::<T>::get(0).unwrap().lawyer, lawyer);
         assert_eq!(
@@ -1800,11 +1803,15 @@ mod benchmarks {
     fn approve_developer_lawyer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let _ = list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+        let _ =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
 
         let lawyer: T::AccountId = account("lawyer", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer.clone(),
@@ -1838,11 +1845,15 @@ mod benchmarks {
     fn finalize_spv_lawyer() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+        let token_holder =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
 
         let lawyer: T::AccountId = account("lawyer", 0, 0);
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer.clone(),
@@ -1895,13 +1906,17 @@ mod benchmarks {
     fn remove_lawyer_claim() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_holder = list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+        let token_holder =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
 
         let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
         let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
 
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_1, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_1,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_1.clone(),
@@ -1912,7 +1927,10 @@ mod benchmarks {
             region_id,
         ));
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_2, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_2,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_2.clone(),
@@ -1973,34 +1991,19 @@ mod benchmarks {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
-
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id = list_property_helper::<T>(
+            seller.clone(),
+            region_id,
+            location,
+            token_amount,
+            token_price,
+            true,
+        );
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
 
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller.clone()).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let token_holder: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -2086,7 +2089,10 @@ mod benchmarks {
         let listing_id = 0;
 
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_1, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_1,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_1.clone(),
@@ -2097,7 +2103,10 @@ mod benchmarks {
             region_id,
         ));
         let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(&lawyer_2, laywer_deposit * 10u32.into());
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer_2,
+            laywer_deposit * 10u32.into(),
+        );
         assert_ok!(Whitelist::<T>::assign_role(
             RawOrigin::Signed(admin.clone()).into(),
             lawyer_2.clone(),
@@ -2175,7 +2184,8 @@ mod benchmarks {
     fn send_property_token() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
-        let token_owner = create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
+        let token_owner =
+            create_registered_property::<T>(seller.clone(), region_id, location, admin.clone());
 
         let new_owner: T::AccountId = account("new_owner", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
