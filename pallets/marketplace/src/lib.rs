@@ -680,7 +680,7 @@ pub mod pallet {
         ///
         /// Emits `ObjectListed` event when successful
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::list_object(
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::list_property(
             <T as pallet_nfts::Config>::StringLimit::get()
         ))]
         pub fn list_property(
@@ -1174,7 +1174,7 @@ pub mod pallet {
         ///
         /// Emits `PropertyTokenClaimed` event when successful.
         #[pallet::call_index(3)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::finalize_claim_window())]
         pub fn finalize_claim_window(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1247,7 +1247,7 @@ pub mod pallet {
         ///
         /// Emits `SpvCreated` event when successful.
         #[pallet::call_index(4)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::create_spv())]
         pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
@@ -1704,7 +1704,7 @@ pub mod pallet {
         ///
         /// Emits `ExpiredFundsWithdrawn` event when successful.
         #[pallet::call_index(12)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_legal_process_expired())]
         pub fn withdraw_legal_process_expired(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -1958,7 +1958,7 @@ pub mod pallet {
         ///
         /// Emits `RejectedFundsWithdrawn` event when successful.
         #[pallet::call_index(15)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_claiming_expired())]
         pub fn withdraw_claiming_expired(
             origin: OriginFor<T>,
             listing_id: ListingId,
@@ -2043,7 +2043,7 @@ pub mod pallet {
         ///
         /// Emits `UnclaimedTokenWithdrawn` event when successful.
         #[pallet::call_index(16)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_unclaimed())]
         pub fn withdraw_unclaimed(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
@@ -2610,7 +2610,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnfrozen` event when successful.
         #[pallet::call_index(23)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unfreeze_spv_lawyer_token())]
         pub fn unfreeze_spv_lawyer_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
@@ -2654,7 +2654,7 @@ pub mod pallet {
         ///
         /// Emits `LawyerRemovedFromCase` event when successful.
         #[pallet::call_index(24)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_from_case())]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_lawyer_claim())]
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,

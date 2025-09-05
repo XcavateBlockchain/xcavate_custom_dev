@@ -14,6 +14,8 @@ use pallet_regions::{RegionIdentifier, Vote};
 use pallet_xcavate_whitelist::Pallet as Whitelist;
 use pallet_xcavate_whitelist::Role;
 use scale_info::prelude::vec;
+extern crate alloc;
+use alloc::vec::Vec;
 
 fn create_whitelisted_user<T: Config>() -> (T::AccountId, T::AccountId) {
     let admin: T::AccountId = account("admin", 0, 0);
@@ -345,6 +347,93 @@ fn claim_buyers_property_token<T: Config>(buyers: u32, listing_id: ListingId) {
             listing_id
         ));
     }
+}
+
+// Helper function to setup SPV and lawyers
+fn setup_spv_and_lawyers<T: Config>(
+    seller: T::AccountId,
+    admin: T::AccountId,
+    listing_id: u32,
+    region_id: u16,
+    buyer: T::AccountId,
+    buyers: Vec<T::AccountId>,
+) -> (T::AccountId, T::AccountId) {
+    let spv_admin: T::AccountId = account("spv_admin", 0, 0);
+    assert_ok!(Whitelist::<T>::assign_role(
+        RawOrigin::Signed(admin.clone()).into(),
+        spv_admin.clone(),
+        Role::SpvConfirmation
+    ));
+    assert_ok!(Marketplace::<T>::create_spv(
+        RawOrigin::Signed(spv_admin).into(),
+        listing_id,
+    ));
+
+    let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
+    let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
+    let lawyer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
+    assert_ok!(<T as pallet_regions::Config>::NativeCurrency::mint_into(
+        &lawyer_1,
+        lawyer_deposit * 10u32.into()
+    ));
+    assert_ok!(Whitelist::<T>::assign_role(
+        RawOrigin::Signed(admin.clone()).into(),
+        lawyer_1.clone(),
+        Role::Lawyer
+    ));
+    assert_ok!(Regions::<T>::register_lawyer(
+        RawOrigin::Signed(lawyer_1.clone()).into(),
+        region_id,
+    ));
+    assert_ok!(<T as pallet_regions::Config>::NativeCurrency::mint_into(
+        &lawyer_2,
+        lawyer_deposit * 10u32.into()
+    ));
+    assert_ok!(Whitelist::<T>::assign_role(
+        RawOrigin::Signed(admin.clone()).into(),
+        lawyer_2.clone(),
+        Role::Lawyer
+    ));
+    assert_ok!(Regions::<T>::register_lawyer(
+        RawOrigin::Signed(lawyer_2.clone()).into(),
+        region_id,
+    ));
+    assert_ok!(Marketplace::<T>::lawyer_claim_property(
+        RawOrigin::Signed(lawyer_1.clone()).into(),
+        listing_id,
+        crate::LegalProperty::RealEstateDeveloperSide,
+        400_u32.into()
+    ));
+    assert_ok!(Marketplace::<T>::approve_developer_lawyer(
+        RawOrigin::Signed(seller).into(),
+        listing_id,
+        true
+    ));
+    assert_ok!(Marketplace::<T>::lawyer_claim_property(
+        RawOrigin::Signed(lawyer_2.clone()).into(),
+        listing_id,
+        crate::LegalProperty::SpvSide,
+        400_u32.into()
+    ));
+
+    for helper_buyer in buyers {
+        let token_amount = pallet_real_estate_asset::PropertyOwnerToken::<T>::get(0, &helper_buyer);
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(helper_buyer).into(),
+            listing_id,
+            types::Vote::Yes,
+            token_amount
+        ));
+    }
+
+    let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+    frame_system::Pallet::<T>::set_block_number(expiry);
+    assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+        RawOrigin::Signed(buyer).into(),
+        listing_id,
+    ));
+
+    (lawyer_1, lawyer_2)
 }
 
 #[benchmarks]
@@ -1141,88 +1230,22 @@ mod benchmarks {
             RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             listing_id,
         ));
-        let spv_admin: T::AccountId = account("spv_admin", 0, 0);
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            spv_admin.clone(),
-            Role::SpvConfirmation
-        ));
-        assert_ok!(Marketplace::<T>::create_spv(
-            RawOrigin::Signed(spv_admin).into(),
-            listing_id,
-        ));
 
-        let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
-        let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_1,
-            laywer_deposit * 10u32.into(),
-        );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            lawyer_1.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
+        let (lawyer_1, lawyer_2) = setup_spv_and_lawyers::<T>(
+            seller,
+            admin.clone(),
+            listing_id,
             region_id,
-        ));
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_2,
-            laywer_deposit * 10u32.into(),
+            buyer.clone(),
+            vec![account("buyer_helper", 1, 1), account("buyer_helper", 2, 2)],
         );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin).into(),
-            lawyer_2.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            region_id,
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
-            0,
-            crate::LegalProperty::RealEstateDeveloperSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
-            RawOrigin::Signed(seller).into(),
-            0,
-            true
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            0,
-            crate::LegalProperty::SpvSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
-            RawOrigin::Signed(buyer.clone()).into(),
-            0,
-            types::Vote::Yes,
-            buyer_amount,
-        ));
-        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+
+        assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
             RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
-            0,
-            types::Vote::Yes,
-            base,
-        ));
-        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
-        frame_system::Pallet::<T>::set_block_number(expiry);
-        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
-            RawOrigin::Signed(buyer.clone()).into(),
             0,
         ));
         assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
-            RawOrigin::Signed(buyer.clone()).into(),
-            0,
-        ));
-        assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
-            RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
+            RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             0,
         ));
         assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
@@ -1332,88 +1355,22 @@ mod benchmarks {
             RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             listing_id,
         ));
-        let spv_admin: T::AccountId = account("spv_admin", 0, 0);
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            spv_admin.clone(),
-            Role::SpvConfirmation
-        ));
-        assert_ok!(Marketplace::<T>::create_spv(
-            RawOrigin::Signed(spv_admin).into(),
-            listing_id,
-        ));
 
-        let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
-        let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_1,
-            laywer_deposit * 10u32.into(),
-        );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            lawyer_1.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
+        let (_, _) = setup_spv_and_lawyers::<T>(
+            seller,
+            admin.clone(),
+            listing_id,
             region_id,
-        ));
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_2,
-            laywer_deposit * 10u32.into(),
+            buyer.clone(),
+            vec![account("buyer_helper", 1, 1), account("buyer_helper", 2, 2)],
         );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin).into(),
-            lawyer_2.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            region_id,
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
-            0,
-            crate::LegalProperty::RealEstateDeveloperSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
-            RawOrigin::Signed(seller).into(),
-            0,
-            true
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            0,
-            crate::LegalProperty::SpvSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
-            RawOrigin::Signed(buyer.clone()).into(),
-            0,
-            types::Vote::Yes,
-            buyer_amount,
-        ));
-        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+        
+        assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
             RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
-            0,
-            types::Vote::Yes,
-            base,
-        ));
-        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
-        frame_system::Pallet::<T>::set_block_number(expiry);
-        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
-            RawOrigin::Signed(buyer.clone()).into(),
             0,
         ));
         assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
-            RawOrigin::Signed(buyer.clone()).into(),
-            0,
-        ));
-        assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
-            RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
+            RawOrigin::Signed(account("buyer_helper", 2, 2)).into(),
             0,
         ));
 
@@ -1522,32 +1479,11 @@ mod benchmarks {
 
         let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
         let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
         let property_price = token_price.saturating_mul((token_amount as u128).into());
         let deposit_amount =
             property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
-        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
-            &seller,
-            deposit_amount.saturating_mul(20u32.into())
-        ));
-
-        let metadata: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit> =
-            BoundedVec::truncate_from(vec![
-                42u8;
-                <T as pallet_nfts::Config>::StringLimit::get() as usize
-            ]);
-
-        let tax_paid_by_developer = true;
-        assert_ok!(Marketplace::<T>::list_property(
-            RawOrigin::Signed(seller).into(),
-            region_id,
-            location,
-            token_price,
-            token_amount,
-            metadata,
-            tax_paid_by_developer,
-        ));
-        let listing_id = 0;
-        assert!(OngoingObjectListing::<T>::contains_key(listing_id));
         let payment_asset = T::AcceptedAssets::get()[0];
         let buyer: T::AccountId = account("buyer", 0, 0);
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
@@ -1639,6 +1575,82 @@ mod benchmarks {
 
         assert!(OngoingObjectListing::<T>::get(listing_id).is_none());
         assert!(pallet_real_estate_asset::PropertyAssetInfo::<T>::get(0).is_none());
+    }
+
+    #[benchmark]
+    fn withdraw_unclaimed() {
+        let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
+
+        let token_amount: u32 = <T as pallet::Config>::MaxPropertyToken::get();
+        let token_price: <T as pallet::Config>::Balance = 1_000u32.into();
+        let listing_id =
+            list_property_helper::<T>(seller, region_id, location, token_amount, token_price, true);
+        let property_price = token_price.saturating_mul((token_amount as u128).into());
+        let deposit_amount =
+            property_price.saturating_mul(T::ListingDeposit::get()) / 100u128.into();
+        let payment_asset = T::AcceptedAssets::get()[0];
+        let buyer: T::AccountId = account("buyer", 0, 0);
+        assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+            &buyer,
+            deposit_amount.saturating_mul(20u32.into())
+        ));
+        assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+            payment_asset,
+            &buyer,
+            property_price.saturating_mul(100u32.into())
+        ));
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            buyer.clone(),
+            Role::RealEstateInvestor
+        ));
+        let base = token_amount / 3;
+        let remainder = token_amount % 3;
+        for i in 1..=2 {
+            let buyer_helper: T::AccountId = account("buyer_helper", i, i);
+            assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
+                &buyer_helper,
+                deposit_amount.saturating_mul(20u32.into())
+            ));
+            assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
+                payment_asset,
+                &buyer_helper,
+                property_price.saturating_mul(100u32.into())
+            ));
+            assert_ok!(Whitelist::<T>::assign_role(
+                RawOrigin::Signed(admin.clone()).into(),
+                buyer_helper.clone(),
+                Role::RealEstateInvestor
+            ));
+            assert_ok!(Marketplace::<T>::buy_property_token(
+                RawOrigin::Signed(buyer_helper.clone()).into(),
+                listing_id,
+                base,
+                payment_asset,
+            ));
+        }
+        let buyer_amount = base + remainder;
+        assert_ok!(Marketplace::<T>::buy_property_token(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+            buyer_amount,
+            payment_asset,
+        ));
+
+        let expiry =
+            frame_system::Pallet::<T>::block_number() + T::ClaimWindow::get() + 1u32.into();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_ok!(Marketplace::<T>::finalize_claim_window(
+            RawOrigin::Signed(buyer.clone()).into(),
+            listing_id,
+        ));
+
+        #[extrinsic_call]
+        withdraw_unclaimed(RawOrigin::Signed(buyer.clone()), listing_id);
+
+        assert!(TokenOwner::<T>::get(&buyer, listing_id).is_none());
     }
 
     #[benchmark]
@@ -1903,6 +1915,68 @@ mod benchmarks {
     }
 
     #[benchmark]
+    fn unfreeze_spv_lawyer_token() {
+        let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
+        let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
+        let token_holder =
+            list_and_sell_property::<T>(seller.clone(), region_id, location.clone(), admin.clone());
+
+        let lawyer: T::AccountId = account("lawyer", 0, 0);
+        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
+        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
+            &lawyer,
+            laywer_deposit * 10u32.into(),
+        );
+        assert_ok!(Whitelist::<T>::assign_role(
+            RawOrigin::Signed(admin.clone()).into(),
+            lawyer.clone(),
+            Role::Lawyer
+        ));
+        assert_ok!(Regions::<T>::register_lawyer(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            region_id,
+        ));
+
+        assert_ok!(Marketplace::<T>::lawyer_claim_property(
+            RawOrigin::Signed(lawyer.clone()).into(),
+            0,
+            crate::LegalProperty::SpvSide,
+            400_u32.into(),
+        ));
+
+        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+            types::Vote::Yes,
+            1
+        ));
+        for i in 1..<T as pallet::Config>::MaxPropertyToken::get() {
+            let buyer: T::AccountId = account("buyer", i, i);
+            assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
+                RawOrigin::Signed(buyer.clone()).into(),
+                0,
+                crate::Vote::Yes,
+                1
+            ));
+            assert!(UserLawyerVote::<T>::get(0, &buyer).is_some());
+        }
+        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
+        frame_system::Pallet::<T>::set_block_number(expiry);
+
+        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
+            RawOrigin::Signed(token_holder.clone()).into(),
+            0,
+        ));
+
+        assert!(UserLawyerVote::<T>::get(0, &token_holder).is_some());
+
+        #[extrinsic_call]
+        unfreeze_spv_lawyer_token(RawOrigin::Signed(token_holder.clone()), 0);
+
+        assert!(UserLawyerVote::<T>::get(0, &token_holder).is_none());
+    }
+
+    #[benchmark]
     fn remove_lawyer_claim() {
         let (seller, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(seller.clone(), admin.clone());
@@ -2072,100 +2146,24 @@ mod benchmarks {
                 ));
             }
         }
-        let spv_admin: T::AccountId = account("spv_admin", 0, 0);
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            spv_admin.clone(),
-            Role::SpvConfirmation
-        ));
-        assert_ok!(Marketplace::<T>::create_spv(
-            RawOrigin::Signed(spv_admin).into(),
-            listing_id,
-        ));
 
-        let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
-        let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
-
-        let listing_id = 0;
-
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_1,
-            laywer_deposit * 10u32.into(),
-        );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            lawyer_1.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
-            region_id,
-        ));
-        let laywer_deposit = <T as pallet_regions::Config>::LawyerDeposit::get();
-        let _ = <T as pallet_regions::Config>::NativeCurrency::mint_into(
-            &lawyer_2,
-            laywer_deposit * 10u32.into(),
-        );
-        assert_ok!(Whitelist::<T>::assign_role(
-            RawOrigin::Signed(admin.clone()).into(),
-            lawyer_2.clone(),
-            Role::Lawyer
-        ));
-        assert_ok!(Regions::<T>::register_lawyer(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            region_id,
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_1.clone()).into(),
-            listing_id,
-            crate::LegalProperty::RealEstateDeveloperSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::approve_developer_lawyer(
-            RawOrigin::Signed(seller).into(),
-            0,
-            true
-        ));
-        assert_ok!(Marketplace::<T>::lawyer_claim_property(
-            RawOrigin::Signed(lawyer_2.clone()).into(),
-            listing_id,
-            crate::LegalProperty::SpvSide,
-            400_u32.into()
-        ));
-        assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
-            RawOrigin::Signed(token_holder.clone()).into(),
-            0,
-            types::Vote::Yes,
-            buyer_amount
-        ));
+        let mut token_holders: Vec<T::AccountId> = vec![token_holder.clone()];
         for i in 1..a - 1 {
             let buyer: T::AccountId = account("buyer", i, i);
-            assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
-                RawOrigin::Signed(buyer.clone()).into(),
-                0,
-                crate::Vote::Yes,
-                1
-            ));
-            assert!(UserLawyerVote::<T>::get(0, &buyer).is_some());
+            token_holders.push(buyer);
         }
         if token_amount - a + 1 >= token_amount * 50 / 100 {
-            let base = (token_amount - a + 1) / 3;
             let buyer_helper: T::AccountId = account("buyer_helper", 1, 1);
-            assert_ok!(Marketplace::<T>::vote_on_spv_lawyer(
-                RawOrigin::Signed(buyer_helper.clone()).into(),
-                0,
-                crate::Vote::Yes,
-                base
-            ));
-            assert!(UserLawyerVote::<T>::get(0, &buyer_helper).is_some());
+            token_holders.push(buyer_helper);
         }
-        let expiry = frame_system::Pallet::<T>::block_number() + T::LawyerVotingTime::get();
-        frame_system::Pallet::<T>::set_block_number(expiry);
-        assert_ok!(Marketplace::<T>::finalize_spv_lawyer(
-            RawOrigin::Signed(token_holder).into(),
-            0,
-        ));
+        let (lawyer_1, lawyer_2) = setup_spv_and_lawyers::<T>(
+            seller,
+            admin.clone(),
+            listing_id,
+            region_id,
+            token_holder.clone(),
+            token_holders,
+        );
 
         assert_ok!(Marketplace::<T>::lawyer_confirm_documents(
             RawOrigin::Signed(lawyer_1).into(),
@@ -2197,7 +2195,7 @@ mod benchmarks {
 
         assert_ok!(<T as pallet::Config>::NativeCurrency::mint_into(
             &new_owner,
-            deposit_amount.saturating_mul(20u32.into())
+            deposit_amount.saturating_mul(100_000_000u32.into())
         ));
 
         let asset_id = 0;
