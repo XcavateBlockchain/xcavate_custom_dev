@@ -661,6 +661,8 @@ pub mod pallet {
         OfferNotFound,
         NoTokensOwned,
         InsufficientRefundableTokens,
+        /// The amount for voting has to be higher than 0.
+        ZeroVoteAmount,
     }
 
     #[pallet::call]
@@ -2338,6 +2340,7 @@ pub mod pallet {
                 proposal_details.expiry_block > current_block_number,
                 Error::<T>::VotingExpired
             );
+            ensure!(amount > 0, Error::<T>::ZeroVoteAmount);
             let voting_power =
                 T::PropertyToken::get_token_balance(proposal_details.asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NotEnoughToken);

@@ -1624,6 +1624,15 @@ fn vote_on_proposal_fails() {
             1000,
             bvec![10, 10]
         ));
+        assert_noop!(
+            PropertyGovernance::vote_on_proposal(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+                0
+            ),
+            Error::<Test>::ZeroVoteAmount
+        );
         assert_ok!(PropertyGovernance::vote_on_proposal(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -3163,6 +3172,15 @@ fn vote_on_challenge_fails() {
             RuntimeOrigin::signed([1; 32].into()),
             0
         ));
+        assert_noop!(
+            PropertyGovernance::vote_on_letting_agent_challenge(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+                0
+            ),
+            Error::<Test>::ZeroVoteAmount
+        );
         assert_ok!(PropertyGovernance::vote_on_letting_agent_challenge(
             RuntimeOrigin::signed([1; 32].into()),
             0,
@@ -4215,6 +4233,15 @@ fn vote_on_property_sale_fails() {
                 10
             ),
             Error::<Test>::NoPermission
+        );
+        assert_noop!(
+            PropertyGovernance::vote_on_property_sale(
+                RuntimeOrigin::signed([1; 32].into()),
+                0,
+                crate::Vote::Yes,
+                0
+            ),
+            Error::<Test>::ZeroVoteAmount
         );
     });
 }

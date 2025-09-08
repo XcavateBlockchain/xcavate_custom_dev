@@ -3865,6 +3865,15 @@ fn vote_on_spv_lawyer_fails() {
             ),
             Error::<Test>::NotEnoughToken
         );
+        assert_noop!(
+            Marketplace::vote_on_spv_lawyer(
+                RuntimeOrigin::signed([0; 32].into()),
+                0,
+                crate::Vote::No,
+                0
+            ),
+            Error::<Test>::ZeroVoteAmount
+        );
         assert_eq!(
             AssetsFreezer::balance_frozen(
                 0,

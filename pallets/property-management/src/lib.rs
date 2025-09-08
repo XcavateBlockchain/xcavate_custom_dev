@@ -382,6 +382,12 @@ pub mod pallet {
         LettingAgentActive,
         /// The user has no token amount frozen.
         NoFrozenAmount,
+        /// The amount for voting has to be higher than 0.
+        ZeroVoteAmount,
+        /// Distribution amount can not be 0.
+        ZeroDistributionAmount,
+        /// Total supply of a property can not be 0.
+        ZeroTokenSupply,
     }
 
     #[pallet::call]
@@ -416,40 +422,25 @@ pub mod pallet {
                 Error::<T>::LocationUnknown
             );
             let deposit_amount = <T as Config>::LettingAgentDeposit::get();
-            if let Some(mut letting_info) = LettingInfo::<T>::get(&signer) {
-                ensure!(
-                    !letting_info.locations.contains_key(&location),
-                    Error::<T>::LettingAgentInLocation
-                );
-                <T as pallet::Config>::NativeCurrency::hold(
-                    &HoldReason::LettingAgent.into(),
-                    &signer,
-                    deposit_amount,
-                )?;
-                letting_info
-                    .locations
-                    .try_insert(
-                        location,
-                        LocationInfo {
-                            assigned_properties: 0,
-                            deposit: deposit_amount,
-                        },
-                    )
-                    .map_err(|_| Error::<T>::TooManyLocations)?;
-                LettingInfo::<T>::insert(&signer, letting_info);
-            } else {
-                <T as pallet::Config>::NativeCurrency::hold(
-                    &HoldReason::LettingAgent.into(),
-                    &signer,
-                    deposit_amount,
-                )?;
-                let mut letting_info = LettingAgentInfo {
+            <T as pallet::Config>::NativeCurrency::hold(
+                &HoldReason::LettingAgent.into(),
+                &signer,
+                deposit_amount,
+            )?;
+
+            LettingInfo::<T>::mutate(&signer, |letting_info| {
+                let mut info = letting_info.take().unwrap_or_else(|| LettingAgentInfo {
                     region,
                     locations: Default::default(),
                     active_strikes: Default::default(),
-                };
-                letting_info
-                    .locations
+                });
+
+                ensure!(
+                    !info.locations.contains_key(&location),
+                    Error::<T>::LettingAgentInLocation
+                );
+
+                info.locations
                     .try_insert(
                         location,
                         LocationInfo {
@@ -458,8 +449,11 @@ pub mod pallet {
                         },
                     )
                     .map_err(|_| Error::<T>::TooManyLocations)?;
-                LettingInfo::<T>::insert(&signer, letting_info);
-            }
+
+                *letting_info = Some(info);
+                Ok::<(), DispatchError>(())
+            })?;
+
             Self::deposit_event(Event::<T>::LettingAgentAdded {
                 region,
                 who: signer,
@@ -485,28 +479,34 @@ pub mod pallet {
                 origin,
                 &pallet_xcavate_whitelist::Role::LettingAgent,
             )?;
-            let mut letting_info =
-                LettingInfo::<T>::get(&signer).ok_or(Error::<T>::AgentNotFound)?;
-            let location_info = letting_info
-                .locations
-                .get(&location)
-                .ok_or(Error::<T>::LettingAgentNotActiveInLocation)?;
-            ensure!(
-                location_info.assigned_properties.is_zero(),
-                Error::<T>::LettingAgentActive
-            );
-            let deposit_amount = location_info.deposit;
-            letting_info
-                .locations
-                .remove(&location)
-                .ok_or(Error::<T>::LocationNotFound)?;
-            <T as pallet::Config>::NativeCurrency::release(
-                &HoldReason::LettingAgent.into(),
-                &signer,
-                deposit_amount,
-                Precision::Exact,
-            )?;
-            LettingInfo::<T>::insert(signer.clone(), letting_info);
+
+            LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info| {
+                let letting_info =
+                    maybe_letting_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
+            
+                let location_info = letting_info
+                    .locations
+                    .get(&location)
+                    .ok_or(Error::<T>::LettingAgentNotActiveInLocation)?;
+             
+                ensure!(
+                    location_info.assigned_properties.is_zero(),
+                    Error::<T>::LettingAgentActive
+                );
+
+                let deposit_amount = location_info.deposit;
+                letting_info.locations.remove(&location);
+                <T as pallet::Config>::NativeCurrency::release(
+                    &HoldReason::LettingAgent.into(),
+                    &signer,
+                    deposit_amount,
+                    Precision::Exact,
+                )?;
+                if letting_info.locations.is_empty() {
+                    *maybe_letting_info = None;
+                }
+                Ok::<(), DispatchError>(())
+            })?;
             Self::deposit_event(Event::<T>::LettingAgentRemoved {
                 location,
                 who: signer,
@@ -603,11 +603,12 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let proposal_details = LettingAgentProposal::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
-            let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
-                proposal_details.expiry_block > current_block_number,
+                proposal_details.expiry_block > <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::VotingExpired
             );
+
+            ensure!(amount > 0, Error::<T>::ZeroVoteAmount);
             let voting_power = T::PropertyToken::get_token_balance(asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NoPermission);
             OngoingLettingAgentVoting::<T>::try_mutate(proposal_id, |maybe_current_vote| {
@@ -694,9 +695,8 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
             let proposal = LettingAgentProposal::<T>::get(proposal_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
-            let current_block_number = <frame_system::Pallet<T>>::block_number();
             ensure!(
-                proposal.expiry_block <= current_block_number,
+                proposal.expiry_block <= <frame_system::Pallet<T>>::block_number(),
                 Error::<T>::VotingStillOngoing
             );
 
@@ -718,16 +718,16 @@ pub mod pallet {
             let meets_quorum =
                 total_votes.saturating_mul(100u32) > total_supply.saturating_mul(quorum_percent);
             if voting_result.yes_voting_power > voting_result.no_voting_power && meets_quorum {
+                ensure!(
+                    LettingStorage::<T>::get(asset_id).is_none(),
+                    Error::<T>::LettingAgentAlreadySet
+                );
                 LettingInfo::<T>::try_mutate(
                     proposal.letting_agent.clone(),
                     |maybe_letting_info| {
                         let letting_info = maybe_letting_info
                             .as_mut()
                             .ok_or(Error::<T>::AgentNotFound)?;
-                        ensure!(
-                            LettingStorage::<T>::get(asset_id).is_none(),
-                            Error::<T>::LettingAgentAlreadySet
-                        );
                         if let Some(location_info) =
                             letting_info.locations.get_mut(&proposal.location)
                         {
@@ -778,9 +778,8 @@ pub mod pallet {
                 .ok_or(Error::<T>::NoFrozenAmount)?;
 
             if let Some(proposal) = LettingAgentProposal::<T>::get(proposal_id) {
-                let current_block_number = frame_system::Pallet::<T>::block_number();
                 ensure!(
-                    proposal.expiry_block <= current_block_number,
+                    proposal.expiry_block <= frame_system::Pallet::<T>::block_number(),
                     Error::<T>::VotingStillOngoing
                 );
             }
@@ -831,6 +830,13 @@ pub mod pallet {
                 T::AcceptedAssets::get().contains(&payment_asset),
                 Error::<T>::PaymentAssetNotSupported
             );
+            ensure!(amount > Zero::zero(), Error::<T>::ZeroDistributionAmount);
+
+            let owner_list = T::PropertyToken::get_property_owner(asset_id);
+            let property_info = T::PropertyToken::get_property_asset_info(asset_id)
+                .ok_or(Error::<T>::NoObjectFound)?;
+            let total_supply = property_info.token_amount;
+            ensure!(total_supply > 0, Error::<T>::ZeroTokenSupply);
 
             let scaled_amount = amount
                 .checked_mul(&1u128.into()) // Modify the scale factor if needed
@@ -845,17 +851,12 @@ pub mod pallet {
             )
             .map_err(|_| Error::<T>::NotEnoughFunds)?;
 
-            let owner_list = T::PropertyToken::get_property_owner(asset_id);
-            let property_info = T::PropertyToken::get_property_asset_info(asset_id)
-                .ok_or(Error::<T>::NoObjectFound)?;
-
-            let total_token = property_info.token_amount;
             for owner in owner_list {
                 let token_amount = T::PropertyToken::get_token_balance(asset_id, &owner);
                 let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
                     .checked_mul(&amount)
                     .ok_or(Error::<T>::MultiplyError)?
-                    .checked_div(&Self::u64_to_balance_option(total_token.into())?)
+                    .checked_div(&Self::u64_to_balance_option(total_supply.into())?)
                     .ok_or(Error::<T>::DivisionError)?;
                 InvestorFunds::<T>::try_mutate((&owner, asset_id, payment_asset), |stored| {
                     *stored = stored

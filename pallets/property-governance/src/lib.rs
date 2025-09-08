@@ -671,6 +671,8 @@ pub mod pallet {
         VotingStillOngoing,
         /// A proposal is already ongoing.
         ProposalOngoing,
+        /// The amount for voting has to be higher than 0.
+        ZeroVoteAmount,
     }
 
     #[pallet::hooks]
@@ -901,6 +903,7 @@ pub mod pallet {
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+            ensure!(amount > 0, Error::<T>::ZeroVoteAmount);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NoPermission);
@@ -1035,6 +1038,7 @@ pub mod pallet {
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+            ensure!(amount > 0, Error::<T>::ZeroVoteAmount);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NoPermission);
@@ -1228,6 +1232,7 @@ pub mod pallet {
             );
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
+            ensure!(amount > 0, Error::<T>::ZeroVoteAmount);
             let voting_power =
                 <T as pallet::Config>::PropertyToken::get_token_balance(asset_id, &signer);
             ensure!(voting_power >= amount, Error::<T>::NoPermission);
