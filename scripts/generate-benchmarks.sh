@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pallets=(
-    pallet_marketplace
+    pallet_property_governance
 )
 
 # Generate weights
@@ -11,5 +11,5 @@ for pallet_name in "${pallets[@]}"; do
         --extrinsic "*" \
         --steps 50 \
         --repeat 20 \
-        --output ./pallets/marketplace/src/weights.rs
+        --output ./pallets/property-governance/src/weights.rs
 done

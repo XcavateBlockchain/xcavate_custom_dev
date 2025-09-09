@@ -488,6 +488,14 @@ mod benchmarks {
         ));
 
         let token_amount = pallet_real_estate_asset::PropertyOwnerToken::<T>::get(0, &token_owner);
+        assert_eq!(
+            <T as pallet::Config>::AssetsFreezer::balance_frozen(
+                asset_id,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &token_owner
+            ),
+            0u32.into()
+        );
         assert_ok!(PropertyManagement::<T>::vote_on_letting_agent(
             RawOrigin::Signed(token_owner.clone()).into(),
             asset_id,
@@ -662,11 +670,27 @@ mod benchmarks {
             asset_id,
         ));
         assert!(UserLettingAgentVote::<T>::get(0, &token_owner).is_some());
+        assert_eq!(
+            <T as pallet::Config>::AssetsFreezer::balance_frozen(
+                asset_id,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &token_owner
+            ),
+            token_amount.into()
+        );
 
         #[extrinsic_call]
         unfreeze_letting_voting_token(RawOrigin::Signed(token_owner.clone()), 0);
 
         assert!(UserLettingAgentVote::<T>::get(0, &token_owner).is_none());
+        assert_eq!(
+            <T as pallet::Config>::AssetsFreezer::balance_frozen(
+                asset_id,
+                &MarketplaceFreezeReason::LettingAgentVoting,
+                &token_owner
+            ),
+            0u32.into()
+        );
     }
 
     #[benchmark]

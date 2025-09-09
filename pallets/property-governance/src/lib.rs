@@ -976,7 +976,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnfrozen` event when successful.
         #[pallet::call_index(3)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unfreeze_proposal_token())]
         pub fn unfreeze_proposal_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
@@ -1110,7 +1110,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnfrozen` event when successful.
         #[pallet::call_index(5)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unfreeze_challenge_token())]
         pub fn unfreeze_challenge_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
@@ -1305,7 +1305,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnfrozen` event when successful.
         #[pallet::call_index(8)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unfreeze_sale_proposal_token())]
         pub fn unfreeze_sale_proposal_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,

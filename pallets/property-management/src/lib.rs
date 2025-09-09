@@ -470,7 +470,7 @@ pub mod pallet {
         ///
         /// Emits `LettingAgentRemoved` event when successful.
         #[pallet::call_index(1)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::remove_letting_agent())]
         pub fn remove_letting_agent(
             origin: OriginFor<T>,
             location: LocationId<T>,
@@ -768,7 +768,7 @@ pub mod pallet {
         ///
         /// Emits `TokenUnfrozen` event when successful.
         #[pallet::call_index(5)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(1,1))]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::unfreeze_letting_voting_token())]
         pub fn unfreeze_letting_voting_token(
             origin: OriginFor<T>,
             proposal_id: ProposalId,
@@ -876,7 +876,7 @@ pub mod pallet {
         ///
         /// Emits `WithdrawFunds` event when successful.
         #[pallet::call_index(7)]
-        #[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
+        #[pallet::weight(<T as pallet::Config>::WeightInfo::claim_income())]
         pub fn claim_income(
             origin: OriginFor<T>,
             asset_id: u32,
