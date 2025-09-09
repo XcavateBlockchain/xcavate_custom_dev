@@ -6,8 +6,8 @@ use super::*;
 use crate::Pallet as PropertyGovernance;
 use frame_benchmarking::v2::*;
 use frame_support::sp_runtime::{Permill, Saturating};
-use frame_support::traits::{fungible::Mutate, Hooks};
 use frame_support::traits::fungibles::InspectFreeze;
+use frame_support::traits::{fungible::Mutate, Hooks};
 use frame_support::BoundedVec;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::{Pallet as System, RawOrigin};
@@ -39,7 +39,10 @@ fn create_whitelisted_user<T: Config>() -> (T::AccountId, T::AccountId) {
     (signer, admin)
 }
 
-fn create_a_new_region<T: Config>(signer: T::AccountId, admin: T::AccountId) -> (u16, LocationId<T>) {
+fn create_a_new_region<T: Config>(
+    signer: T::AccountId,
+    admin: T::AccountId,
+) -> (u16, LocationId<T>) {
     let region = RegionIdentifier::France;
     let region_id = region.clone().into_u16();
 
@@ -164,7 +167,12 @@ fn list_and_sell_property<T: Config>(
         buyer.clone(),
         Role::RealEstateInvestor
     ));
-    add_buyers_to_listing::<T>(token_amount - 1, payment_asset, property_price, admin.clone());
+    add_buyers_to_listing::<T>(
+        token_amount - 1,
+        payment_asset,
+        property_price,
+        admin.clone(),
+    );
 
     assert_ok!(Marketplace::<T>::buy_property_token(
         RawOrigin::Signed(buyer.clone()).into(),
@@ -196,8 +204,9 @@ fn create_registered_property<T: Config>(
     region_id: u16,
     location: LocationId<T>,
     admin: T::AccountId,
-) -> T::AccountId {
-    let token_owner = list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
+) -> (T::AccountId, u32) {
+    let token_owner =
+        list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
     let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
     let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
 
@@ -279,7 +288,8 @@ fn create_registered_property<T: Config>(
         0,
         true
     ));
-    token_owner
+    let asset_id = 0u32;
+    (token_owner, asset_id) 
 }
 
 fn add_buyers_to_listing<T: Config + pallet_marketplace::Config>(
@@ -408,15 +418,14 @@ mod benchmarks {
     fn propose() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let letting_agent = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner,
-            admin,
+            admin.clone(),
         );
+        let letting_agent =
+            set_letting_agent::<T>(region_id, location.clone(), 0, token_owner, admin);
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::VotingTime::get());
         let mut proposals = BoundedVec::default();
@@ -426,7 +435,6 @@ mod benchmarks {
         ProposalRoundsExpiring::<T>::insert(expiry_block, proposals);
 
         let data = BoundedVec::try_from("Proposal".as_bytes().to_vec()).unwrap();
-        let asset_id = 0;
 
         let proposal_amount = T::LowProposal::get().saturating_mul(2_u32.into());
 
@@ -448,15 +456,13 @@ mod benchmarks {
     fn challenge_against_letting_agent() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let _ = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let _ = set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::VotingTime::get());
         let mut challenges = BoundedVec::default();
@@ -465,32 +471,30 @@ mod benchmarks {
         }
         ChallengeRoundsExpiring::<T>::insert(expiry_block, challenges);
 
-        let asset_id = 0;
-
         #[extrinsic_call]
         challenge_against_letting_agent(RawOrigin::Signed(token_owner.clone()), asset_id);
 
-        assert!(Challenges::<T>::contains_key(0));
+        let proposal_id = 0;
+        assert!(Challenges::<T>::contains_key(proposal_id));
         assert!(ChallengeRoundsExpiring::<T>::get(expiry_block).contains(&asset_id));
-        assert!(OngoingChallengeVotes::<T>::get(0).is_some());
+        assert!(OngoingChallengeVotes::<T>::get(proposal_id).is_some());
+        assert_eq!(AssetLettingChallenge::<T>::get(asset_id), Some(proposal_id));
     }
 
     #[benchmark]
     fn vote_on_proposal() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let letting_agent = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let letting_agent =
+            set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
         let data = BoundedVec::try_from("Proposal".as_bytes().to_vec()).unwrap();
-        let asset_id = 0;
         let proposal_amount = T::LowProposal::get().saturating_mul(2_u32.into());
 
         assert_ok!(PropertyGovernance::<T>::propose(
@@ -520,32 +524,28 @@ mod benchmarks {
             OngoingProposalVotes::<T>::get(proposal_id)
                 .unwrap()
                 .yes_voting_power,
-            1
+            token_amount
         );
-        assert_eq!(
-            UserProposalVote::<T>::get(proposal_id, &token_owner)
-                .unwrap()
-                .vote,
-            crate::Vote::Yes
-        );
+        let vote_record = UserProposalVote::<T>::get(proposal_id, &token_owner).unwrap();
+        assert_eq!(vote_record.vote, crate::Vote::Yes);
+        assert_eq!(vote_record.asset_id, asset_id);
+        assert_eq!(vote_record.power, token_amount);
     }
 
     #[benchmark]
     fn unfreeze_proposal_token() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let letting_agent = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let letting_agent =
+            set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
         let data = BoundedVec::try_from("Proposal".as_bytes().to_vec()).unwrap();
-        let asset_id = 0;
         let proposal_amount = T::LowProposal::get().saturating_mul(2_u32.into());
 
         assert_ok!(PropertyGovernance::<T>::propose(
@@ -586,10 +586,7 @@ mod benchmarks {
         run_to_block::<T>(expiry);
 
         #[extrinsic_call]
-        unfreeze_proposal_token(
-            RawOrigin::Signed(token_owner.clone()),
-            0,
-        );
+        unfreeze_proposal_token(RawOrigin::Signed(token_owner.clone()), 0);
 
         let proposal_id = 0;
 
@@ -608,17 +605,14 @@ mod benchmarks {
     fn vote_on_letting_agent_challenge() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let _ = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let _ = set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
-        let asset_id = 0;
         assert_ok!(PropertyGovernance::<T>::challenge_against_letting_agent(
             RawOrigin::Signed(token_owner.clone()).into(),
             asset_id
@@ -636,38 +630,31 @@ mod benchmarks {
             RawOrigin::Signed(token_owner.clone()),
             asset_id,
             crate::Vote::Yes,
-            token_amount
+            token_amount,
         );
 
         assert_eq!(
-            OngoingChallengeVotes::<T>::get(0)
-                .unwrap()
-                .yes_voting_power,
-            1
+            OngoingChallengeVotes::<T>::get(0).unwrap().yes_voting_power,
+            token_amount
         );
-        assert_eq!(
-            UserChallengeVote::<T>::get(0, &token_owner)
-                .unwrap()
-                .vote,
-            crate::Vote::Yes
-        );
+        let vote_record = UserChallengeVote::<T>::get(0, &token_owner).unwrap();
+        assert_eq!(vote_record.vote, crate::Vote::Yes);
+        assert_eq!(vote_record.asset_id, asset_id);
+        assert_eq!(vote_record.power, token_amount);
     }
 
     #[benchmark]
     fn unfreeze_challenge_token() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let _ = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let _ = set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
-        let asset_id = 0;
         assert_ok!(PropertyGovernance::<T>::challenge_against_letting_agent(
             RawOrigin::Signed(token_owner.clone()).into(),
             asset_id
@@ -704,10 +691,7 @@ mod benchmarks {
         run_to_block::<T>(expiry);
 
         #[extrinsic_call]
-        unfreeze_challenge_token(
-            RawOrigin::Signed(token_owner.clone()),
-            0,
-        );
+        unfreeze_challenge_token(RawOrigin::Signed(token_owner.clone()), 0);
 
         assert!(UserChallengeVote::<T>::get(0, &token_owner).is_none());
         assert_eq!(
@@ -724,15 +708,13 @@ mod benchmarks {
     fn propose_property_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let _ = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
+        let _ = set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
         let expiry_block = <System<T>>::block_number().saturating_add(T::SaleVotingTime::get());
         let mut sale_proposals = BoundedVec::default();
@@ -741,31 +723,27 @@ mod benchmarks {
         }
         ProposalRoundsExpiring::<T>::insert(expiry_block, sale_proposals);
 
-        let asset_id = 0;
-
         #[extrinsic_call]
         propose_property_sale(RawOrigin::Signed(token_owner.clone()), asset_id);
 
-        assert!(SaleProposals::<T>::contains_key(0));
+        let proposal_id = 0;
+        assert!(SaleProposals::<T>::contains_key(proposal_id));
         assert!(SaleProposalRoundsExpiring::<T>::get(expiry_block).contains(&asset_id));
-        assert!(OngoingSaleProposalVotes::<T>::get(0).is_some());
+        assert!(OngoingSaleProposalVotes::<T>::get(proposal_id).is_some());
+        assert_eq!(AssetSaleProposal::<T>::get(asset_id), Some(proposal_id));
     }
 
     #[benchmark]
     fn vote_on_property_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
-        let _ = set_letting_agent::<T>(
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
             region_id,
             location.clone(),
-            0,
-            token_owner.clone(),
-            admin,
+            admin.clone(),
         );
-
-        let asset_id = 0;
+        let _ = set_letting_agent::<T>(region_id, location.clone(), 0, token_owner.clone(), admin);
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -784,7 +762,7 @@ mod benchmarks {
             RawOrigin::Signed(token_owner.clone()),
             asset_id,
             crate::Vote::Yes,
-            token_amount
+            token_amount,
         );
 
         assert_eq!(
@@ -805,8 +783,12 @@ mod benchmarks {
     fn unfreeze_sale_proposal_token() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -814,8 +796,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -854,10 +834,7 @@ mod benchmarks {
         assert_eq!(SaleAuctions::<T>::get(asset_id).is_some(), true);
 
         #[extrinsic_call]
-        unfreeze_sale_proposal_token(
-            RawOrigin::Signed(token_owner.clone()),
-            0,
-        );
+        unfreeze_sale_proposal_token(RawOrigin::Signed(token_owner.clone()), 0);
 
         assert!(UserSaleProposalVote::<T>::get(0, &token_owner).is_none());
         assert_eq!(
@@ -874,8 +851,12 @@ mod benchmarks {
     fn bid_on_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -883,8 +864,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -965,8 +944,12 @@ mod benchmarks {
     fn lawyer_claim_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -974,8 +957,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -1064,8 +1045,12 @@ mod benchmarks {
     fn lawyer_confirm_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -1073,8 +1058,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -1159,8 +1142,12 @@ mod benchmarks {
     fn finalize_sale() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -1168,8 +1155,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),
@@ -1273,8 +1258,12 @@ mod benchmarks {
     fn claim_sale_funds() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
         let _ = set_letting_agent::<T>(
             region_id,
             location.clone(),
@@ -1282,8 +1271,6 @@ mod benchmarks {
             token_owner.clone(),
             admin.clone(),
         );
-
-        let asset_id = 0;
 
         assert_ok!(PropertyGovernance::<T>::propose_property_sale(
             RawOrigin::Signed(token_owner.clone()).into(),

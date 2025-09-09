@@ -45,7 +45,7 @@ use pallet_real_estate_asset::traits::{
     PropertyTokenInspect, PropertyTokenManage, PropertyTokenOwnership, PropertyTokenSpvControl,
 };
 
-use pallet_xcavate_whitelist::RolePermission;
+use pallet_xcavate_whitelist::{RolePermission, Role};
 
 use pallet_regions::{LawyerManagement, Pallet as PalletRegions};
 
@@ -195,13 +195,13 @@ pub mod pallet {
 
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            pallet_xcavate_whitelist::Role,
+            Role,
             Success = Self::AccountId,
         >;
 
         type CompliantOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            pallet_xcavate_whitelist::Role,
+            Role,
             Success = Self::AccountId,
         >;
 
@@ -696,7 +696,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+                &Role::RealEstateDeveloper,
             )?;
             ensure!(token_amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(
@@ -820,7 +820,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             let accepted_payment_assets = T::AcceptedAssets::get();
@@ -991,7 +991,7 @@ pub mod pallet {
         pub fn claim_property_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1183,7 +1183,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1253,7 +1253,7 @@ pub mod pallet {
         pub fn create_spv(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::SpvConfirmation,
+                &Role::SpvConfirmation,
             )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::NoObjectFound)?;
@@ -1292,7 +1292,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(amount > 0, Error::<T>::AmountCannotBeZero);
             ensure!(!token_price.is_zero(), Error::<T>::InvalidTokenPrice);
@@ -1351,7 +1351,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let buyer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),
@@ -1397,7 +1397,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1466,7 +1466,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::CompliantOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),
@@ -1531,7 +1531,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let listing_details =
                 TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
@@ -1598,7 +1598,7 @@ pub mod pallet {
         pub fn cancel_offer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let offer_details =
                 OngoingOffers::<T>::take(listing_id, &signer).ok_or(Error::<T>::OfferNotFound)?;
@@ -1630,7 +1630,7 @@ pub mod pallet {
         pub fn withdraw_rejected(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut refund_infos =
                 RefundToken::<T>::get(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
@@ -1713,7 +1713,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1825,7 +1825,7 @@ pub mod pallet {
         pub fn withdraw_expired(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1901,7 +1901,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -1967,7 +1967,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut refund_amount =
                 RefundClaimedToken::<T>::take(listing_id).ok_or(Error::<T>::TokenNotRefunded)?;
@@ -2049,7 +2049,7 @@ pub mod pallet {
         pub fn withdraw_unclaimed(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let token_details: TokenOwnerDetails<T> =
                 TokenOwner::<T>::take(&signer, listing_id).ok_or(Error::<T>::TokenOwnerNotFound)?;
@@ -2100,7 +2100,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+                &Role::RealEstateDeveloper,
             )?;
             ensure!(
                 PropertyLawyer::<T>::get(listing_id).is_none(),
@@ -2146,7 +2146,7 @@ pub mod pallet {
         pub fn delist_token(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let listing_details =
                 TokenListings::<T>::take(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
@@ -2186,7 +2186,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
                 .ok_or(Error::<T>::NoPermission)?;
@@ -2329,7 +2329,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id =
                 ListingSpvProposal::<T>::get(listing_id).ok_or(Error::<T>::NoLawyerProposed)?;
@@ -2438,7 +2438,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateDeveloper,
+                &Role::RealEstateDeveloper,
             )?;
             let property_details =
                 OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::ListingNotFound)?;
@@ -2513,7 +2513,7 @@ pub mod pallet {
         pub fn finalize_spv_lawyer(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
 
             let proposal_id =
@@ -2661,7 +2661,7 @@ pub mod pallet {
         pub fn remove_lawyer_claim(origin: OriginFor<T>, listing_id: ListingId) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             ensure!(
                 pallet_regions::RealEstateLawyer::<T>::get(&signer).is_some(),
@@ -2717,7 +2717,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             let mut property_lawyer_details =
                 PropertyLawyer::<T>::take(listing_id).ok_or(Error::<T>::InvalidIndex)?;
@@ -2825,12 +2825,12 @@ pub mod pallet {
         ) -> DispatchResult {
             let sender = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 <T as pallet::Config>::Whitelist::has_role(
                     &receiver,
-                    pallet_xcavate_whitelist::Role::RealEstateInvestor
+                    Role::RealEstateInvestor
                 ),
                 Error::<T>::UserNotWhitelisted
             );

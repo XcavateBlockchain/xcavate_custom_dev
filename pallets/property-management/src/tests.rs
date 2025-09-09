@@ -1,4 +1,4 @@
-/*use crate::{mock::*, Error};
+use crate::{mock::*, Error};
 use frame_support::BoundedVec;
 use frame_support::{
     assert_noop, assert_ok,
@@ -505,20 +505,16 @@ fn remove_letting_agent_works_2() {
             RuntimeOrigin::signed([0; 32].into()),
             bvec![10, 10],
         ));
-        assert!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .locations
-                .get(&location)
-                .is_none()
-        );
-        assert!(
-            LettingInfo::<Test>::get::<AccountId>([0; 32].into())
-                .unwrap()
-                .locations
-                .get(&bvec![11, 10])
-                .is_some()
-        );
+        assert!(LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+            .unwrap()
+            .locations
+            .get(&location)
+            .is_none());
+        assert!(LettingInfo::<Test>::get::<AccountId>([0; 32].into())
+            .unwrap()
+            .locations
+            .get(&bvec![11, 10])
+            .is_some());
         assert_eq!(
             Balances::balance_on_hold(&HoldReason::LettingAgent.into(), &([0; 32].into())),
             1_000
@@ -3299,4 +3295,4 @@ fn claim_income_fails() {
             Error::<Test>::PaymentAssetNotSupported
         );
     });
-}*/
+}

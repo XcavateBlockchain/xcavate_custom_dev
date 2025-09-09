@@ -1364,7 +1364,7 @@ mod benchmarks {
             buyer.clone(),
             vec![account("buyer_helper", 1, 1), account("buyer_helper", 2, 2)],
         );
-        
+
         assert_ok!(Marketplace::<T>::unfreeze_spv_lawyer_token(
             RawOrigin::Signed(account("buyer_helper", 1, 1)).into(),
             0,

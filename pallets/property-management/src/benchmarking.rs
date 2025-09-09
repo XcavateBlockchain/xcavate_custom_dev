@@ -6,7 +6,7 @@ use super::*;
 use crate::Pallet as PropertyManagement;
 use frame_benchmarking::v2::*;
 use frame_support::sp_runtime::{Permill, Saturating};
-use frame_support::traits::fungible::{Mutate, Inspect};
+use frame_support::traits::fungible::{Inspect, Mutate};
 use frame_support::traits::fungibles::InspectFreeze;
 use frame_support::BoundedVec;
 use frame_support::{assert_ok, traits::Get};
@@ -38,7 +38,10 @@ fn create_whitelisted_user<T: Config>() -> (T::AccountId, T::AccountId) {
     (signer, admin)
 }
 
-fn create_a_new_region<T: Config>(signer: T::AccountId, admin: T::AccountId) -> (u16, LocationId<T>) {
+fn create_a_new_region<T: Config>(
+    signer: T::AccountId,
+    admin: T::AccountId,
+) -> (u16, LocationId<T>) {
     let region = RegionIdentifier::France;
     let region_id = region.clone().into_u16();
 
@@ -163,7 +166,12 @@ fn list_and_sell_property<T: Config>(
         buyer.clone(),
         Role::RealEstateInvestor
     ));
-    add_buyers_to_listing::<T>(token_amount - 1, payment_asset, property_price, admin.clone());
+    add_buyers_to_listing::<T>(
+        token_amount - 1,
+        payment_asset,
+        property_price,
+        admin.clone(),
+    );
 
     assert_ok!(Marketplace::<T>::buy_property_token(
         RawOrigin::Signed(buyer.clone()).into(),
@@ -194,8 +202,9 @@ fn create_registered_property<T: Config>(
     region_id: u16,
     location: LocationId<T>,
     admin: T::AccountId,
-) -> T::AccountId {
-    let token_owner = list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
+) -> (T::AccountId, u32) {
+    let token_owner =
+        list_and_sell_property::<T>(seller.clone(), region_id, location, admin.clone());
     let lawyer_1: T::AccountId = account("lawyer1", 0, 0);
     let lawyer_2: T::AccountId = account("lawyer2", 0, 0);
     assert_ok!(Whitelist::<T>::assign_role(
@@ -277,7 +286,8 @@ fn create_registered_property<T: Config>(
         0,
         true
     ));
-    token_owner
+    let asset_id = 0u32;
+    (token_owner, asset_id)
 }
 
 fn add_buyers_to_listing<T: Config + pallet_marketplace::Config>(
@@ -367,10 +377,17 @@ mod benchmarks {
             T::LettingAgentDeposit::get()
         );
         assert_eq!(
-            letting_info.locations.get(&location).unwrap().assigned_properties,
+            letting_info
+                .locations
+                .get(&location)
+                .unwrap()
+                .assigned_properties,
             0
         );
-        assert_eq!(<T as pallet::Config>::NativeCurrency::balance(&letting_agent), deposit - T::LettingAgentDeposit::get());
+        assert_eq!(
+            <T as pallet::Config>::NativeCurrency::balance(&letting_agent),
+            deposit - T::LettingAgentDeposit::get()
+        );
     }
 
     #[benchmark]
@@ -396,23 +413,31 @@ mod benchmarks {
             region_id,
             location.clone(),
         ));
-        assert_eq!(<T as pallet::Config>::NativeCurrency::balance(&letting_agent), deposit - T::LettingAgentDeposit::get());
-
-        #[extrinsic_call]
-        remove_letting_agent(
-            RawOrigin::Signed(letting_agent.clone()),
-            location.clone(),
+        assert_eq!(
+            <T as pallet::Config>::NativeCurrency::balance(&letting_agent),
+            deposit - T::LettingAgentDeposit::get()
         );
 
+        #[extrinsic_call]
+        remove_letting_agent(RawOrigin::Signed(letting_agent.clone()), location.clone());
+
         assert!(LettingInfo::<T>::get(&letting_agent).is_none());
-        assert_eq!(<T as pallet::Config>::NativeCurrency::balance(&letting_agent), deposit);
+        assert_eq!(
+            <T as pallet::Config>::NativeCurrency::balance(&letting_agent),
+            deposit
+        );
     }
 
     #[benchmark]
     fn letting_agent_propose() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let _ = create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (_, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -431,8 +456,6 @@ mod benchmarks {
             region_id,
             location,
         ));
-
-        let asset_id = 0;
 
         #[extrinsic_call]
         letting_agent_propose(RawOrigin::Signed(letting_agent.clone()), asset_id);
@@ -459,8 +482,12 @@ mod benchmarks {
     fn vote_on_letting_agent() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -479,8 +506,6 @@ mod benchmarks {
             region_id,
             location,
         ));
-
-        let asset_id = 0;
 
         assert_ok!(PropertyManagement::<T>::letting_agent_propose(
             RawOrigin::Signed(letting_agent.clone()).into(),
@@ -521,11 +546,13 @@ mod benchmarks {
             RawOrigin::Signed(token_owner.clone()),
             asset_id,
             crate::Vote::Yes,
-            token_amount
+            token_amount,
         );
 
         assert_eq!(
-            UserLettingAgentVote::<T>::get(0, &token_owner).unwrap().vote,
+            UserLettingAgentVote::<T>::get(0, &token_owner)
+                .unwrap()
+                .vote,
             crate::Vote::Yes
         );
         assert_eq!(
@@ -549,8 +576,12 @@ mod benchmarks {
     fn finalize_letting_agent() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -569,8 +600,6 @@ mod benchmarks {
             region_id,
             location,
         ));
-
-        let asset_id = 0;
 
         assert_ok!(PropertyManagement::<T>::letting_agent_propose(
             RawOrigin::Signed(letting_agent.clone()).into(),
@@ -615,8 +644,12 @@ mod benchmarks {
     fn unfreeze_letting_voting_token() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -635,8 +668,6 @@ mod benchmarks {
             region_id,
             location,
         ));
-
-        let asset_id = 0;
 
         assert_ok!(PropertyManagement::<T>::letting_agent_propose(
             RawOrigin::Signed(letting_agent.clone()).into(),
@@ -697,8 +728,12 @@ mod benchmarks {
     fn distribute_income() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -744,8 +779,6 @@ mod benchmarks {
             RawOrigin::Signed(token_owner.clone()).into(),
             0
         ));
-
-        let asset_id = 0;
 
         let payment_asset = <T as pallet::Config>::AcceptedAssets::get()[0];
         assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(
@@ -774,8 +807,12 @@ mod benchmarks {
     fn claim_income() {
         let (region_owner, admin): (T::AccountId, T::AccountId) = create_whitelisted_user::<T>();
         let (region_id, location) = create_a_new_region::<T>(region_owner.clone(), admin.clone());
-        let token_owner =
-            create_registered_property::<T>(region_owner.clone(), region_id, location.clone(), admin.clone());
+        let (token_owner, asset_id) = create_registered_property::<T>(
+            region_owner.clone(),
+            region_id,
+            location.clone(),
+            admin.clone(),
+        );
 
         let letting_agent: T::AccountId = account("letting_agent", 0, 0);
         assert_ok!(Whitelist::<T>::assign_role(
@@ -821,8 +858,6 @@ mod benchmarks {
             RawOrigin::Signed(token_owner.clone()).into(),
             0
         ));
-
-        let asset_id = 0;
 
         let payment_asset = <T as pallet::Config>::AcceptedAssets::get()[0];
         assert_ok!(<T as pallet::Config>::ForeignCurrency::mint_into(

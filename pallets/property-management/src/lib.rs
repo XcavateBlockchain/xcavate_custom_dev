@@ -36,6 +36,8 @@ use pallet_real_estate_asset::traits::{PropertyTokenInspect, PropertyTokenSpvCon
 
 use primitives::MarketplaceFreezeReason;
 
+use pallet_xcavate_whitelist::Role;
+
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
@@ -206,7 +208,7 @@ pub mod pallet {
 
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            pallet_xcavate_whitelist::Role,
+            Role,
             Success = Self::AccountId,
         >;
 
@@ -411,7 +413,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::LettingAgent,
+                &Role::LettingAgent,
             )?;
             ensure!(
                 pallet_regions::RegionDetails::<T>::contains_key(region),
@@ -477,18 +479,19 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::LettingAgent,
+                &Role::LettingAgent,
             )?;
 
             LettingInfo::<T>::try_mutate(&signer, |maybe_letting_info| {
-                let letting_info =
-                    maybe_letting_info.as_mut().ok_or(Error::<T>::AgentNotFound)?;
-            
+                let letting_info = maybe_letting_info
+                    .as_mut()
+                    .ok_or(Error::<T>::AgentNotFound)?;
+
                 let location_info = letting_info
                     .locations
                     .get(&location)
                     .ok_or(Error::<T>::LettingAgentNotActiveInLocation)?;
-             
+
                 ensure!(
                     location_info.assigned_properties.is_zero(),
                     Error::<T>::LettingAgentActive
@@ -527,7 +530,7 @@ pub mod pallet {
         pub fn letting_agent_propose(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::LettingAgent,
+                &Role::LettingAgent,
             )?;
             let property_info = T::PropertyToken::get_property_asset_info(asset_id)
                 .ok_or(Error::<T>::NoObjectFound)?;
@@ -597,7 +600,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id = AssetLettingProposal::<T>::get(asset_id)
                 .ok_or(Error::<T>::NoLettingAgentProposed)?;
@@ -688,7 +691,7 @@ pub mod pallet {
         pub fn finalize_letting_agent(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let _ = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
 
             let proposal_id = AssetLettingProposal::<T>::get(asset_id)
@@ -821,7 +824,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::LettingAgent,
+                &Role::LettingAgent,
             )?;
             let letting_agent =
                 LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
@@ -884,7 +887,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 T::AcceptedAssets::get().contains(&payment_asset),

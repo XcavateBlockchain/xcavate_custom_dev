@@ -29,6 +29,8 @@ use frame_support::{
     PalletId,
 };
 
+use pallet_xcavate_whitelist::Role;
+
 pub type NegativeImbalanceOf<T> =
     Credit<<T as frame_system::Config>::AccountId, <T as Config>::NativeCurrency>;
 
@@ -293,7 +295,7 @@ pub mod pallet {
 
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            pallet_xcavate_whitelist::Role,
+            Role,
             Success = Self::AccountId,
         >;
 
@@ -704,7 +706,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
             let region_id = region_identifier.into_u16();
 
@@ -781,7 +783,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id =
                 RegionProposalId::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
@@ -935,7 +937,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
 
             if let Some(proposal_id) = RegionProposalId::<T>::get(region_id) {
@@ -1031,7 +1033,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
             let auction = RegionAuctions::<T>::get(region_id).ok_or(Error::<T>::NoAuction)?;
             let current_block_number = <frame_system::Pallet<T>>::block_number();
@@ -1112,7 +1114,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
             ensure!(
                 !listing_duration.is_zero(),
@@ -1156,7 +1158,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
 
             RegionDetails::<T>::try_mutate(region_id, |maybe_region| {
@@ -1189,7 +1191,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
             ensure!(
                 !LocationRegistration::<T>::contains_key(region_id, &location),
@@ -1251,7 +1253,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 RegionDetails::<T>::contains_key(region_id),
@@ -1322,7 +1324,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id =
                 RegionOwnerProposalId::<T>::get(region_id).ok_or(Error::<T>::NotOngoing)?;
@@ -1470,7 +1472,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
             let region_info =
                 RegionDetails::<T>::get(region_id).ok_or(Error::<T>::RegionUnknown)?;
@@ -1576,7 +1578,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RegionalOperator,
+                &Role::RegionalOperator,
             )?;
 
             RegionDetails::<T>::try_mutate(region_id, |maybe_region| -> DispatchResult {
@@ -1615,7 +1617,7 @@ pub mod pallet {
         pub fn register_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             ensure!(
                 RegionDetails::<T>::contains_key(region),
@@ -1658,7 +1660,7 @@ pub mod pallet {
         pub fn unregister_lawyer(origin: OriginFor<T>, region: RegionId) -> DispatchResult {
             let signer = T::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             ensure!(
                 RegionDetails::<T>::contains_key(region),

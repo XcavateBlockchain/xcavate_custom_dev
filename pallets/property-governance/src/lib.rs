@@ -35,6 +35,8 @@ use pallet_real_estate_asset::traits::{
 
 use pallet_regions::{LawyerManagement, Pallet as PalletRegions};
 
+use pallet_xcavate_whitelist::Role;
+
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
 
@@ -299,7 +301,7 @@ pub mod pallet {
 
         type PermissionOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            pallet_xcavate_whitelist::Role,
+            Role,
             Success = Self::AccountId,
         >;
 
@@ -673,6 +675,8 @@ pub mod pallet {
         ProposalOngoing,
         /// The amount for voting has to be higher than 0.
         ZeroVoteAmount,
+        /// Proposal amount can not be 0.
+        ZeroAmount,
     }
 
     #[pallet::hooks]
@@ -758,7 +762,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::LettingAgent,
+                &Role::LettingAgent,
             )?;
             ensure!(
                 pallet_property_management::LettingStorage::<T>::get(asset_id)
@@ -770,6 +774,8 @@ pub mod pallet {
                 !AssetProposal::<T>::contains_key(asset_id),
                 Error::<T>::ProposalOngoing
             );
+            ensure!(amount > Zero::zero(), Error::<T>::ZeroAmount);
+
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let proposal = Proposal {
                 proposer: signer.clone(),
@@ -793,6 +799,7 @@ pub mod pallet {
                     .map_err(|_| Error::<T>::TooManyProposals)?;
                 Ok::<(), DispatchError>(())
             })?;
+
             let vote_stats = VoteStats {
                 yes_voting_power: 0,
                 no_voting_power: 0,
@@ -829,7 +836,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let owner_list = <T as pallet::Config>::PropertyToken::get_property_owner(asset_id);
             ensure!(owner_list.contains(&signer), Error::<T>::NoPermission);
@@ -841,23 +848,25 @@ pub mod pallet {
                 !AssetLettingChallenge::<T>::contains_key(asset_id),
                 Error::<T>::ChallengeAlreadyOngoing
             );
-            let proposal_id = ProposalCount::<T>::get();
             let current_block_number = <frame_system::Pallet<T>>::block_number();
             let expiry_block =
                 current_block_number.saturating_add(<T as Config>::VotingTime::get());
-            let challenge = Challenge {
-                proposer: signer.clone(),
-                created_at: current_block_number,
-            };
+
+            let proposal_id = ProposalCount::<T>::get();
             ChallengeRoundsExpiring::<T>::try_mutate(expiry_block, |keys| {
                 keys.try_push(asset_id)
                     .map_err(|_| Error::<T>::TooManyProposals)?;
                 Ok::<(), DispatchError>(())
             })?;
+            let challenge = Challenge {
+                proposer: signer.clone(),
+                created_at: current_block_number,
+            };
             let vote_stats = VoteStats {
                 yes_voting_power: 0,
                 no_voting_power: 0,
             };
+
             AssetLettingChallenge::<T>::insert(asset_id, proposal_id);
             OngoingChallengeVotes::<T>::insert(proposal_id, vote_stats);
             Challenges::<T>::insert(proposal_id, challenge);
@@ -866,6 +875,7 @@ pub mod pallet {
                 .checked_add(1)
                 .ok_or(Error::<T>::ArithmeticOverflow)?;
             ProposalCount::<T>::put(next_proposal_id);
+            
             Self::deposit_event(Event::Challenge {
                 asset_id,
                 proposer: signer,
@@ -894,7 +904,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id = AssetProposal::<T>::get(asset_id).ok_or(Error::<T>::NotOngoing)?;
             ensure!(
@@ -1028,7 +1038,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id =
                 AssetLettingChallenge::<T>::get(asset_id).ok_or(Error::<T>::NotOngoing)?;
@@ -1156,7 +1166,7 @@ pub mod pallet {
         pub fn propose_property_sale(origin: OriginFor<T>, asset_id: u32) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             <T as pallet::Config>::PropertyToken::ensure_property_finalized(asset_id)?;
 
@@ -1222,7 +1232,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let proposal_id =
                 AssetSaleProposal::<T>::get(asset_id).ok_or(Error::<T>::NotOngoing)?;
@@ -1357,7 +1367,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             ensure!(
                 <T as pallet::Config>::AcceptedAssets::get().contains(&payment_asset),
@@ -1423,7 +1433,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             let lawyer_region = pallet_regions::RealEstateLawyer::<T>::get(&signer)
                 .ok_or(Error::<T>::NoPermission)?;
@@ -1498,7 +1508,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
             let mut property_sale_info =
                 PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
@@ -1636,7 +1646,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::Lawyer,
+                &Role::Lawyer,
             )?;
 
             PropertySale::<T>::try_mutate_exists(asset_id, |maybe_sale| -> DispatchResult {
@@ -1753,7 +1763,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let signer = <T as pallet::Config>::PermissionOrigin::ensure_origin(
                 origin,
-                &pallet_xcavate_whitelist::Role::RealEstateInvestor,
+                &Role::RealEstateInvestor,
             )?;
             let mut property_sale_info =
                 PropertySale::<T>::take(asset_id).ok_or(Error::<T>::NotForSale)?;
