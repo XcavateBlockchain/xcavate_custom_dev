@@ -652,16 +652,11 @@ impl pallet_marketplace::Config for Runtime {
     type MaxRelistAttempts = MaximumRelistAttempts;
 }
 
-parameter_types! {
-    pub const MaxWhitelistUsers: u32 = 1000;
-}
-
 /// Configure the pallet-xcavate-whitelist in pallets/xcavate-whitelist.
 impl pallet_xcavate_whitelist::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_xcavate_whitelist::weights::SubstrateWeight<Runtime>;
     type WhitelistOrigin = EnsureRoot<Self::AccountId>;
-    type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
 use pallet_xcavate_whitelist::{self as whitelist, RolePermission};

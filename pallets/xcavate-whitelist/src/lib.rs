@@ -73,10 +73,6 @@ pub mod pallet {
         type WeightInfo: WeightInfo;
         /// Origin who can add and remove users to the whitelist.
         type WhitelistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-
-        /// Max users allowed in the whitelist.
-        #[pallet::constant]
-        type MaxUsersInWhitelist: Get<u32>;
     }
 
     /// Mapping of the admin accounts.

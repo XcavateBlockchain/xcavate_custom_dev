@@ -1,5 +1,5 @@
 use crate as pallet_whitelist;
-use frame_support::{derive_impl, parameter_types, traits::ConstU64};
+use frame_support::{derive_impl, traits::ConstU64};
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
     BuildStorage,
@@ -44,15 +44,10 @@ impl frame_system::Config for Test {
     type RuntimeTask = ();
 }
 
-parameter_types! {
-    pub const MaxWhitelistUsers: u32 = 1000000;
-}
-
 impl pallet_whitelist::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_whitelist::weights::SubstrateWeight<Test>;
     type WhitelistOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
 // Build genesis storage according to the mock runtime.

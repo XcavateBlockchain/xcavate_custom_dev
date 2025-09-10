@@ -141,15 +141,10 @@ impl pallet_nfts::Config for Test {
     type BlockNumberProvider = System;
 }
 
-parameter_types! {
-    pub const MaxWhitelistUsers: u32 = 1000000;
-}
-
 impl pallet_xcavate_whitelist::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_xcavate_whitelist::weights::SubstrateWeight<Test>;
     type WhitelistOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
 use pallet_xcavate_whitelist::{self as whitelist, RolePermission};

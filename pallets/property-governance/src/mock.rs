@@ -232,15 +232,10 @@ impl pallet_nft_fractionalization::Config for Test {
     type RuntimeHoldReason = RuntimeHoldReason;
 }
 
-parameter_types! {
-    pub const MaxWhitelistUsers: u32 = 1000000;
-}
-
 impl pallet_xcavate_whitelist::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = pallet_xcavate_whitelist::weights::SubstrateWeight<Test>;
     type WhitelistOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type MaxUsersInWhitelist = MaxWhitelistUsers;
 }
 
 use pallet_xcavate_whitelist::{self as whitelist, RolePermission};
